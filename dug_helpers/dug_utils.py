@@ -3,9 +3,9 @@ from dug.annotate import TOPMedStudyAnnotator
 from dug_helpers.dug_logger import get_logger
 from roger.Config import get_default_config as get_config
 import os
-from pathlib import Path
 from roger.core import Util
 from io import StringIO
+import hashlib
 import logging
 
 log = get_logger()
@@ -52,6 +52,38 @@ class Dug:
         return Dug.annotator.annotate(tags)
 
     @staticmethod
+    def make_edge (subj,
+                   obj,
+                   predicate = 'biolink:association',
+                   predicate_label= 'association',
+                   relation = 'biolink:association',
+                   relation_label = 'association'
+    ):
+        """
+        Create an edge between two nodes.
+
+        :param subj: The identifier of the subject.
+        :param pred: The predicate linking the subject and object.
+        :param obj: The object of the relation.
+        :param predicate: Biolink compatible edge type.
+        :param predicate_label: Edge label.
+        :param relation: Ontological edge type.
+        :param relation_label: Ontological edge type label.
+        :returns: Returns and edge.
+        """
+        edge_id = hashlib.md5(f'{subj}{predicate}{obj}'.encode('utf-8')).hexdigest()
+        return {
+            "subject"     : subj,
+            "predicate"   : predicate,
+            "predicate_label": predicate_label,
+            "id": edge_id,
+            "relation"  :  relation,
+            "relation_label": relation_label,
+            "object"      : obj,
+            "provided_by" : "renci.bdc.semanticsearch.annotator"
+        }
+
+    @staticmethod
     def make_tagged_kg(variables, tags):
         """ Make a Translator standard knowledge graph representing
         tagged study variables.
@@ -84,23 +116,22 @@ class Dug:
             })
             """ Link ontology identifiers we've found for this tag via nlp. """
             for identifier, metadata in tag['identifiers'].items():
+                node_types = list(metadata['type']) if isinstance(metadata['type'], str) else metadata['type']
+                # @TODO this change should be done in Dug. This is bad.
+                # change named_Thing to biolink:NamedThing for non normalized stuff
+                node_types = [x for x in node_types if x != 'named_thing']
+                node_types.append('biolink:NamedThing')
                 nodes.append({
                     "id": identifier,
                     "name": metadata['label'],
-                    "category": metadata['type']
+                    "category": node_types
                 })
-                edges.append(Dug.annotator.make_edge(
+                edges.append(Dug.make_edge(
                     subj=tag_id,
-                    pred="OBAN:association",
-                    obj=identifier,
-                    edge_label='biolink:association',
-                    category=["biolink:association"]))
-                edges.append(Dug.annotator.make_edge(
+                    obj=identifier))
+                edges.append(Dug.make_edge(
                     subj=identifier,
-                    pred="OBAN:association",
-                    obj=tag_id,
-                    edge_label='biolink:association',
-                    category=["biolink:association"]))
+                    obj=tag_id))
 
         """ Create nodes and edges to model variables, studies, and their
         relationships to tags. """
@@ -127,70 +158,51 @@ class Dug:
                 "category": ["biolink:ClinicalModifier"]
             })
             """ Link to its study.  """
-            edges.append(Dug.annotator.make_edge(
+            edges.append(Dug.make_edge(
                 subj=variable_id,
-                edge_label='biolink:part_of',
-                pred="BFO:0000050",
-                obj=study_id,
-                category=['biolink:part_of']))
-            edges.append(Dug.annotator.make_edge(
+                predicate='biolink:part_of',
+                predicate_label='part of',
+                relation='BFO:0000050',
+                relation_label='part of',
+                obj=study_id))
+            edges.append(Dug.make_edge(
                 subj=study_id,
-                edge_label='biolink:has_part',
-                pred="BFO:0000051",
-                obj=variable_id,
-                category=['biolink:has_part']))
+                predicate='biolink:has_part',
+                predicate_label='has part',
+                relation='BFO:0000051',
+                relation_label='part of',
+                obj=variable_id))
 
             """ Link to its tag. """
-            edges.append(Dug.annotator.make_edge(
+            edges.append(Dug.make_edge(
                 subj=variable_id,
-                edge_label='biolink:part_of',
-                pred="BFO:0000050",
-                obj=tag_id,
-                category=['biolink:part_of']))
-            edges.append(Dug.annotator.make_edge(
+                predicate='biolink:part_of',
+                predicate_label='part of',
+                relation='BFO:0000050',
+                relation_label='part of',
+                obj=tag_id))
+            edges.append(Dug.make_edge(
                 subj=tag_id,
-                edge_label='biolink:has_part',
-                pred="BFO:0000051",
-                obj=variable_id,
-                category=['biolink:has_part']))
+                predicate='biolink:has_part',
+                predicate_label='has part',
+                relation='BFO:0000051',
+                relation_label='has part',
+                obj=variable_id))
         return graph
 
 
 class DugUtil:
 
     @staticmethod
-    def get_multiple_file_path(file_path, pattern):
-        data_path = Path(file_path)
-        data_files = data_path.glob(pattern)
-        files = [str(file) for file in data_files]
-        return files
-
-    @staticmethod
-    def get_annotation_output_path(config):
-        output_base_path = os.path.join(config.get('data_root'), 'dug', 'output', 'annotations')
-        return output_base_path
-
-    @staticmethod
-    def get_kgx_output_path(config):
-        output_base_path = os.path.join(config.get('data_root'),'dug', 'output', 'kgx')
-        return output_base_path
-
-    @staticmethod
-    def get_topmed_files():
-        home = os.path.dirname(os.path.abspath(__file__))
-        file_path = os.path.join(home, '..', 'dug_helpers/dug_data/topmed_data')
-        return DugUtil.get_multiple_file_path(file_path, 'topmed_*.csv')
-
-    @staticmethod
     def load_and_annotate(config=None):
         with Dug(config) as dug:
-            topmed_files = DugUtil.get_topmed_files()
-            output_base_path = DugUtil.get_annotation_output_path(config)
+            topmed_files = Util.dug_topmed_objects()
+            output_base_path = Util.dug_annotation_path('')
             for file in topmed_files:
                 """Loading step"""
                 variables, tags = dug.load_tagged(file)
                 """Annotating step"""
-                #dug.annotate modifies the tags in place. It adds
+                # dug.annotate modifies the tags in place. It adds
                 # a new attribute `identifiers` on each tag.
                 # That is used in make kg downstream to build associciations
                 # between Variable Tags and other Concepts.
@@ -219,10 +231,9 @@ class DugUtil:
     @staticmethod
     def make_kg_tagged(config=None):
         with Dug(config) as dug:
-            output_base_path = DugUtil.get_kgx_output_path(config)
+            output_base_path = Util.dug_kgx_path("")
             log.info("Starting building KGX files")
-            annotations_output_path = DugUtil.get_annotation_output_path(config)
-            annotated_file_names = DugUtil.get_multiple_file_path(annotations_output_path, 'topmed_*.json')
+            annotated_file_names = Util.dug_annotation_objects()
             for annotated_file in annotated_file_names:
                 log.info(f"Processing {annotated_file}")
                 with open(annotated_file) as f:

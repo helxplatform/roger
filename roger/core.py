@@ -34,7 +34,8 @@ class FileFormat(Enum):
     """ File formats this module knows about. """
     JSON = "json"
     YAML = "yaml"
-    
+
+# @TODO move this to shared file between dug , roger etc...
 class Util:
 
     @staticmethod
@@ -169,6 +170,43 @@ class Util:
         return os.path.join (data_root, "bulk", name)
 
     @staticmethod
+    def dug_kgx_path(name):
+        data_root = get_config()['data_root']
+        return os.path.join (data_root, "dug", "kgx",  name)
+
+    @staticmethod
+    def dug_annotation_path(name):
+        data_root = get_config()['data_root']
+        return os.path.join(data_root, "dug", "annotations", name)
+
+    @staticmethod
+    def dug_kgx_objects():
+        """ A list of dug KGX objects. """
+        dug_kgx_pattern = Util.dug_kgx_path("**.json")
+        return sorted(glob.glob(dug_kgx_pattern))
+
+    @staticmethod
+    def dug_annotation_objects():
+        """ A list of dug annotation Objects. """
+        annotation_pattern = Util.dug_annotation_path("**.json")
+        return sorted(glob.glob(annotation_pattern))
+
+    @staticmethod
+    def dug_topmed_path(name):
+        """ Topmed source files"""
+        home = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(home, "..", "dug_helpers", "dug_data", "topmed_data", name)
+
+    @staticmethod
+    def dug_topmed_objects():
+        topmed_file_pattern = Util.dug_topmed_path("topmed_*.csv")
+        return sorted(glob.glob(topmed_file_pattern))
+
+    @staticmethod
+    def copy_file_to_dir(file_location, dir_name):
+        return shutil.copy(file_location, dir_name)
+
+    @staticmethod
     def read_schema (schema_type: SchemaType):
         """ Read a schema object.
         :param schema_type: Schema type of the object to read. """
@@ -237,7 +275,6 @@ class KGXModel:
                     }
                     Util.write_object (subgraph, subgraph_path)
                     total_time = Util.current_time_in_millis () - start
-                
                     edges = len(subgraph['edges'])
                     nodes = len(subgraph['nodes'])
                     log.debug ("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format (
@@ -388,22 +425,6 @@ class KGXModel:
             k_list.insert (0, 'id')
         return k_list
 
-    def load (self):
-        """ Use KGX to load a data set into Redisgraph """
-        input_format = "json"
-        uri = f"redis://{self.config['redisgraph']['host']}:{self.config['redisgraph']['port']}/"
-        username = self.config['redisgraph']['username']
-        password = self.config['redisgraph']['password']
-        log.info (f"connecting to redisgraph: {uri}")
-        for subgraph in glob.glob (f"{kgx_repo}/**.json"):
-            redisgraph_upload(inputs=[ subgraph ],
-                              input_format=input_format,
-                              input_compression=None,
-                              uri=uri,
-                              username=username,
-                              password=password,
-                              node_filters=[],
-                              edge_filters=[])
 
 class BiolinkModel:
     """ Programmatic model of Biolink. """
@@ -784,7 +805,7 @@ class RogerUtil:
             roger.bulk.validate ()
             output = roger.log_stream.getvalue () if to_string else None
         return output
-    
+
 if __name__ == "__main__":
     """ Roger CLI. """
     parser = argparse.ArgumentParser(description='Roger')
