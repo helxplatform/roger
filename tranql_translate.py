@@ -112,5 +112,5 @@ with DAG(
     finish = BashOperator (task_id='Finish', bash_command='echo finish')
 
     """ Build the DAG. """
-    intro >> get_kgx >> [ create_schema, merge_nodes ] >> create_bulk_load >> \
+    get_kgx >> [ create_schema, merge_nodes ] >> create_bulk_load >> \
         bulk_load >> validate >> finish
