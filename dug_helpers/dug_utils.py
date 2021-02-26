@@ -84,12 +84,12 @@ class Dug:
         }
 
     def convert_to_kgx_json(annotations):
-    """
-    Given an annotated and normalized set of study variables,
-    generate a KGX compliant graph given the normalized annotations.
-    Write that grpah to a graph database.
-    See BioLink Model for category descriptions. https://biolink.github.io/biolink-model/notes.html
-    """
+        """
+        Given an annotated and normalized set of study variables,
+        generate a KGX compliant graph given the normalized annotations.
+        Write that grpah to a graph database.
+        See BioLink Model for category descriptions. https://biolink.github.io/biolink-model/notes.html
+        """
         graph = {
             "nodes": [],
             "edges": []
