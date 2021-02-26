@@ -325,7 +325,7 @@ class DugUtil():
                     log.info(f"Processing {annotated_file}")
                     with open(annotated_file) as f:
                         data_set = json.load(f)
-                        graph = dug.(data_set['variables'])
+                        graph = dug.convert_to_kgx_json(data_set['variables'])
                     output_file_path = os.path.join(output_base_path,
                                                 '.'.join(os.path.basename(annotated_file).split('.')[:-1]) + '_kgx.json')
                     Util.write_object(graph, output_file_path)
