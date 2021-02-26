@@ -835,6 +835,7 @@ class RogerUtil:
     @staticmethod
     def get_kgx (to_string=False, config=None):
         output = None
+        log.debug("Getting KGX method called.")
         with Roger (to_string, config=config) as roger:
             roger.kgx.get ()
             output = roger.log_stream.getvalue () if to_string else None
