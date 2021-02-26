@@ -90,62 +90,62 @@ class Dug:
     Write that grpah to a graph database.
     See BioLink Model for category descriptions. https://biolink.github.io/biolink-model/notes.html
     """
-    graph = {
-        "nodes": [],
-        "edges": []
-    }
-    edges = graph['edges']
-    nodes = graph['nodes']
+        graph = {
+            "nodes": [],
+            "edges": []
+        }
+        edges = graph['edges']
+        nodes = graph['nodes']
 
-    for index, variable in enumerate(annotations):
-        study_id = variable['collection_id']
-        if index == 0:
-            """ assumes one study in this set. """
-            nodes.append({
-                "id": study_id,
-                "category": ["clinical_trial"]
-            })
+        for index, variable in enumerate(annotations):
+            study_id = variable['collection_id']
+            if index == 0:
+                """ assumes one study in this set. """
+                nodes.append({
+                    "id": study_id,
+                    "category": ["clinical_trial"]
+                })
 
-        """ connect the study and the variable. """
-        edges.append(Dug.make_edge(
-            subj=variable['element_id'],
-            edge_label='part_of',
-            pred="OBO:RO_0002434",
-            obj=study_id,
-            category=['part_of']))
-        edges.append(Dug.make_edge(
-            subj=study_id,
-            edge_label='has_part',
-            pred="OBO:RO_0002434",
-            obj=variable['element_id'],
-            category=['has_part']))
-
-        """ a node for the variable. """
-        nodes.append({
-            "id": variable['element_id'],
-            "name": variable['element_name'],
-            "description": variable['element_desc'],
-            "category": ["clinical_modifier"]
-        })
-        for identifier, metadata in variable['identifiers'].items():
+            """ connect the study and the variable. """
             edges.append(Dug.make_edge(
                 subj=variable['element_id'],
+                edge_label='part_of',
                 pred="OBO:RO_0002434",
-                obj=identifier,
-                edge_label='association',
-                category=["case_to_phenotypic_feature_association"]))
+                obj=study_id,
+                category=['part_of']))
             edges.append(Dug.make_edge(
-                subj=identifier,
+                subj=study_id,
+                edge_label='has_part',
                 pred="OBO:RO_0002434",
                 obj=variable['element_id'],
-                edge_label='association',
-                category=["case_to_phenotypic_feature_association"]))
+                category=['has_part']))
+
+            """ a node for the variable. """
             nodes.append({
-                "id": identifier,
-                "name": metadata['label'],
-                "category": metadata['type']
+                "id": variable['element_id'],
+                "name": variable['element_name'],
+                "description": variable['element_desc'],
+                "category": ["clinical_modifier"]
             })
-    return graph
+            for identifier, metadata in variable['identifiers'].items():
+                edges.append(Dug.make_edge(
+                    subj=variable['element_id'],
+                    pred="OBO:RO_0002434",
+                    obj=identifier,
+                    edge_label='association',
+                    category=["case_to_phenotypic_feature_association"]))
+                edges.append(Dug.make_edge(
+                    subj=identifier,
+                    pred="OBO:RO_0002434",
+                    obj=variable['element_id'],
+                    edge_label='association',
+                    category=["case_to_phenotypic_feature_association"]))
+                nodes.append({
+                    "id": identifier,
+                    "name": metadata['label'],
+                    "category": metadata['type']
+                })
+        return graph
 
     @staticmethod
     def make_tagged_kg(variables, tags):
