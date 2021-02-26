@@ -265,7 +265,7 @@ class DugUtil():
     def load_and_annotate(config=None):
         with Dug(config) as dug:
             topmed_files = Util.dug_topmed_objects()
-            dd_xml_files = Util.get_dd_xml_objects()
+            dd_xml_files = Util.dug_dd_xml_objects()
             output_base_path = Util.dug_annotation_path('')
             for file in topmed_files:
                 """Loading step"""
