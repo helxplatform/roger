@@ -251,6 +251,7 @@ class KGXModel:
             config = get_config()
         self.config = config
         self.biolink_version = self.config.get('kgx').get('biolink_model_version')
+        log.debug(f"Trying to get biolink version : {self.biolink_version}")
         self.biolink = BiolinkModel(self.biolink_version)
 
     def get (self, dataset_version = "v1.0"):
