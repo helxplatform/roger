@@ -47,6 +47,11 @@ class Dug:
         return Dug.annotator.load_tagged_variables(file)
 
     @staticmethod
+    def load_dd_xml(file):
+        log.info(f"Loading DD xml file --> {file}")
+        return Dug.annotator.load_data_dictionary(file)
+
+    @staticmethod
     def annotate(tags):
         log.info(f"Annotating")
         return Dug.annotator.annotate(tags)
@@ -82,6 +87,71 @@ class Dug:
             "object"      : obj,
             "provided_by" : "renci.bdc.semanticsearch.annotator"
         }
+
+    @staticmethod
+    def convert_to_kgx_json(annotations):
+        """
+        Given an annotated and normalized set of study variables,
+        generate a KGX compliant graph given the normalized annotations.
+        Write that grpah to a graph database.
+        See BioLink Model for category descriptions. https://biolink.github.io/biolink-model/notes.html
+        """
+        graph = {
+            "nodes": [],
+            "edges": []
+        }
+        edges = graph['edges']
+        nodes = graph['nodes']
+
+        for index, variable in enumerate(annotations):
+            study_id = variable['collection_id']
+            if index == 0:
+                """ assumes one study in this set. """
+                nodes.append({
+                    "id": study_id,
+                    "category": ["clinical_trial"]
+                })
+
+            """ connect the study and the variable. """
+            edges.append(Dug.make_edge(
+                subj=variable['element_id'],
+                relation_label='part_of',
+                relation='OBO:RO_0002434',
+                obj=study_id,
+                predicate_label='part_of'))
+            edges.append(Dug.make_edge(
+                subj=study_id,
+                relation_label='has_part',
+                relation="OBO:RO_0002434",
+                obj=variable['element_id'],
+                predicate_label='has_part'))
+
+            """ a node for the variable. """
+            nodes.append({
+                "id": variable['element_id'],
+                "name": variable['element_name'],
+                "description": variable['element_desc'],
+                "category": ["clinical_modifier"]
+            })
+            for identifier, metadata in variable['identifiers'].items():
+                edges.append(Dug.make_edge(
+                    subj=variable['element_id'],
+                    relation='OBO:RO_0002434',
+                    obj=identifier,
+                    relation_label='association',
+                    predicate_label='case_to_phenotypic_feature_association'))
+                edges.append(Dug.make_edge(
+                    subj=identifier,
+                    relation='OBO:RO_0002434',
+                    obj=variable['element_id'],
+                    relation_label='association',
+                    predicate_label='case_to_phenotypic_feature_association'))
+                nodes.append({
+                    "id": identifier,
+                    "name": metadata['label'],
+                    "category": metadata['type']
+                })
+        return graph
 
     @staticmethod
     def make_tagged_kg(variables, tags):
@@ -191,12 +261,17 @@ class Dug:
         return graph
 
 
-class DugUtil:
+class DugUtil():
+
+    @staticmethod
+    def make_output_file_path(base, file):
+        return os.path.join(base, '.'.join(os.path.basename(file).split('.')[:-1]) + '_annotated.json')
 
     @staticmethod
     def load_and_annotate(config=None):
         with Dug(config) as dug:
             topmed_files = Util.dug_topmed_objects()
+            dd_xml_files = Util.dug_dd_xml_objects()
             output_base_path = Util.dug_annotation_path('')
             for file in topmed_files:
                 """Loading step"""
@@ -216,14 +291,22 @@ class DugUtil:
                 # Using the inplace modified `tags` makes sense for make_tagged_kg. since concepts are
                 # binned within each tag.
 
-                output_file_path = os.path.join(output_base_path,
-                                                '.'.join(os.path.basename(file).split('.')[:-1]) + '_annotated.json')
+                output_file_path = DugUtil.make_output_file_path(output_base_path, file)
                 Util.write_object({
                     "variables": variables,
                     "original_tags": tags,
                     # Don't think we need these yet
                     # "annotated_tags": annotated_tags
                 }, output_file_path)
+
+            for file in dd_xml_files:
+                """Loading XML step"""
+                variables = dug.load_dd_xml(file)
+                """Annotating XML step"""
+                annotated_tags = dug.annotate(variables)
+                # The annotated tags are not needed.
+                output_file_path = DugUtil.make_output_file_path(output_base_path, file)
+                Util.write_object({"variables": variables}, output_file_path)
             log.info(f"Load and Annotate complete")
             output_log = dug.log_stream.getvalue()
         return output_log
@@ -235,14 +318,24 @@ class DugUtil:
             log.info("Starting building KGX files")
             annotated_file_names = Util.dug_annotation_objects()
             for annotated_file in annotated_file_names:
-                log.info(f"Processing {annotated_file}")
-                with open(annotated_file) as f:
-                    data_set = json.load(f)
-                    graph = dug.make_tagged_kg(data_set['variables'], data_set['original_tags'])
-                output_file_path = os.path.join(output_base_path,
+                if "topmed" in annotated_file:
+                    log.info(f"Processing {annotated_file}")
+                    with open(annotated_file) as f:
+                        data_set = json.load(f)
+                        graph = dug.make_tagged_kg(data_set['variables'], data_set['original_tags'])
+                    output_file_path = os.path.join(output_base_path,
                                                 '.'.join(os.path.basename(annotated_file).split('.')[:-1]) + '_kgx.json')
-                Util.write_object(graph, output_file_path)
-                log.info(f"Wrote {len(graph['nodes'])} nodes and {len(graph['edges'])} edges, to {output_file_path}.")
+                    Util.write_object(graph, output_file_path)
+                    log.info(f"Wrote {len(graph['nodes'])} nodes and {len(graph['edges'])} edges, to {output_file_path}.")
+                else:
+                    log.info(f"Processing {annotated_file}")
+                    with open(annotated_file) as f:
+                        data_set = json.load(f)
+                        graph = dug.convert_to_kgx_json(data_set['variables'])
+                    output_file_path = os.path.join(output_base_path,
+                                                '.'.join(os.path.basename(annotated_file).split('.')[:-1]) + '_kgx.json')
+                    Util.write_object(graph, output_file_path)
+                    log.info(f"Wrote {len(graph['nodes'])} nodes and {len(graph['edges'])} edges, to {output_file_path}.")
             log.info("Building the graph complete")
             output_log = dug.log_stream.getvalue()
         return output_log

@@ -203,6 +203,17 @@ class Util:
         return sorted(glob.glob(topmed_file_pattern))
 
     @staticmethod
+    def dug_dd_xml_path(name):
+        """ Topmed source files"""
+        home = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(home, "..", "dug_helpers", "dug_data", "dd_xml_data", name)
+
+    @staticmethod
+    def dug_dd_xml_objects():
+        topmed_file_pattern = Util.dug_dd_xml_path("*.xml")
+        return sorted(glob.glob(topmed_file_pattern))
+
+    @staticmethod
     def copy_file_to_dir(file_location, dir_name):
         return shutil.copy(file_location, dir_name)
 
