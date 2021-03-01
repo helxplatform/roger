@@ -133,7 +133,7 @@ class Dug:
                 "id": variable['element_id'],
                 "name": variable['element_name'],
                 "description": variable['element_desc'],
-                "category": ["clinical_modifier"]
+                "category": ["biolink:ClinicalModifier"]
             })
             for identifier, metadata in variable['identifiers'].items():
                 edges.append(Dug.make_edge(
