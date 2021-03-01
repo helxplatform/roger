@@ -114,16 +114,16 @@ class Dug:
             """ connect the study and the variable. """
             edges.append(Dug.make_edge(
                 subj=variable['element_id'],
-                edge_label='part_of',
-                pred="OBO:RO_0002434",
+                relation_label='part_of',
+                relation='OBO:RO_0002434',
                 obj=study_id,
-                category=['part_of']))
+                predicate_label='part_of'))
             edges.append(Dug.make_edge(
                 subj=study_id,
-                edge_label='has_part',
-                pred="OBO:RO_0002434",
+                relation_label='has_part',
+                relation="OBO:RO_0002434",
                 obj=variable['element_id'],
-                category=['has_part']))
+                predicate_label='has_part'))
 
             """ a node for the variable. """
             nodes.append({
@@ -135,16 +135,16 @@ class Dug:
             for identifier, metadata in variable['identifiers'].items():
                 edges.append(Dug.make_edge(
                     subj=variable['element_id'],
-                    pred="OBO:RO_0002434",
+                    relation='OBO:RO_0002434',
                     obj=identifier,
-                    edge_label='association',
-                    category=["case_to_phenotypic_feature_association"]))
+                    relation_label='association',
+                    predicate_label='case_to_phenotypic_feature_association'))
                 edges.append(Dug.make_edge(
                     subj=identifier,
-                    pred="OBO:RO_0002434",
+                    relation='OBO:RO_0002434',
                     obj=variable['element_id'],
-                    edge_label='association',
-                    category=["case_to_phenotypic_feature_association"]))
+                    relation_label='association',
+                    predicate_label='case_to_phenotypic_feature_association'))
                 nodes.append({
                     "id": identifier,
                     "name": metadata['label'],
