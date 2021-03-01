@@ -88,6 +88,7 @@ class Dug:
             "provided_by" : "renci.bdc.semanticsearch.annotator"
         }
 
+    @staticmethod
     def convert_to_kgx_json(annotations):
         """
         Given an annotated and normalized set of study variables,
