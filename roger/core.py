@@ -193,7 +193,7 @@ class Util:
 
     @staticmethod
     def dug_dd_xml_objects():
-        topmed_file_pattern = Util.dug_topmed_path("*.xml")
+        topmed_file_pattern = Util.dug_dd_xml_path("*.xml")
         return sorted(glob.glob(topmed_file_pattern))
 
     @staticmethod

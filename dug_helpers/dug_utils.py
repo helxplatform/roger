@@ -47,6 +47,11 @@ class Dug:
         return Dug.annotator.load_tagged_variables(file)
 
     @staticmethod
+    def load_dd_xml(file):
+        log.info(f"Loading DD xml file --> {file}")
+        return Dug.annotator.load_data_dictionary(file)
+
+    @staticmethod
     def annotate(tags):
         log.info(f"Annotating")
         return Dug.annotator.annotate(tags)
@@ -259,7 +264,7 @@ class DugUtil():
 
     @staticmethod
     def make_output_file_path(base, file):
-        return os.path.join(output_base_path, '.'.join(os.path.basename(file).split('.')[:-1]) + '_annotated.json')
+        return os.path.join(base, '.'.join(os.path.basename(file).split('.')[:-1]) + '_annotated.json')
 
     @staticmethod
     def load_and_annotate(config=None):
