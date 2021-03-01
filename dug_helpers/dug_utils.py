@@ -109,22 +109,24 @@ class Dug:
                 """ assumes one study in this set. """
                 nodes.append({
                     "id": study_id,
-                    "category": ["clinical_trial"]
+                    "category": ["biolink:ClinicalTrial"]
                 })
 
             """ connect the study and the variable. """
             edges.append(Dug.make_edge(
                 subj=variable['element_id'],
-                relation_label='part_of',
-                relation='OBO:RO_0002434',
+                relation_label='part of',
+                relation='BFO:0000050',
                 obj=study_id,
-                predicate_label='part_of'))
+                predicate='biolink:part_of',
+                predicate_label='part of'))
             edges.append(Dug.make_edge(
                 subj=study_id,
-                relation_label='has_part',
-                relation="OBO:RO_0002434",
+                relation_label='has part',
+                relation="BFO:0000051",
                 obj=variable['element_id'],
-                predicate_label='has_part'))
+                predicate='biolink:has_part',
+                predicate_label='has part'))
 
             """ a node for the variable. """
             nodes.append({
@@ -136,16 +138,18 @@ class Dug:
             for identifier, metadata in variable['identifiers'].items():
                 edges.append(Dug.make_edge(
                     subj=variable['element_id'],
-                    relation='OBO:RO_0002434',
+                    relation='OBAN:association',
                     obj=identifier,
                     relation_label='association',
-                    predicate_label='case_to_phenotypic_feature_association'))
+                    predicate='biolink:Association',
+                    predicate_label='association'))
                 edges.append(Dug.make_edge(
                     subj=identifier,
-                    relation='OBO:RO_0002434',
+                    relation='OBAN:association',
                     obj=variable['element_id'],
                     relation_label='association',
-                    predicate_label='case_to_phenotypic_feature_association'))
+                    predicate='biolink:Association',
+                    predicate_label='association'))
                 nodes.append({
                     "id": identifier,
                     "name": metadata['label'],
