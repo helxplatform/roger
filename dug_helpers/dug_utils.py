@@ -339,7 +339,7 @@ class DugUtil():
                         if identifier.startswith("TOPMED:"):  # expand
                             new_vars = list(annotated_tags[identifier]['identifiers'].keys())
                             variable['identifiers'].extend(new_vars)
-                    variables["identifiers"] = list(set(list(variables["identifiers"])))
+                        variable["identifiers"] = list(set(list(variable["identifiers"])))
 
                 output_file_path = DugUtil.make_output_file_path(output_base_path, file)
                 Util.write_object({
