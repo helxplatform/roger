@@ -20,7 +20,7 @@ with DAG(
                          bash_command='echo running tranql translator && exit 0',
                          dag=dag)
 
-    is_topmed_file_available = create_python_task(dag, "is_topmed_file_available", DugUtil.is_top_med_data_available)
+    is_topmed_file_available = create_python_task(dag, "is_topmed_file_available", DugUtil.is_topmed_data_available)
     dug_load_topmed_variables = create_python_task(dag, "annotate_and_normalize", DugUtil.load_and_annotate)
     make_kg_tagged = create_python_task(dag, "create_kgx_files", DugUtil.make_kg_tagged)
 
