@@ -426,7 +426,7 @@ class DugUtil():
     def is_topmed_data_available(config=None, to_string=False):
         if not config:
             config = get_config()
-        home = os.path.dirname(os.path.abspath(__file__))
+        home = os.path.dirname(os.path.join('../',os.path.abspath(__file__)))
         file_path = os.path.join(home, get_config()['dug_data_root'])
         data_path = Path(file_path)
         data_files = data_path.glob('topmed_*.csv')
