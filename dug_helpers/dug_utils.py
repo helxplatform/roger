@@ -426,11 +426,12 @@ class DugUtil():
     def is_topmed_data_available(config=None, to_string=False):
         if not config:
             config = get_config()
-        home = os.path.dirname(os.path.join('../',os.path.abspath(__file__)))
+        home = os.path.join(os.path.dirname(os.path.join(os.path.abspath(__file__))), '..')
         file_path = os.path.join(home, get_config()['dug_data_root'])
         data_path = Path(file_path)
         data_files = data_path.glob('topmed_*.csv')
         files = [str(file) for file in data_files]
         if not files:
+            log.error("No topmed files were found.")
             raise FileNotFoundError("Error could not find topmed files")
         return len(files)
