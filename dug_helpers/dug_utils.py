@@ -39,11 +39,12 @@ class Dug:
             )
         if not Dug.search_obj:
             # Dug search expects these to be set as os envrion
-
-            os.environ['ELASTIC_API_HOST']  =  'localhost'
-            os.environ['ELASTIC_USERNAME'] =  'elastic'
-            os.environ['ELASTIC_PASSWORD'] = 'changeme'
-            os.environ['NBOOST_API_HOST'] = 'nboost'
+            # Elastic config
+            elastic_conf = config.get("elastic_search")
+            os.environ['ELASTIC_API_HOST']  =  elastic_conf.get("host")
+            os.environ['ELASTIC_USERNAME'] =  elastic_conf.get("username")
+            os.environ['ELASTIC_PASSWORD'] = elastic_conf.get("password")
+            os.environ['NBOOST_API_HOST'] = elastic_conf.get("nboost_host")
             Dug.search_obj = Search(os.environ['ELASTIC_API_HOST'])
 
     def __enter__(self):

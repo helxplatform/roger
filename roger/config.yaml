@@ -56,6 +56,15 @@ indexing:
     "anat_to_pheno": ["anatomical_entity", "phenotypic_feature"]
   tranql_endpoint: "http://localhost:8081/tranql/query?dynamic_id_resolution=true&asynchronous=false"
 
+elastic_search:
+  host: localhost
+  username: elastic
+  # temporary
+  password: "changeme"
+  nboost_host: ""
+
+
+
 validation:
   queries:
     count_nodes:
