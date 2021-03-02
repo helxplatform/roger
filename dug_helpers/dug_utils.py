@@ -1,5 +1,6 @@
 import json
 from dug.annotate import TOPMedStudyAnnotator
+from dug.core import Search
 from dug_helpers.dug_logger import get_logger
 from roger.Config import get_default_config as get_config
 import os
@@ -7,21 +8,24 @@ from roger.core import Util
 from io import StringIO
 import hashlib
 import logging
+import dug.tranql as tql
 
 log = get_logger()
 
 
 class Dug:
     annotator = None
+    search_obj = None
+    config = None
 
     def __init__(self, config=None, to_string=True):
         if not config:
-            self.config = get_config()
+            Dug.config = get_config()
         if to_string:
             self.log_stream = StringIO()
             self.string_handler = logging.StreamHandler (self.log_stream)
             log.addHandler(self.string_handler)
-        self.config = config
+        Dug.config = config
         if not Dug.annotator:
             annotation_config = self.config.get('annotation')
             annotation_config.update({
@@ -32,7 +36,14 @@ class Dug:
             Dug.annotator = TOPMedStudyAnnotator(
                 config=annotation_config
             )
-        # self.conn = self.create_redis()
+        if not Dug.search_obj:
+            # Dug search expects these to be set as os envrion
+
+            os.environ['ELASTIC_API_HOST']  =  'localhost'
+            os.environ['ELASTIC_USERNAME'] =  'elastic'
+            os.environ['ELASTIC_PASSWORD'] = 'changeme'
+            os.environ['NBOOST_API_HOST'] = 'nboost'
+            Dug.search_obj = Search(os.environ['ELASTIC_API_HOST'])
 
     def __enter__(self):
         return self
@@ -191,10 +202,6 @@ class Dug:
             """ Link ontology identifiers we've found for this tag via nlp. """
             for identifier, metadata in tag['identifiers'].items():
                 node_types = list(metadata['type']) if isinstance(metadata['type'], str) else metadata['type']
-                # @TODO this change should be done in Dug. This is bad.
-                # change named_Thing to biolink:NamedThing for non normalized stuff
-                node_types = [x for x in node_types if x != 'named_thing']
-                node_types.append('biolink:NamedThing')
                 nodes.append({
                     "id": identifier,
                     "name": metadata['label'],
@@ -264,6 +271,36 @@ class Dug:
                 obj=variable_id))
         return graph
 
+    @staticmethod
+    def index_variables(variables):
+        Dug.search_obj.index_variables(variables, "variables_index")
+
+    @staticmethod
+    def crawl_concepts(concepts, crawl_dir):
+        # This needs to be redisgraph.graphName.
+        index_config = Dug.config.get("indexing")
+        tranql_url = index_config["tranql_endpoint"]
+        graph_name = Dug.config["redisgraph"]["graph"]
+        source = f"redis:{graph_name}"
+        queries_config = index_config["queries"]
+        tranql_queries = {
+            key: tql.QueryFactory(queries_config[key], source)
+            for key in queries_config
+        }
+
+        Dug.search_obj.crawlspace = crawl_dir
+        Dug.search_obj.crawl(
+            concepts=concepts,
+            concept_index=index_config["concepts_index"],
+            kg_index=index_config["kg_index"],
+            queries=tranql_queries,
+            min_score=index_config["tranql_min_score"],
+            include_node_keys=["id", "name", "synonyms"],
+            include_edge_keys=[],
+            query_exclude_identifiers=index_config["excluded_identifiers"],
+            tranql_endpoint=tranql_url
+        )
+
 
 class DugUtil():
 
@@ -272,7 +309,7 @@ class DugUtil():
         return os.path.join(base, '.'.join(os.path.basename(file).split('.')[:-1]) + '_annotated.json')
 
     @staticmethod
-    def load_and_annotate(config=None):
+    def load_and_annotate(config=None, to_string=False):
         with Dug(config) as dug:
             topmed_files = Util.dug_topmed_objects()
             dd_xml_files = Util.dug_dd_xml_objects()
@@ -295,12 +332,18 @@ class DugUtil():
                 # Using the inplace modified `tags` makes sense for make_tagged_kg. since concepts are
                 # binned within each tag.
 
+                for variable in variables:
+                    for identifier in variable['identifiers']:
+                        if identifier.startswith("TOPMED:"):  # expand
+                            new_vars = list(annotated_tags[identifier]['identifiers'].keys())
+                            variable['identifiers'].extend(new_vars)
+                    variables["identifiers"] = list(set(list(variables["identifiers"])))
+
                 output_file_path = DugUtil.make_output_file_path(output_base_path, file)
                 Util.write_object({
                     "variables": variables,
                     "original_tags": tags,
-                    # Don't think we need these yet
-                    # "annotated_tags": annotated_tags
+                    "concepts": annotated_tags
                 }, output_file_path)
 
             for file in dd_xml_files:
@@ -308,15 +351,23 @@ class DugUtil():
                 variables = dug.load_dd_xml(file)
                 """Annotating XML step"""
                 annotated_tags = dug.annotate(variables)
+                ## This has to do with https://github.com/helxplatform/dug/blob/75eb62584f75eb9d6e66ce82ab54077a5d35c45e/dug/core.py#L550
+                # @TODO maybe annotate should do such normalization from dict to list in variable identifiers.
+                for var in variables:
+                    var["identifiers"] = list(set(list(var["identifiers"])))
+
                 # The annotated tags are not needed.
                 output_file_path = DugUtil.make_output_file_path(output_base_path, file)
-                Util.write_object({"variables": variables}, output_file_path)
+                Util.write_object({
+                    "variables": variables,
+                    "concepts": annotated_tags
+                }, output_file_path)
             log.info(f"Load and Annotate complete")
             output_log = dug.log_stream.getvalue()
         return output_log
 
     @staticmethod
-    def make_kg_tagged(config=None):
+    def make_kg_tagged(config=None, to_string=False):
         with Dug(config) as dug:
             output_base_path = Util.dug_kgx_path("")
             log.info("Starting building KGX files")
@@ -344,6 +395,27 @@ class DugUtil():
             output_log = dug.log_stream.getvalue()
         return output_log
 
+    @staticmethod
+    def index_variables(config=None, to_string=False):
+        with Dug(config) as dug:
+            annotated_file_names = Util.dug_annotation_objects()
+            log.info(f'Indexing Dug variables, found {len(annotated_file_names)} file(s).' )
+            for file in annotated_file_names:
+                with open(file) as f:
+                    variables = json.load(f)['variables']
+                    log.info(f'Indexing {f}... found {len(variables)}')
+                    dug.index_variables(variables)
+            output_log = dug.log_stream.getvalue()
+            log.info('Done.')
+            return output_log
 
-
-
+    @staticmethod
+    def crawl_tranql(config=None, to_string=False):
+        with Dug(config) as dug:
+            annotated_file_names = Util.dug_annotation_objects()
+            log.info(f'Crawling Dug Concepts, found {len(annotated_file_names)} file(s).')
+            for file in annotated_file_names:
+                with open(file) as f:
+                    data_set = json.load(f)
+                    crawl_dir = Util.dug_crawl_path('')
+                    dug.crawl_concepts(concepts=data_set["concepts"],crawl_dir=crawl_dir)

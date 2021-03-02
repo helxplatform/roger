@@ -180,6 +180,11 @@ class Util:
         return os.path.join(data_root, "dug", "annotations", name)
 
     @staticmethod
+    def dug_crawl_path(name):
+        data_root = get_config()['data_root']
+        return os.path.join(data_root, "dug", "crawl", name)
+
+    @staticmethod
     def dug_kgx_objects():
         """ A list of dug KGX objects. """
         dug_kgx_pattern = Util.dug_kgx_path("**.json")

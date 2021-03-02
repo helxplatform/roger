@@ -39,6 +39,23 @@ annotation:
   username: ""
   password: ""
 
+indexing:
+  variables_index: "variables_index"
+  concepts_index: "concepts_index"
+  kg_index: "kg_index"
+  tranql_min_score: 0.2
+  excluded_identifiers:
+    - "CHEBI:17336"
+  queries:
+    "disease": ["disease", "phenotypic_feature"]
+    "pheno": ["phenotypic_feature", "disease"]
+    "anat": ["disease", "anatomical_entity"]
+    "chem_to_disease": ["chemical_substance", "disease"]
+    "phen_to_anat": ["phenotypic_feature", "anatomical_entity"]
+    "anat_to_disease": ["anatomical_entity", "disease"]
+    "anat_to_pheno": ["anatomical_entity", "phenotypic_feature"]
+  tranql_endpoint: "http://localhost:8081/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+
 validation:
   queries:
     count_nodes:
