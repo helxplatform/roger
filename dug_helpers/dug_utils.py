@@ -333,14 +333,6 @@ class DugUtil():
                 # derived from their descriptions.
                 # Using the inplace modified `tags` makes sense for make_tagged_kg. since concepts are
                 # binned within each tag.
-
-                for variable in variables:
-                    for identifier in variable['identifiers']:
-                        if identifier.startswith("TOPMED:"):  # expand
-                            new_vars = list(annotated_tags[identifier]['identifiers'].keys())
-                            variable['identifiers'].extend(new_vars)
-                        variable["identifiers"] = list(set(list(variable["identifiers"])))
-
                 output_file_path = DugUtil.make_output_file_path(output_base_path, file)
                 Util.write_object({
                     "variables": variables,
@@ -353,11 +345,6 @@ class DugUtil():
                 variables = dug.load_dd_xml(file)
                 """Annotating XML step"""
                 annotated_tags = dug.annotate(variables)
-                ## This has to do with https://github.com/helxplatform/dug/blob/75eb62584f75eb9d6e66ce82ab54077a5d35c45e/dug/core.py#L550
-                # @TODO maybe annotate should do such normalization from dict to list in variable identifiers.
-                for var in variables:
-                    var["identifiers"] = list(set(list(var["identifiers"])))
-
                 # The annotated tags are not needed.
                 output_file_path = DugUtil.make_output_file_path(output_base_path, file)
                 Util.write_object({
@@ -404,8 +391,19 @@ class DugUtil():
             log.info(f'Indexing Dug variables, found {len(annotated_file_names)} file(s).' )
             for file in annotated_file_names:
                 with open(file) as f:
-                    variables = json.load(f)['variables']
+                    data_set = json.load(f)
+                    variables = data_set['variables']
+                    annotated_tags = data_set['concepts']
                     log.info(f'Indexing {f}... found {len(variables)}')
+                    ## This has to do with
+                    # https://github.com/helxplatform/dug/blob/75eb62584f75eb9d6e66ce82ab54077a5d35c45e/dug/core.py#L550
+                    # @TODO maybe annotate should do such normalization from dict to list in variable identifiers.
+                    for variable in variables:
+                        for identifier in variable['identifiers']:
+                            if identifier.startswith("TOPMED:"):  # expand
+                                new_vars = list(annotated_tags[identifier]['identifiers'].keys())
+                                variable['identifiers'].extend(new_vars)
+                            variable["identifiers"] = list(set(list(variable["identifiers"])))
                     dug.index_variables(variables)
             output_log = dug.log_stream.getvalue()
             log.info('Done.')
