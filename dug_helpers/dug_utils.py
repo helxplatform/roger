@@ -4,6 +4,7 @@ from dug.core import Search
 from dug_helpers.dug_logger import get_logger
 from roger.Config import get_default_config as get_config
 import os
+from pathlib import Path
 from roger.core import Util
 from io import StringIO
 import hashlib
@@ -419,3 +420,16 @@ class DugUtil():
                     data_set = json.load(f)
                     crawl_dir = Util.dug_crawl_path('')
                     dug.crawl_concepts(concepts=data_set["concepts"],crawl_dir=crawl_dir)
+
+    @staticmethod
+    def is_topmed_data_available(config=None, to_string=False):
+        if not config:
+            config = get_config()
+        home = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(home, get_config()['dug_data_root'])
+        data_path = Path(file_path)
+        data_files = data_path.glob('topmed_*.csv')
+        files = [str(file) for file in data_files]
+        if not files:
+            raise FileNotFoundError("Error could not find topmed files")
+        return len(files)
