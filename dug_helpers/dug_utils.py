@@ -403,7 +403,7 @@ class DugUtil():
                             if identifier.startswith("TOPMED:"):  # expand
                                 new_vars = list(annotated_tags[identifier]['identifiers'].keys())
                                 variable['identifiers'].extend(new_vars)
-                            variable["identifiers"] = list(set(list(variable["identifiers"])))
+                        variable["identifiers"] = list(set(list(variable["identifiers"])))
                     dug.index_variables(variables)
             output_log = dug.log_stream.getvalue()
             log.info('Done.')
