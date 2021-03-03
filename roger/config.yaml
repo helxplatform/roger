@@ -57,10 +57,10 @@ indexing:
   tranql_endpoint: "http://localhost:8081/tranql/query?dynamic_id_resolution=true&asynchronous=false"
 
 elastic_search:
-  host: dug-elasticsearch
+  host: localhost
   username: elastic
   # temporary
-  password: "nOm8q4neFm"
+  password: ""
   nboost_host: ""
 
 

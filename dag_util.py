@@ -53,6 +53,11 @@ def get_executor_config(data_path='/opt/roger/data'):
                 {
                     "mountPath": data_path,
                     "name": "roger-data",
+                    "subpath": "data"
+                },{
+                    "mountPath": "/opt/airflow/logs",
+                    "name": "roger-data",
+                    "subpath": "task-logs"
                 }
             ]
         }
