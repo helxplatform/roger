@@ -7,6 +7,6 @@ redisgraph==2.1.5
 redisgraph-bulk-loader==0.9.5
 requests==2.24.0
 PyYAML==5.3.1
-dug-test==1.0.4
+dug-test==1.0.6
 elasticsearch==7.11.0
 git+git://github.com/patrickkwang/biolink-model-toolkit@master#egg=bmt
