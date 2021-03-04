@@ -1,7 +1,7 @@
 redis:
   image:
     repository: redislabs/redisgraph
-    tag: 2.2.13
+    tag: 2.4.1
   redis:
     command: "redis-server"
   clusterDomain: "blackbalsam-cluster"
@@ -43,7 +43,7 @@ airflow:
     ##
     image:
       repository: renciorg/airflow-task
-      tag: "0.0.1"
+      tag: "0.0.8"
     #  executor: CeleryExecutor
     executor: KubernetesExecutor
 
@@ -70,24 +70,12 @@ airflow:
       AIRFLOW__KUBERNETES__DELETE_WORKER_PODS: "FALSE"
       # @TODO change to helxplatform docker repo
       AIRFLOW__KUBERNETES__WORKER_CONTAINER_REPOSITORY: "renciorg/airflow-task"
-      AIRFLOW__KUBERNETES__WORKER_CONTAINER_TAG: "0.0.1"
+      AIRFLOW__KUBERNETES__WORKER_CONTAINER_TAG: "0.0.8"
       # DAGS
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
 
       ## Disable noisy "Handling signal: ttou" Gunicorn log messages
       GUNICORN_CMD_ARGS: "--log-level WARNING"
-
-#    extraPipPackages:
-#      - Babel==2.8.0
-#      - biolink-model==1.2.5
-#      - biolinkml==1.5.8
-#      - redisgraph==2.1.5
-#      - git+https://github.com/RedisGraph/redisgraph-bulk-loader.git
-#      - flatten-dict
-#      - dug-test==1.0.3
-#      - werkzeug==1.0.0
-      # node on werkzeug need to make sure this is fixed, dug-test installs a later version
-      # that's not compatible with apache-airflow's spec.
 
     ###################################
     # Volumes
