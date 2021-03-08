@@ -32,6 +32,8 @@ class Config:
                     warnings.warn(f"{e} encountered trying to assign string from "
                                   f"OS variable `{key}` to a dictionary object."
                                   f"Please specify inner keys.")
+                except:
+                    warnings.warn(f"{e} error parsing {key}")
 
     @staticmethod
     def os_var_to_dict(var_name, value):
