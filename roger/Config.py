@@ -15,7 +15,7 @@ class Config:
     Singleton config wrapper
     """
     __instance__: Optional[Dict] = None
-    os_var_prefix = "ROGER_"
+    os_var_prefix = "ROGERENV_"
 
     def __init__(self, file_name: str):
         if not Config.__instance__:
