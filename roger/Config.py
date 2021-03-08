@@ -32,7 +32,7 @@ class Config:
                     warnings.warn(f"{e} encountered trying to assign string from "
                                   f"OS variable `{key}` to a dictionary object."
                                   f"Please specify inner keys.")
-                except:
+                except Exception as e:
                     warnings.warn(f"{e} error parsing {key}")
 
     @staticmethod
