@@ -44,6 +44,7 @@ def get_executor_config(data_path='/opt/roger/data'):
     k8s_executor_config = {
         "KubernetesExecutor": {
             "containers": [{
+                "name": "base",
                 "env": roger_env_vars
             }],
             "volumes": [
