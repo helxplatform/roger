@@ -61,8 +61,8 @@ def get_executor_config(data_path='/opt/roger/data'):
                 "name": secret["env_var_name"],
                 "valueFrom": {
                     "secretKeyRef": {
-                       "name": secret["secret_name"],
-                       "key": secret["secret_key"]
+                       "name": secret_name,
+                       "key": secret_key_name
                     }
                 }
             })
