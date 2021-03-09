@@ -90,7 +90,7 @@ class Config:
             if 'PASSWORD' in k or 'password' in k:
                 flat[k] = '******'
         flat = unflatten(flat)
-        result = json.dumps(flat, indent=2)
+        result = json.dumps(flat)
         return f"""{result}"""
 
 

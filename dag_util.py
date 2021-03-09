@@ -1,3 +1,4 @@
+import os
 from airflow.utils.dates import days_ago
 from airflow.operators.python_operator import PythonOperator
 from roger.Config import get_default_config as get_config
@@ -39,11 +40,44 @@ def get_executor_config(data_path='/opt/roger/data'):
     :param annotations: Annotations to attach to the executor.
     :returns: Returns a KubernetesExecutor if K8s is configured and None otherwise.
     """
-    import os
-    roger_env_vars = {name: value for name, value in os.environ.items() if name.startswith(get_config().os_var_prefix)}
+
+    # based on envrioment set on scheduler pod, make secrets for worker pod
+    # this ensures passwords don't leak as pod templates.
+    secrets_map = [{
+        "secret_name_ref": "ELASTIC_SEARCH_PASSWORD_SECRET",
+        "secret_key_ref": "ELASTIC_SEARCH_PASSWORD_SECRET_KEY",
+        "env_var_name": "ROGER_ELASTIC__SEARCH_PASSWORD"
+        },{
+        "secret_name_ref": "REDIS_PASSWORD_SECRET",
+        "secret_key_ref": "REDIS_PASSWORD_SECRET_KEY",
+        "env_var_name": "ROGER_REDISGRAPH_PASSWORD"
+    }]
+    secrets = []
+    for secret in secrets_map:
+        secret_name = os.environ.get(secret["secret_name_ref"], False)
+        secret_key_name = os.environ.get(secret["secret_key_ref"], False)
+        if secret_name and secret_key_name:
+            secrets.append({
+                "name": secret["env_var_name"],
+                "valueFrom": {
+                    "secretKeyRef": {
+                       "name": secret["secret_name"],
+                       "key": secret["secret_key"]
+                    }
+                }
+            })
+
+    # generic config map for overriding everything else in config.yaml
+
+    generic_config_maps = []
+    generic_config_map_ref = os.environ.get("ROGER_GENERIC_CONFIG_MAP_NAME")
+    if generic_config_map_ref:
+        generic_config_maps = [ generic_config_map_ref ]
+
     k8s_executor_config = {
         "KubernetesExecutor": {
-            "envs": roger_env_vars,
+            "envs": secrets,
+            "configmaps": generic_config_maps,
             "volumes": [
                 {
                     "name": "roger-data",
