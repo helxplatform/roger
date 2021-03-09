@@ -40,7 +40,7 @@ def get_executor_config(data_path='/opt/roger/data'):
     :returns: Returns a KubernetesExecutor if K8s is configured and None otherwise.
     """
     import os
-    roger_env_vars = [{name: value} for name, value in os.environ.items() if name.startswith(get_config().os_var_prefix) ]
+    roger_env_vars = {name: value for name, value in os.environ.items() if name.startswith(get_config().os_var_prefix)}
     k8s_executor_config = {
         "KubernetesExecutor": {
             "envs": [roger_env_vars],
