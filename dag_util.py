@@ -39,8 +39,13 @@ def get_executor_config(data_path='/opt/roger/data'):
     :param annotations: Annotations to attach to the executor.
     :returns: Returns a KubernetesExecutor if K8s is configured and None otherwise.
     """
+    import os
+    roger_env_vars = [{name: value} for name, value in os.environ.items() if name.startswith(get_config().os_var_prefix) ]
     k8s_executor_config = {
         "KubernetesExecutor": {
+            "containers": [{
+                "env": roger_env_vars
+            }],
             "volumes": [
                 {
                     "name": "roger-data",
