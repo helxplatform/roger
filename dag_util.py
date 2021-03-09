@@ -43,10 +43,7 @@ def get_executor_config(data_path='/opt/roger/data'):
     roger_env_vars = [{name: value} for name, value in os.environ.items() if name.startswith(get_config().os_var_prefix) ]
     k8s_executor_config = {
         "KubernetesExecutor": {
-            "containers": [{
-                "name": "base",
-                "env": roger_env_vars
-            }],
+            "envs": [roger_env_vars],
             "volumes": [
                 {
                     "name": "roger-data",
