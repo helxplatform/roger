@@ -7,7 +7,7 @@ redis:
   clusterDomain: "blackbalsam-cluster"
   cluster:
     slaveCount: 1
-  usePassword: false
+  usePassword: true
   master:
     command: ""
     readinessProbe:
@@ -24,6 +24,15 @@ redis:
       enabled: false
     extraFlags:
       - "--loadmodule /usr/lib/redis/modules/redisgraph.so"
+  existingSecret: &redis-secret roger-redis-secret-config
+  existingSecretPasswordKey: &redis-secret-key redis-password
+
+elasticSearch:
+  # Currently uses external elastic search
+  host: elasticsearch
+  port: 9200
+  passwordSecretName: &elastic-password-secret-name ""
+  passwordSecretKey: &elastic-password-secret-key ""
 
 
 airflow:
@@ -73,6 +82,7 @@ airflow:
       AIRFLOW__KUBERNETES__WORKER_CONTAINER_TAG: "0.0.8"
       # DAGS
       AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__KUBERNETES__ENV_FROM_CONFIGMAP_REF: "roger-generic-config-map"
 
       ## Disable noisy "Handling signal: ttou" Gunicorn log messages
       GUNICORN_CMD_ARGS: "--log-level WARNING"
@@ -90,6 +100,18 @@ airflow:
       - name: roger-data
         emptyDir: {}
 
+    extraEnv:
+      # This are going to be used to compute env for worker pods.
+      - name: ELASTIC_SEARCH_PASSWORD_SECRET
+        value: *elastic-password-secret-name
+      - name: ELASTIC_SEARCH_PASSWORD_SECRET_KEY
+        value: *elastic-password-secret-key
+      - name: REDIS_PASSWORD_SECRET
+        # Same as redis.existingSecret
+        value: *redis-secret
+      - name: REDIS_PASSWORD_SECRET_KEY
+        # same as redis.existingSecretKey
+        value: *redis-secret-key
 
 
   ###################################

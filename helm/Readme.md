@@ -149,6 +149,21 @@ refer to this [Redis helm chart](https://github.com/bitnami/charts/tree/master/b
 | `redis.slave.extraFlags` | `['--loadmodule /usr/lib/redis/modules/redisgraph.so']`
 
  
+ ### Elastic Search 
+ 
+ Currently this installation assumes and external elastic search with password stored in 
+ an accessible Secrets kubernetes config.
+ 
+ 
+| Parameter |  Default |
+| --------- |  ----    | 
+| `elasticSearch.host` | `elasticsearch`
+| `elasticSearch.port` | `9200`
+| `elasticSearch.passwordSecretName` | `nil`
+| `elasticSearch.passwordSecretKey` | `nil`
+ 
+ 
+ 
 ### Installation
 
 To install `my-release` to kubernetes.
