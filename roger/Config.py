@@ -86,9 +86,9 @@ class Config:
 
     def __str__(self):
         flat = flatten(Config.__instance__)
-        # for k in flat:
-        #     if 'PASSWORD' in k or 'password' in k:
-        #         flat[k] = '******'
+        for k in flat:
+            if 'PASSWORD' in k or 'password' in k:
+                flat[k] = '******'
         flat = unflatten(flat)
         result = json.dumps(flat)
         return f"""{result}"""
