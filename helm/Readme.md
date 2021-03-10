@@ -32,37 +32,6 @@ spec:
       storage: 20Gi
 ```
 
----
-
-#### Secrets:
-
-There are two secrets for airflow required for Git syncronization.
-
-This is used by `airflow.airflow.config.AIRFLOW__KUBERNETES__GIT_SSH_KEY_SECRET_NAME`
- ```yaml
-    kind: Secret
-    apiVersion: v1
-    metadata:
-      name: airflow-secrets
-    data:
-      gitSshKey: >-
-        ######
-    type: Opaque
- ```
-
-This used by `airflow.dags.git.secret`
-
-```yaml
-kind: Secret
-apiVersion: v1
-metadata:
-  name: airflow-git-keys 
-data:
-  id_rsa: <private-key-base64-encoded>    
-  id_rsa.pub: <public-key-base64-encoded>
-  known_hosts: <known-hosts>
-type: Opaque
-```
 
 ### Parameters
 

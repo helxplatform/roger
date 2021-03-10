@@ -24,15 +24,14 @@ redis:
       enabled: false
     extraFlags:
       - "--loadmodule /usr/lib/redis/modules/redisgraph.so"
-  existingSecret: &redis-secret roger-redis-secret-config
-  existingSecretPasswordKey: &redis-secret-key redis-password
+  existingSecret: roger-redis-secret-config
+  existingSecretPasswordKey: redis-password
 
 elasticSearch:
   # Currently uses external elastic search
   host: elasticsearch
   port: 9200
-  passwordSecretName: &elastic-password-secret-name ""
-  passwordSecretKey: &elastic-password-secret-key ""
+
 
 
 airflow:
@@ -103,15 +102,15 @@ airflow:
     extraEnv:
       # This are going to be used to compute env for worker pods.
       - name: ELASTIC_SEARCH_PASSWORD_SECRET
-        value: *elastic-password-secret-name
+        value: ""
       - name: ELASTIC_SEARCH_PASSWORD_SECRET_KEY
-        value: *elastic-password-secret-key
+        value: ""
       - name: REDIS_PASSWORD_SECRET
         # Same as redis.existingSecret
-        value: *redis-secret
+        value: roger-redis-secret-config
       - name: REDIS_PASSWORD_SECRET_KEY
         # same as redis.existingSecretKey
-        value: *redis-secret-key
+        value: redis-password
 
 
   ###################################
