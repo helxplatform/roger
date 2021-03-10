@@ -71,13 +71,13 @@ def get_executor_config(data_path='/opt/roger/data'):
 
     generic_config_maps = []
     generic_config_map_ref = os.environ.get("ROGER_GENERIC_CONFIG_MAP_NAME")
-    if generic_config_map_ref:
-        generic_config_maps = [ generic_config_map_ref ]
+    # if generic_config_map_ref:
+    #     generic_config_maps = [ generic_config_map_ref ]
 
     k8s_executor_config = {
         "KubernetesExecutor": {
             "envs": secrets,
-            "configmaps": generic_config_maps,
+            # "configmaps": generic_config_maps,
             "volumes": [
                 {
                     "name": "roger-data",
