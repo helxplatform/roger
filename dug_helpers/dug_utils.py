@@ -1,8 +1,10 @@
 import json
-from dug.annotate import TOPMedStudyAnnotator
-from dug.core import Search
-from dug_helpers.dug_logger import get_logger
+from dug.annotate import DugAnnotator, Annotator, Normalizer, OntologyHelper, Preprocessor, SynonymFinder
+from dug.parsers import DugConcept, DugElement
+from dug.core import Search, get_parser, Crawler
+from roger.roger_util import get_logger
 from roger.Config import get_default_config as get_config
+from requests_cache import CachedSession
 import os
 from pathlib import Path
 from roger.core import Util
@@ -10,6 +12,8 @@ from io import StringIO
 import hashlib
 import logging
 import dug.tranql as tql
+import redis
+import pickle
 
 log = get_logger()
 
@@ -18,6 +22,7 @@ class Dug:
     annotator = None
     search_obj = None
     config = None
+    cached_session = None
 
     def __init__(self, config=None, to_string=True):
         if not config:
@@ -28,14 +33,39 @@ class Dug:
             log.addHandler(self.string_handler)
         Dug.config = config
         if not Dug.annotator:
+            # @TODO still work in progress but these need to be in roger's conf. Dug is a library here.
+            import dug.config as dug_config
+            preprocessor = Preprocessor(**dug_config.preprocessor)
+            annotator = Annotator(**dug_config.annotator)
+            normalizer = Normalizer(**dug_config.normalizer)
+            synonym_finder = SynonymFinder(**dug_config.synonym_service)
+            ontology_helper = OntologyHelper(**dug_config.ontology_helper)
+            ontology_greenlist = dug_config.ontology_greenlist if hasattr(dug_config,"ontology_greenlist") else []
+
             annotation_config = self.config.get('annotation')
             annotation_config.update({
                 'redis_host': self.config.get('redisgraph', {}).get('host'),
                 'redis_port': self.config.get('redisgraph', {}).get('port'),
                 'redis_password': self.config.get('redisgraph', {}).get('password')
             })
-            Dug.annotator = TOPMedStudyAnnotator(
-                config=annotation_config
+            redis_config = {
+                'host': self.config.get('redisgraph', {}).get('host'),
+                'port': self.config.get('redisgraph', {}).get('port'),
+                'password': self.config.get('redisgraph', {}).get('password')
+            }
+
+            import requests
+            Dug.cached_session = requests.session()
+                # CachedSession(cache_name='annotator',
+                #                          backend='redis',
+                #                          connection=redis.StrictRedis(**redis_config))
+
+            Dug.annotator = DugAnnotator(
+                preprocessor=preprocessor,
+                annotator=annotator,
+                normalizer=normalizer,
+                synonym_finder=synonym_finder,
+                ontology_helper=ontology_helper
             )
         if not Dug.search_obj:
             # Dug search expects these to be set as os envrion
@@ -70,6 +100,43 @@ class Dug:
         return Dug.annotator.annotate(tags)
 
     @staticmethod
+    def annotate_files(parser_name, parsable_files):
+        parser = get_parser(parser_name)
+        output_base_path = Util.dug_annotation_path('')
+        log.info("Parsing files")
+        for file in parsable_files:
+            log.debug("Creating Dug Crawler object")
+            crawler = Crawler(
+                crawl_file=file,
+                parser=parser,
+                annotator=Dug.annotator,
+                tranqlizer='',
+                tranql_queries=[],
+                http_session= Dug.cached_session
+            )
+            # configure crawl space
+            current_file_name = '.'.join(os.path.basename(file).split('.')[:-1])
+            elements_file_path = os.path.join(output_base_path, current_file_name)
+            elements_file_name = 'elements.pickle'
+            concepts_file_name = 'concepts.pickle'
+            # create an empty elements file
+            log.debug(f"Creating empty file:  {elements_file_path}/element_file.json")
+            Util.write_object({}, os.path.join(elements_file_path, 'element_file.json'))
+            crawler.elements = parser.parse(file)
+            # @TODO propose for Dug to make this a crawler class init parameter(??)
+            crawler.crawlspace = elements_file_path
+            crawler.annotate_elements()
+            non_expanded_concepts = crawler.concepts
+            elements = crawler.elements
+            log.info(f"Parsed and annotated: {file}")
+            with open(os.path.join(elements_file_path, elements_file_name), 'wb') as f:
+                pickle.dump(elements, f)
+                log.info(f"Pickled annotated elements to : {elements_file_path}/{elements_file_name}")
+            with open(os.path.join(elements_file_path, concepts_file_name), 'wb') as f:
+                pickle.dump(non_expanded_concepts, f)
+                log.info(f"Pickled annotated concepts to : {elements_file_path}/{concepts_file_name}")
+
+    @staticmethod
     def make_edge (subj,
                    obj,
                    predicate = 'biolink:association',
@@ -102,7 +169,7 @@ class Dug:
         }
 
     @staticmethod
-    def convert_to_kgx_json(annotations):
+    def convert_to_kgx_json(elements):
         """
         Given an annotated and normalized set of study variables,
         generate a KGX compliant graph given the normalized annotations.
@@ -116,18 +183,19 @@ class Dug:
         edges = graph['edges']
         nodes = graph['nodes']
 
-        for index, variable in enumerate(annotations):
-            study_id = variable['collection_id']
+        for index, variable in enumerate(elements):
+            if not isinstance(variable, DugElement):
+                continue
+            study_id = variable.collection_id
             if index == 0:
                 """ assumes one study in this set. """
                 nodes.append({
                     "id": study_id,
                     "category": ["biolink:ClinicalTrial"]
                 })
-
             """ connect the study and the variable. """
             edges.append(Dug.make_edge(
-                subj=variable['element_id'],
+                subj=variable.id,
                 relation_label='part of',
                 relation='BFO:0000050',
                 obj=study_id,
@@ -137,20 +205,21 @@ class Dug:
                 subj=study_id,
                 relation_label='has part',
                 relation="BFO:0000051",
-                obj=variable['element_id'],
+                obj=variable.id,
                 predicate='biolink:has_part',
                 predicate_label='has part'))
 
-            """ a node for the variable. """
-            nodes.append({
-                "id": variable['element_id'],
-                "name": variable['element_name'],
-                "description": variable['element_desc'],
-                "category": ["biolink:ClinicalModifier"]
-            })
-            for identifier, metadata in variable['identifiers'].items():
+            """ a node for the variable. Should be BL compatible """
+            variable_node = {
+                "id": variable.id,
+                "name": variable.name,
+                "category": ["biolink:ClinicalModifier"],
+                "description": variable.description
+            }
+            nodes.append(variable_node)
+            for identifier, metadata in variable.concepts.items():
                 edges.append(Dug.make_edge(
-                    subj=variable['element_id'],
+                    subj=variable.id,
                     relation='OBAN:association',
                     obj=identifier,
                     relation_label='association',
@@ -159,19 +228,20 @@ class Dug:
                 edges.append(Dug.make_edge(
                     subj=identifier,
                     relation='OBAN:association',
-                    obj=variable['element_id'],
+                    obj=variable.id,
                     relation_label='association',
                     predicate='biolink:Association',
                     predicate_label='association'))
-                nodes.append({
-                    "id": identifier,
-                    "name": metadata['label'],
-                    "category": metadata['type']
-                })
+                try:
+                    concept_node = metadata.identifiers[identifier].__dict__
+                    concept_node['category'] = concept_node['types']
+                    nodes.append(concept_node)
+                except:
+                    log.error(f"Error identifier not found {identifier}")
         return graph
 
     @staticmethod
-    def make_tagged_kg(variables, tags):
+    def make_tagged_kg(elements):
         """ Make a Translator standard knowledge graph representing
         tagged study variables.
         :param variables: The variables to model.
@@ -189,25 +259,29 @@ class Dug:
         """ Create graph elements to model tags and their
         links to identifiers gathered by semantic tagging. """
         tag_map = {}
-        for tag in tags:
-            tag_pk = tag['pk']
-            tag_id = tag['id']
-            tag_map[tag_pk] = tag
+        # @TODO extract this into config or maybe dug ??
+        topmed_tag_concept_type = "TOPMed Phenotype Concept"
+        for tag in elements:
+            if not (isinstance(tag, DugConcept) and tag.type == topmed_tag_concept_type):
+                continue
+            tag_id = tag.id
+            tag_map[tag_id] = tag
             nodes.append({
                 "id": tag_id,
-                "pk": tag_pk,
-                "name": tag['title'],
-                "description": tag['description'],
-                "instructions": tag['instructions'],
+                "name": tag.name,
+                "description": tag.description,
                 "category": ["biolink:InformationContentEntity"]
             })
             """ Link ontology identifiers we've found for this tag via nlp. """
-            for identifier, metadata in tag['identifiers'].items():
-                node_types = list(metadata['type']) if isinstance(metadata['type'], str) else metadata['type']
+            for identifier, metadata in tag.identifiers.items():
+
+                node_types = list(metadata.types) if isinstance(metadata.types, str) else metadata.types
+                synonyms = metadata.synonyms if metadata.synonyms else []
                 nodes.append({
                     "id": identifier,
-                    "name": metadata['label'],
-                    "category": node_types
+                    "name": metadata.label,
+                    "category": node_types,
+                    "synonyms": synonyms
                 })
                 edges.append(Dug.make_edge(
                     subj=tag_id,
@@ -218,16 +292,22 @@ class Dug:
 
         """ Create nodes and edges to model variables, studies, and their
         relationships to tags. """
-        for variable in variables:
-            variable_id = variable['element_id']
-            variable_name = variable['element_name']
+        for variable in elements:
+            if not isinstance(variable, DugElement):
+                continue
+            variable_id = variable.id
+            variable_name = variable.name
 
-            # Eg. variable['identifiers'] = ['TOPMED.TAG:51']
-            variable_tag_pk = variable['identifiers'][0].split(':')[-1]
-
-            study_id = variable['collection_id']
-            study_name = variable['collection_name']
-            tag_id = tag_map[int(variable_tag_pk)]['id']
+            # These contain other concepts that the variable is annotate with.
+            # These But here we want to link them with topmed tags only
+            # The tags are supposed to be linked with the other concepts.
+            # So We will filter out the Topmed Tag here.
+            tag_ids = [x for x in variable.concepts.keys() if x.startswith('TOPMED.TAG')]
+            if len(tag_ids) != 1:
+                log.error(f"Topmed tags Tags for element {variable} > 1...")
+            study_id = variable.collection_id
+            study_name = variable.collection_name
+            tag_id = tag_ids[0]
             if not study_id in studies:
                 nodes.append({
                     "id": study_id,
@@ -275,7 +355,8 @@ class Dug:
 
     @staticmethod
     def index_variables(variables):
-        Dug.search_obj.index_variables(variables, "variables_index")
+        pass
+        # Dug.search_obj.index_variables(variables, "variables_index")
 
     @staticmethod
     def crawl_concepts(concepts, crawl_dir):
@@ -313,45 +394,22 @@ class DugUtil():
     @staticmethod
     def load_and_annotate(config=None, to_string=False):
         with Dug(config) as dug:
+            # This needs to be meta data driven (?)
+            # annotation:
+            #   - dir: <topmed_dir>
+            #     parser: "Dug parser name"
+            #     kg_type : <harmonized (Topmed graph) vs non-harmonized (Dbgap graph) > ?
             topmed_files = Util.dug_topmed_objects()
             dd_xml_files = Util.dug_dd_xml_objects()
             output_base_path = Util.dug_annotation_path('')
-            for file in topmed_files:
-                """Loading step"""
-                variables, tags = dug.load_tagged(file)
-                """Annotating step"""
-                # dug.annotate modifies the tags in place. It adds
-                # a new attribute `identifiers` on each tag.
-                # That is used in make kg downstream to build associciations
-                # between Variable Tags and other Concepts.
-
-                annotated_tags = dug.annotate(tags)
-
-                # annotated_tags is an expanded format of the tags. Basically
-                # all the Nodes we have. This expansion makes it difficult to
-                # preserve the `edges` / `links` between the Tags and the concepts
-                # derived from their descriptions.
-                # Using the inplace modified `tags` makes sense for make_tagged_kg. since concepts are
-                # binned within each tag.
-                output_file_path = DugUtil.make_output_file_path(output_base_path, file)
-                Util.write_object({
-                    "variables": variables,
-                    "original_tags": tags,
-                    "concepts": annotated_tags
-                }, output_file_path)
-
-            for file in dd_xml_files:
-                """Loading XML step"""
-                variables = dug.load_dd_xml(file)
-                """Annotating XML step"""
-                annotated_tags = dug.annotate(variables)
-                # The annotated tags are not needed.
-                output_file_path = DugUtil.make_output_file_path(output_base_path, file)
-                Util.write_object({
-                    "variables": variables,
-                    "concepts": annotated_tags
-                }, output_file_path)
-            log.info(f"Load and Annotate complete")
+            # Parse db gap
+            parser_name = "DbGaP"
+            dug.annotate_files(parser_name=parser_name,
+                               parsable_files=dd_xml_files)
+            # Parse and annotate Topmed
+            parser_name = "TOPMedTag"
+            dug.annotate_files(parser_name=parser_name,
+                               parsable_files=topmed_files)
             output_log = dug.log_stream.getvalue()
         return output_log
 
@@ -360,29 +418,19 @@ class DugUtil():
         with Dug(config) as dug:
             output_base_path = Util.dug_kgx_path("")
             log.info("Starting building KGX files")
-            annotated_file_names = Util.dug_annotation_objects()
-            for annotated_file in annotated_file_names:
-                if "topmed" in annotated_file:
-                    log.info(f"Processing {annotated_file}")
-                    with open(annotated_file) as f:
-                        data_set = json.load(f)
-                        graph = dug.make_tagged_kg(data_set['variables'], data_set['original_tags'])
-                    output_file_path = os.path.join(output_base_path,
-                                                '.'.join(os.path.basename(annotated_file).split('.')[:-1]) + '_kgx.json')
-                    Util.write_object(graph, output_file_path)
-                    log.info(f"Wrote {len(graph['nodes'])} nodes and {len(graph['edges'])} edges, to {output_file_path}.")
-                else:
-                    log.info(f"Processing {annotated_file}")
-                    with open(annotated_file) as f:
-                        data_set = json.load(f)
-                        graph = dug.convert_to_kgx_json(data_set['variables'])
-                    output_file_path = os.path.join(output_base_path,
-                                                '.'.join(os.path.basename(annotated_file).split('.')[:-1]) + '_kgx.json')
-                    Util.write_object(graph, output_file_path)
-                    log.info(f"Wrote {len(graph['nodes'])} nodes and {len(graph['edges'])} edges, to {output_file_path}.")
-            log.info("Building the graph complete")
-            output_log = dug.log_stream.getvalue()
-        return output_log
+            elements_files = Util.dug_elements_objects()
+            for file in elements_files:
+                with open(file, "rb") as f:
+                    elements = pickle.load(f)
+                    if "topmed_" in file:
+                        kg = dug.make_tagged_kg(elements)
+                    else:
+                        kg = dug.convert_to_kgx_json(elements)
+                    dug_base_file_name = file.split(os.path.sep)[-2]
+                    output_file_path = os.path.join(output_base_path, dug_base_file_name + '_kgx.json')
+                    Util.write_object(kg, output_file_path)
+                    log.info(f"Wrote {len(kg['nodes'])} nodes and {len(kg['edges'])} edges, to {output_file_path}.")
+
 
     @staticmethod
     def index_variables(config=None, to_string=False):
