@@ -33,32 +33,20 @@ class Dug:
             log.addHandler(self.string_handler)
         Dug.config = config
         if not Dug.annotator:
-            # @TODO still work in progress but these need to be in roger's conf. Dug is a library here.
-            import dug.config as dug_config
-            preprocessor = Preprocessor(**dug_config.preprocessor)
-            annotator = Annotator(**dug_config.annotator)
-            normalizer = Normalizer(**dug_config.normalizer)
-            synonym_finder = SynonymFinder(**dug_config.synonym_service)
-            ontology_helper = OntologyHelper(**dug_config.ontology_helper)
-            ontology_greenlist = dug_config.ontology_greenlist if hasattr(dug_config,"ontology_greenlist") else []
-
-            annotation_config = self.config.get('annotation')
-            annotation_config.update({
-                'redis_host': self.config.get('redisgraph', {}).get('host'),
-                'redis_port': self.config.get('redisgraph', {}).get('port'),
-                'redis_password': self.config.get('redisgraph', {}).get('password')
-            })
+            annotation_config = self.config.get("annotation")
+            preprocessor = Preprocessor(**annotation_config["preprocessor"])
+            annotator = Annotator(url=annotation_config["annotator"])
+            normalizer = Normalizer(url=annotation_config["normalizer"])
+            synonym_finder = SynonymFinder(url=annotation_config["synonym_service"])
+            ontology_helper = OntologyHelper(url=annotation_config["ontology_metadata"])
             redis_config = {
                 'host': self.config.get('redisgraph', {}).get('host'),
                 'port': self.config.get('redisgraph', {}).get('port'),
                 'password': self.config.get('redisgraph', {}).get('password')
             }
-
-            import requests
-            Dug.cached_session = requests.session()
-                # CachedSession(cache_name='annotator',
-                #                          backend='redis',
-                #                          connection=redis.StrictRedis(**redis_config))
+            Dug.cached_session = CachedSession(cache_name='annotator',
+                                                backend='redis',
+                                                connection=redis.StrictRedis(**redis_config))
 
             Dug.annotator = DugAnnotator(
                 preprocessor=preprocessor,
@@ -67,12 +55,13 @@ class Dug:
                 synonym_finder=synonym_finder,
                 ontology_helper=ontology_helper
             )
+
         if not Dug.search_obj:
             # Dug search expects these to be set as os envrion
             # Elastic config
             elastic_conf = config.get("elastic_search")
-            os.environ['ELASTIC_API_HOST']  =  elastic_conf.get("host")
-            os.environ['ELASTIC_USERNAME'] =  elastic_conf.get("username")
+            os.environ['ELASTIC_API_HOST'] = elastic_conf.get("host")
+            os.environ['ELASTIC_USERNAME'] = elastic_conf.get("username")
             os.environ['ELASTIC_PASSWORD'] = elastic_conf.get("password")
             os.environ['NBOOST_API_HOST'] = elastic_conf.get("nboost_host")
             Dug.search_obj = Search(os.environ['ELASTIC_API_HOST'])
@@ -94,13 +83,15 @@ class Dug:
         log.info(f"Loading DD xml file --> {file}")
         return Dug.annotator.load_data_dictionary(file)
 
-    @staticmethod
-    def annotate(tags):
-        log.info(f"Annotating")
-        return Dug.annotator.annotate(tags)
 
     @staticmethod
     def annotate_files(parser_name, parsable_files):
+        """
+        Annotates a Data element file using a Dug parser.
+        :param parser_name: Name of Dug parser to use.
+        :param parsable_files: Files to parse.
+        :return: None.
+        """
         parser = get_parser(parser_name)
         output_base_path = Util.dug_annotation_path('')
         log.info("Parsing files")
@@ -114,20 +105,28 @@ class Dug:
                 tranql_queries=[],
                 http_session= Dug.cached_session
             )
-            # configure crawl space
+
+            # configure output space.
             current_file_name = '.'.join(os.path.basename(file).split('.')[:-1])
             elements_file_path = os.path.join(output_base_path, current_file_name)
             elements_file_name = 'elements.pickle'
             concepts_file_name = 'concepts.pickle'
-            # create an empty elements file
+
+            # create an empty elements file. This also creates output dir if it doesn't exist.
             log.debug(f"Creating empty file:  {elements_file_path}/element_file.json")
             Util.write_object({}, os.path.join(elements_file_path, 'element_file.json'))
             crawler.elements = parser.parse(file)
+
             # @TODO propose for Dug to make this a crawler class init parameter(??)
             crawler.crawlspace = elements_file_path
             crawler.annotate_elements()
+
+            # Extract out the concepts gotten out of annotation
+            # Extract out the elements
             non_expanded_concepts = crawler.concepts
             elements = crawler.elements
+
+            # Write pickles of objects to file
             log.info(f"Parsed and annotated: {file}")
             with open(os.path.join(elements_file_path, elements_file_name), 'wb') as f:
                 pickle.dump(elements, f)
@@ -182,20 +181,22 @@ class Dug:
         }
         edges = graph['edges']
         nodes = graph['nodes']
-
-        for index, variable in enumerate(elements):
-            if not isinstance(variable, DugElement):
+        written_nodes = set()
+        for index, element in enumerate(elements):
+            # DugElement means a variable (Study variable...)
+            if not isinstance(element, DugElement):
                 continue
-            study_id = variable.collection_id
-            if index == 0:
-                """ assumes one study in this set. """
+            study_id = element.collection_id
+            if study_id not in written_nodes:
                 nodes.append({
                     "id": study_id,
-                    "category": ["biolink:ClinicalTrial"]
+                    "category": ["biolink:ClinicalTrial"],
+                    "name": study_id
                 })
+                written_nodes.add(study_id)
             """ connect the study and the variable. """
             edges.append(Dug.make_edge(
-                subj=variable.id,
+                subj=element.id,
                 relation_label='part of',
                 relation='BFO:0000050',
                 obj=study_id,
@@ -205,21 +206,48 @@ class Dug:
                 subj=study_id,
                 relation_label='has part',
                 relation="BFO:0000051",
-                obj=variable.id,
+                obj=element.id,
                 predicate='biolink:has_part',
                 predicate_label='has part'))
 
             """ a node for the variable. Should be BL compatible """
             variable_node = {
-                "id": variable.id,
-                "name": variable.name,
+                "id": element.id,
+                "name": element.name,
                 "category": ["biolink:ClinicalModifier"],
-                "description": variable.description
+                "description": element.description
             }
-            nodes.append(variable_node)
-            for identifier, metadata in variable.concepts.items():
+            if element.id not in written_nodes:
+                nodes.append(variable_node)
+                written_nodes.add(element.id)
+
+            for identifier, metadata in element.concepts.items():
+                identifier_object = metadata.identifiers.get(identifier)
+                # This logic is treating DBGap files.
+                # First item in current DBGap xml files is a topmed tag,
+                # This is treated as a DugConcept Object. But since its not
+                # a concept we get from annotation (?) its never added to
+                # variable.concepts.items  (Where variable is a DugElement object)
+                # The following logic is trying to extract types, and for the
+                # aformentioned topmed tag it adds `biolink:InfomrmationContentEntity`
+                # Maybe a better solution could be adding types on DugConcept objects
+                # More specifically Biolink compatible types (?)
+                #
+                if identifier_object:
+                    category = identifier_object.types
+                elif identifier.startswith("TOPMED.TAG:") :
+                    category = ["biolink:InformationContentEntity"]
+                else:
+                    continue
+                if identifier not in written_nodes:
+                    nodes.append({
+                        "id": identifier,
+                        "category": category,
+                        "name": metadata.name
+                    })
+                    written_nodes.add(identifier)
                 edges.append(Dug.make_edge(
-                    subj=variable.id,
+                    subj=element.id,
                     relation='OBAN:association',
                     obj=identifier,
                     relation_label='association',
@@ -228,16 +256,10 @@ class Dug:
                 edges.append(Dug.make_edge(
                     subj=identifier,
                     relation='OBAN:association',
-                    obj=variable.id,
+                    obj=element.id,
                     relation_label='association',
                     predicate='biolink:Association',
                     predicate_label='association'))
-                try:
-                    concept_node = metadata.identifiers[identifier].__dict__
-                    concept_node['category'] = concept_node['types']
-                    nodes.append(concept_node)
-                except:
-                    log.error(f"Error identifier not found {identifier}")
         return graph
 
     @staticmethod
@@ -401,7 +423,6 @@ class DugUtil():
             #     kg_type : <harmonized (Topmed graph) vs non-harmonized (Dbgap graph) > ?
             topmed_files = Util.dug_topmed_objects()
             dd_xml_files = Util.dug_dd_xml_objects()
-            output_base_path = Util.dug_annotation_path('')
             # Parse db gap
             parser_name = "DbGaP"
             dug.annotate_files(parser_name=parser_name,
