@@ -13,7 +13,6 @@ import hashlib
 import logging
 import dug.tranql as tql
 import redis
-import pickle
 from functools import reduce
 
 log = get_logger()
@@ -153,12 +152,12 @@ class Dug:
 
             # Write pickles of objects to file
             log.info(f"Parsed and annotated: {file}")
-            with open(os.path.join(elements_file_path, elements_file_name), 'wb') as f:
-                pickle.dump(elements, f)
-                log.info(f"Pickled annotated elements to : {elements_file_path}/{elements_file_name}")
-            with open(os.path.join(elements_file_path, concepts_file_name), 'wb') as f:
-                pickle.dump(non_expanded_concepts, f)
-                log.info(f"Pickled annotated concepts to : {elements_file_path}/{concepts_file_name}")
+            elements_out_file = os.path.join(elements_file_path, elements_file_name)
+            Util.write_object(elements, elements_out_file)
+            log.info(f"Pickled annotated elements to : {elements_file_path}/{elements_file_name}")
+            concepts_out_file = os.path.join(elements_file_path, concepts_file_name)
+            Util.write_object(non_expanded_concepts, concepts_out_file)
+            log.info(f"Pickled annotated concepts to : {elements_file_path}/{concepts_file_name}")
 
     @staticmethod
     def make_edge (subj,
@@ -484,7 +483,11 @@ class Dug:
 
     @staticmethod
     def index_concepts(concepts):
+        log.info("Indexing Concepts")
+        total = len(concepts)
+        count = 0
         for concept_id, concept in concepts.items():
+            count += 1
             Dug.search_obj.index_concept(concept, index=Dug.CONCEPTS_INDEX)
             # Index knowledge graph answers for each concept
             for kg_answer_id, kg_answer in concept.kg_answers.items():
@@ -492,6 +495,10 @@ class Dug:
                                        kg_answer=kg_answer,
                                        index=Dug.KG_INDEX,
                                        id_suffix=kg_answer_id)
+            percent_complete = int((count/total) * 100)
+            if percent_complete % 10 == 0:
+                log.info(f"{percent_complete} %")
+        log.info("Done Indexing concepts")
 
     @staticmethod
     def validate_indexed_concepts(elements, concepts):
@@ -607,9 +614,8 @@ class DugUtil():
             # These are concepts that have knowledge graphs  from tranql
             expanded_concepts_files = Util.dug_expanded_concept_objects()
             for file in expanded_concepts_files:
-                with open(file, 'rb') as file:
-                    concepts = pickle.load(file)
-                    dug.index_concepts(concepts=concepts)
+                concepts = Util.read_object(file)
+                dug.index_concepts(concepts=concepts)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
@@ -629,11 +635,10 @@ class DugUtil():
             concepts_files = Util.dug_concepts_objects()
             log.info(f'Crawling Dug Concepts, found {len(concepts_files)} file(s).')
             for file in concepts_files:
-                with open(file, 'rb') as f:
-                    data_set = pickle.load(f)
-                    original_variables_dataset_name = os.path.split(os.path.dirname(file))[-1]
-                    dug.crawl_concepts(concepts=data_set,
-                                       data_set_name=original_variables_dataset_name)
+                data_set = Util.read_object(file)
+                original_variables_dataset_name = os.path.split(os.path.dirname(file))[-1]
+                dug.crawl_concepts(concepts=data_set,
+                                   data_set_name=original_variables_dataset_name)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
