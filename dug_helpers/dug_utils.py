@@ -474,11 +474,17 @@ class Dug:
             http_session= Dug.cached_session
         )
         crawler.crawlspace = crawl_dir
+        counter= 0
+        total = len(concepts)
         for concept_id, concept in concepts.items():
+            counter += 1
             crawler.expand_concept(concept)
             concept.set_search_terms()
             concept.set_optional_terms()
             concept.clean()
+            percent_complete = int((counter/total)*100)
+            if percent_complete % 10 == 0:
+                log.info(f"{percent_complete}%")
         Util.write_object(obj=concepts, path=output_file)
 
     @staticmethod
