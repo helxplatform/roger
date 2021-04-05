@@ -85,7 +85,7 @@ docker() {
     "
   }
   config() {
-     grep -v "^#" .env
+     grep -v "^#" dev.env
   }
   init() {
     export $(config | xargs -0)
