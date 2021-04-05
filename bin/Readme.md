@@ -84,6 +84,8 @@ passwords etc.. to the backend servers.
 
 ##### Run a task 
 
+To run a single task : 
+
 ```shell script
 python cli.py -l # runs annotatation task 
 python cli.py -h # see the full list of available arguments.
@@ -91,6 +93,7 @@ python cli.py -h # see the full list of available arguments.
 
 ##### Using the Makefiles
 
+Another way to run roger is as a pipeline, where each task is 
 In `roger/roger/bin/` there is a root make file and in the `roger/roger/bin/dug_annotate`,
 `roger/roger/bin/dug_indexing` and `roger/roger/bin/roger_graph_build`. 
 
