@@ -82,6 +82,14 @@ pip install -r requirements.txt
 Refer to configuration section to override server names and passwords to 
 passwords etc.. to the backend servers. 
 
+For development there is a dev.env file in `roger/bin/` directory with some start
+up variables. Modify as needed. The following command can be used to export them into
+shell.
+```shell script
+export $(grep -v'^#' bin/dev.env | xargs 0)
+```
+
+
 ##### Run a task 
 
 To run a single task : 
