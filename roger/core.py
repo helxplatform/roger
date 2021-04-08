@@ -20,6 +20,8 @@ from roger.components.data_conversion_utils import TypeConversionUtil
 from redisgraph_bulk_loader.bulk_insert import bulk_insert
 from roger.roger_db import RedisGraph
 from string import Template
+from kgx.transformer import Transformer
+import kgx.graph_operations.graph_merge as graph_merge
 
 log = get_logger ()
 config = get_config ()
@@ -415,54 +417,28 @@ class KGXModel:
 
     def merge (self):
         """ Merge nodes. Would be good to have something less computationally intensive. """
-        for path in Util.kgx_objects ():
-            new_path = path.replace ('/kgx/', '/merge/')
+        kgx_files = Util.kgx_objects()
+        # TODO: Change to meta-data dataset version
+        provided_by = 'kgx-dataset-v1.0'
+        graphs = []
+        for x in kgx_files:
+            input_args = {'filename': [x], 'format': 'json', 'name': x, 'provided_by': provided_by}
+            t = Transformer(stream=False)
+            t.transform(input_args=input_args)
+            graph = t.store.graph
+            graphs.append(graph)
+        merged_graph = graph_merge.merge_all_graphs(graphs)
+        input_args = {'graph': merged_graph, 'format': 'graph'}
+        output_path = Util.merge_path('merged_graph.json')
 
-            source_stats = os.stat (path)
-            if os.path.exists (new_path):
-                dest_stats = os.stat (new_path)
-                if dest_stats.st_mtime > source_stats.st_mtime:
-                    log.info (f"merge {new_path} is up to date.")
-                    continue
+        # create empty file.
+        if not os.path.exists(output_path):
+            Util.write_object({}, output_path)
 
-            log.info (f"merging {path}")
-            graph = Util.read_object (path)
-            graph_nodes = graph.get ('nodes', [])
-            graph_map = { n['id'] : n for n in graph_nodes }
-            graph_keys = graph_map.keys ()
-            total_merge_time = 0
-            for path_2 in Util.kgx_objects ():
-                if path_2 == path:
-                    continue
-                start = Util.current_time_in_millis ()
-                other_graph = Util.read_object (path_2)
-                load_time = Util.current_time_in_millis () - start
-
-                start = Util.current_time_in_millis ()                
-                other_nodes = other_graph.get('nodes', [])
-                other_map = { n['id'] : n for n in other_nodes }
-                other_keys = set(other_map.keys())
-                intersection = [ v for v in graph_keys if v in other_keys ]
-                difference = list(set(other_keys) - set(graph_keys))
-                scope_time = Util.current_time_in_millis () - start
-                
-                start = Util.current_time_in_millis ()
-                for i in intersection:
-                    self.merge_nodes (graph_map[i], other_map[i])
-                other_graph['nodes'] = [ other_map[i] for i in difference ]
-                merge_time = Util.current_time_in_millis () - start
-                
-                start = Util.current_time_in_millis ()
-                Util.write_object (other_graph, path_2.replace ('kgx', 'merge'))
-                write_time = Util.current_time_in_millis () - start
-                log.debug ("merged {:>45} load:{:>5} scope:{:>7} merge:{:>3}".format(
-                    Util.trunc(path_2, 45), load_time, scope_time, merge_time))
-                total_merge_time += load_time + scope_time + merge_time + write_time
-                
-            start = Util.current_time_in_millis ()
-            Util.write_object (graph, new_path)
-            rewrite_time = Util.current_time_in_millis () - start
-            log.info (f"{path} rewrite: {rewrite_time}. total merge time: {total_merge_time}")
+        output_args = {'filename': output_path, 'format': 'json'}
+        out_transformer = Transformer(stream=False)
+        out_transformer.transform(output_args=output_args, input_args=input_args)
+        return None
 
     def format_keys (self, keys, schema_type : SchemaType):
         """ Format schema keys. Make source and destination first in edges. Make
