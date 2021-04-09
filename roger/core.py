@@ -451,7 +451,7 @@ class KGXModel:
             del graph_0, current_graph, graphs, merged_graph
             log.debug(f"memory freed")
             # Read back merged graph as inital graph
-            graph_0 = self.get_kgx_graph(output_path, provided_by)
+            graph_0 = self._get_kgx_graph(output_path, provided_by)
 
 
 
