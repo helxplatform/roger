@@ -456,7 +456,7 @@ class KGXModel:
 
 
         # finally merge last file
-        current_graph = self._get_kgx_graph(kgx_files[-1])
+        current_graph = self._get_kgx_graph(kgx_files[-1], provided_by)
         merged_graph = graph_merge.merge_all_graphs([graph_0, current_graph])
         log.info (f"added {kgx_files[-1]} to base graph.")
         output_path = Util.merge_path(f'merged_graph-{provided_by}.json')
