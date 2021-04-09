@@ -349,7 +349,7 @@ class KGXModel:
 
         predicate_schemas = defaultdict(lambda:None)
         category_schemas = defaultdict(lambda:None)        
-        for subgraph in Util.kgx_objects ():
+        for subgraph in Util.merged_objects ():
             """ Read a kgx data file. """
             log.debug (f"analyzing schema of {subgraph}.")
             basename = os.path.basename (subgraph).replace (".json", "")
@@ -434,8 +434,13 @@ class KGXModel:
 
     def merge (self, config):
         """ Merge nodes. Would be good to have something less computationally intensive. """
-        kgx_files = Util.kgx_objects()
         provided_by = 'dataset-version-' + config.get('kgx',{}).get('dataset_version', '-NA')
+        final_graph_file_name = f'merged_graph-{provided_by}.json'
+        # TODO refine check
+        if final_graph_file_name in Util.merged_objects():
+            log.info("Found existing merged graph for dataset... Nothing to be done.")
+            return
+        kgx_files = Util.kgx_objects()
         graphs = []
         if not len(kgx_files): log.warning('No KGX files found to merge'); return
         graph_0 = self._get_kgx_graph(kgx_files[0], provided_by)
@@ -459,7 +464,7 @@ class KGXModel:
         current_graph = self._get_kgx_graph(kgx_files[-1], provided_by)
         merged_graph = graph_merge.merge_all_graphs([graph_0, current_graph])
         log.info (f"added {kgx_files[-1]} to base graph.")
-        output_path = Util.merge_path(f'merged_graph-{provided_by}.json')
+        output_path = Util.merge_path(final_graph_file_name)
         self._write_kgx_graph(output_path, merged_graph)
         log.info(f"wrote final graph to {output_path}")
 
