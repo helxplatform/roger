@@ -415,30 +415,64 @@ class KGXModel:
     def diff_lists (self, L, R):
         return list(list(set(L)-set(R)) + list(set(R)-set(L)))
 
-    def merge (self):
+    def _get_kgx_graph(self, input_file_name, provided_by):
+        input_args = {'filename': [input_file_name], 'format': 'json', 'provided_by': provided_by}
+        t = Transformer(stream=False)
+        t.transform(input_args=input_args)
+        graph = t.store.graph
+        return graph
+
+    def _write_kgx_graph(self, out_file_name, nx_graph):
+        input_args = {'graph': nx_graph, 'format': 'graph'}
+        # create empty file.
+        if not os.path.exists(out_file_name):
+            Util.write_object({}, out_file_name)
+            output_args = {'filename': out_file_name, 'format': 'json'}
+            out_transformer = Transformer(stream=False)
+            out_transformer.transform(output_args=output_args, input_args=input_args)
+
+
+    def merge (self, config):
         """ Merge nodes. Would be good to have something less computationally intensive. """
         kgx_files = Util.kgx_objects()
-        # TODO: Change to meta-data dataset version
-        provided_by = 'kgx-dataset-v1.0'
+        provided_by = 'dataset-version-' + config.get('kgx',{}).get('dataset_version', '-NA')
         graphs = []
-        for x in kgx_files:
-            input_args = {'filename': [x], 'format': 'json', 'name': x, 'provided_by': provided_by}
-            t = Transformer(stream=False)
-            t.transform(input_args=input_args)
-            graph = t.store.graph
-            graphs.append(graph)
-        merged_graph = graph_merge.merge_all_graphs(graphs)
-        input_args = {'graph': merged_graph, 'format': 'graph'}
-        output_path = Util.merge_path('merged_graph.json')
+        if not len(kgx_files): log.warning('No KGX files found to merge'); return
+        graph_0 = self._get_kgx_graph(kgx_files[0], provided_by)
+        log.debug(f"intial graph read {kgx_files[0]}")
+        for index, x in enumerate(kgx_files[1:-1]):
+            current_graph = self._get_kgx_graph(x, provided_by)
+            graphs = [graph_0, current_graph]
+            merged_graph = graph_merge.merge_all_graphs(graphs)
+            output_path = Util.merge_path(f"temp-merged_graph-{index}.json")
+            self._write_kgx_graph(output_path, merged_graph)
+            log.info(f"added {x} to base graph")
+            # free up memory
+            del graph_0, current_graph, graphs, merged_graph
+            log.debug(f"memory freed")
+            # Read back merged graph as inital graph
+            graph_0 = self.get_kgx_graph(output_path, provided_by)
 
-        # create empty file.
-        if not os.path.exists(output_path):
-            Util.write_object({}, output_path)
 
-        output_args = {'filename': output_path, 'format': 'json'}
-        out_transformer = Transformer(stream=False)
-        out_transformer.transform(output_args=output_args, input_args=input_args)
-        return None
+
+        # finally merge last file
+        current_graph = self._get_kgx_graph(kgx_files[-1])
+        merged_graph = graph_merge.merge_all_graphs([graph_0, current_graph])
+        log.info (f"added {kgx_files[-1]} to base graph.")
+        output_path = Util.merge_path(f'merged_graph-{provided_by}.json')
+        self._write_kgx_graph(output_path, merged_graph)
+        log.info(f"wrote final graph to {output_path}")
+
+        # remove temp files
+        log.info("removing temporary files.... ")
+        temps = Util.merged_objects()
+        for tmp_file in temps:
+            if 'temp-merged_graph-' in tmp_file:
+                log.debug(f"removing {tmp_file}")
+                os.remove(tmp_file)
+        log.info("Done removing temporary files...")
+        log.info("Done merging.")
+
 
     def format_keys (self, keys, schema_type : SchemaType):
         """ Format schema keys. Make source and destination first in edges. Make
@@ -869,7 +903,7 @@ class RogerUtil:
     def merge_nodes (to_string=False, config=None):
         output = None
         with Roger (to_string, config=config) as roger:
-            roger.kgx.merge ()
+            roger.kgx.merge (config=config)
             output = roger.log_stream.getvalue () if to_string else None
         return output
     
