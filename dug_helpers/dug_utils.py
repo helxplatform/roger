@@ -13,6 +13,7 @@ import hashlib
 import logging
 import dug.tranql as tql
 import redis
+import tarfile
 from functools import reduce
 
 log = get_logger()
@@ -691,15 +692,36 @@ class DugUtil():
         return output_log
 
     @staticmethod
-    def is_topmed_data_available(config=None, to_string=False):
+    def get_topmed_files(config=None, to_string=False):
+        """
+        Currently this is a copy form dug data dir to <working dir>/dug/input_files/topmed/
+        :param config:
+        :param to_string:
+        :return:
+        """
         if not config:
             config = get_config()
         home = os.path.join(os.path.dirname(os.path.join(os.path.abspath(__file__))), '..')
-        file_path = os.path.join(home, get_config()['dug_data_root'])
-        data_path = Path(file_path)
-        data_files = data_path.glob('topmed_*.csv')
-        files = [str(file) for file in data_files]
-        if not files:
-            log.error("No topmed files were found.")
-            raise FileNotFoundError("Error could not find topmed files")
-        return len(files)
+        zip_file_path = os.path.join(home, get_config()['dug_data_root'], 'topmed_data')
+        data_path = Path(zip_file_path)
+        data_files = data_path.glob('topmed_*')
+        output_path = Util.dug_input_files_path("topmed/")
+        Util.mkdir(output_path)
+        for file in data_files:
+            output_file_name = os.path.join(output_path, file.name)
+            Util.copy_file_to_dir(file, output_file_name)
+            log.info(f"Copied {file.name} to {output_file_name}")
+
+
+    @staticmethod
+    def extract_dbgap_zip_files(config=None, to_string=False):
+
+        if not config:
+            config = get_config()
+        home = os.path.join(os.path.dirname(os.path.join(os.path.abspath(__file__))), '..')
+        zip_file_path = os.path.join(home, config['dug_data_root'], 'dd_xml_data' ,'bdc_dbgap_data_dicts.tar.gz')
+        log.info(f"Unzipping {zip_file_path}")
+        tar = tarfile.open(zip_file_path)
+        out_path = Util.dug_input_files_path("db_gap/")
+        Util.mkdir(out_path)
+        tar.extractall(path=out_path)
