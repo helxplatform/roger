@@ -32,7 +32,7 @@ with DAG(
         task = create_python_task(dag, f"annotate_and_normalize-DB_GAP-{index}", DugUtil.annotate_db_gap_files,{"files": chunk})
         intro >> task >> make_kg_tagged
     topmed_task = create_python_task(dag, f"annotate_and_normalize-TOPMED", DugUtil.annotate_topmed_files, {"files": topmed_files})
-    intro >> topmed_files >> make_kg_tagged
+    intro >> topmed_task >> make_kg_tagged
     # get_topmed_files = create_python_task(dag, "get_topmed_data", DugUtil.get_topmed_files)
     # extract_db_files = create_python_task(dag, "get_dbgab_data", DugUtil.extract_dbgap_zip_files)
 
