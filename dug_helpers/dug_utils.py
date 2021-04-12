@@ -108,7 +108,6 @@ class Dug:
         log.info(f"Loading DD xml file --> {file}")
         return Dug.annotator.load_data_dictionary(file)
 
-
     @staticmethod
     def annotate_files(parser_name, parsable_files):
         """
@@ -574,6 +573,28 @@ class Dug:
 
 
 class DugUtil():
+
+    @staticmethod
+    def annotate_db_gap_files(config=None, to_string=False, files = None):
+        with Dug(config, to_string=to_string) as dug:
+            if len(files) is None:
+                files = Util.dug_dd_xml_objects()
+            parser_name = "DbGap"
+            dug.annotate_files(parser_name=parser_name,
+                               parsable_files=files)
+            output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    @staticmethod
+    def annotate_topmed_files(config=None, to_string=False, files = None):
+        with Dug(config, to_string=to_string) as dug:
+            if files is None:
+                files = Util.dug_topmed_objects()
+            parser_name = "TOPMedTag"
+            dug.annotate_files(parser_name=parser_name,
+                               parsable_files=files)
+            output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
 
     @staticmethod
     def load_and_annotate(config=None, to_string=False):
