@@ -51,7 +51,10 @@ with DAG(
 
     dug_load_topmed_variables = create_python_task(dag, "annotate_topmed", DugUtil.annotate_topmed_files)
     bridge_task = create_python_task(dag, "bridge_task_set_db_gap_files", setup_db_gab_tasks)
-    chunked_db_gap_files = Variable.get("db_gap_chucked")
+    try:
+        chunked_db_gap_files = Variable.get("db_gap_chucked")
+    except:
+        chunked_db_gap_files = None
 
     intro >> [get_topmed_files, extract_db_gap_files] >> bridge_task >> \
     [dug_load_topmed_variables, db_gap_task_set] >> make_kg_tagged
