@@ -1,15 +1,17 @@
 import os
 from pathlib import Path
 from airflow.operators.bash_operator import BashOperator
-from airflow.models import DAG, Variable
+from airflow.models import DAG, Variable, DagBag, TaskInstance
+from airflow import settings
 from dug_helpers.dug_utils import DugUtil
 from roger.core import Util
-from dag_util import default_args, create_python_task, get_config
+from dag_util import default_args, create_python_task
 
+DAG_ID = 'annotate_dug'
 
 """ Build the workflow's tasks and DAG. """
 with DAG(
-    dag_id='annotate_dug',
+    dag_id=DAG_ID,
     default_args=default_args,
     schedule_interval=None
 ) as dag:
@@ -30,11 +32,30 @@ with DAG(
     get_topmed_files = create_python_task(dag, "get_topmed_data", DugUtil.get_topmed_files)
     extract_db_gap_files = create_python_task(dag, "get_dbgab_data", DugUtil.extract_dbgap_zip_files)
 
-    def setup_db_gab_tasks(**kwargs):
+
+    def resetTasksStatus(task_id, execution_date):
+        print("Resetting: " + task_id + " " + execution_date)
+
+        dag_folder = print.get('core', 'DAGS_FOLDER')
+        dagbag = DagBag(dag_folder)
+        check_dag = dagbag.dags[DAG_ID]
+        session = settings.Session()
+
+        my_task = check_dag.get_task(task_id)
+        ti = TaskInstance(my_task, execution_date)
+        state = ti.current_state()
+        print("Current state of " + task_id + " is " + str(state))
+        ti.set_state(None, session)
+        state = ti.current_state()
+        print("Updated state of " + task_id + " is " + str(state))
+
+    def setup_db_gab_tasks(*args, **kwargs):
         db_gap_files = Util.dug_dd_xml_objects()
         chunk_size = 10
         chucked = [db_gap_files[start: start + chunk_size] for start in range(0, len(db_gap_files), chunk_size)]
         Variable.set("db_gap_chunked", chucked)
+        for index, chunk in enumerate(chucked):
+            resetTasksStatus(f'db_gap_annotate-{index}', str(kwargs['execution_date']))
 
 
     try:
@@ -43,6 +64,7 @@ with DAG(
         db_gap_file_chunks = []
 
     bridge_task = create_python_task(dag, "bridge_task_set_db_gap_files", setup_db_gab_tasks)
+
     for index, chunk in enumerate(db_gap_file_chunks):
         task = create_python_task(
             dag,
