@@ -1,10 +1,6 @@
-import os
-from pathlib import Path
 from airflow.operators.bash_operator import BashOperator
-from airflow.models import DAG, Variable, DagBag, TaskInstance
-from airflow import settings
+from airflow.models import DAG
 from dug_helpers.dug_utils import DugUtil
-from roger.core import Util
 from dag_util import default_args, create_python_task
 
 DAG_ID = 'annotate_dug'
@@ -15,7 +11,6 @@ with DAG(
     default_args=default_args,
     schedule_interval=None
 ) as dag:
-
 
     """Build workflow tasks."""
     intro = BashOperator(task_id='Intro',
@@ -32,51 +27,9 @@ with DAG(
     get_topmed_files = create_python_task(dag, "get_topmed_data", DugUtil.get_topmed_files)
     extract_db_gap_files = create_python_task(dag, "get_dbgab_data", DugUtil.extract_dbgap_zip_files)
 
+    annotate_topmed_files = create_python_task(dag, "annotate_topmed_files", DugUtil.annotate_topmed_files)
+    annotate_db_gap_files = create_python_task(dag, "annotate_db_gap_files", DugUtil.annotate_db_gap_files)
 
-    def resetTasksStatus(task_id, execution_date):
-        print("Resetting: " + task_id + " " + execution_date)
-
-        dag_folder = print.get('core', 'DAGS_FOLDER')
-        dagbag = DagBag(dag_folder)
-        check_dag = dagbag.dags[DAG_ID]
-        session = settings.Session()
-
-        my_task = check_dag.get_task(task_id)
-        ti = TaskInstance(my_task, execution_date)
-        state = ti.current_state()
-        print("Current state of " + task_id + " is " + str(state))
-        ti.set_state(None, session)
-        state = ti.current_state()
-        print("Updated state of " + task_id + " is " + str(state))
-
-    def setup_db_gab_tasks(*args, **kwargs):
-        db_gap_files = Util.dug_dd_xml_objects()
-        chunk_size = 10
-        chucked = [db_gap_files[start: start + chunk_size] for start in range(0, len(db_gap_files), chunk_size)]
-        Variable.set("db_gap_chunked", chucked)
-        for index, chunk in enumerate(chucked):
-            resetTasksStatus(f'db_gap_annotate-{index}', str(kwargs['execution_date']))
-
-
-    try:
-        db_gap_file_chunks = Variable.get("db_gap_chunked")
-    except:
-        db_gap_file_chunks = []
-
-    bridge_task = create_python_task(dag, "bridge_task_set_db_gap_files", setup_db_gab_tasks)
-
-    for index, chunk in enumerate(db_gap_file_chunks):
-        task = create_python_task(
-            dag,
-            f"db_gap_annotate-{index}",
-            DugUtil.annotate_db_gap_files,
-            {"files": chunk}
-        )
-        bridge_task.set_downstream(task)
-        task.set_downstream(make_kg_tagged)
-
-    dug_load_topmed_variables = create_python_task(dag, "annotate_topmed", DugUtil.annotate_topmed_files)
-
-    intro >> [get_topmed_files, extract_db_gap_files] >> bridge_task >> \
-    dug_load_topmed_variables >> make_kg_tagged
+    intro >> [get_topmed_files, extract_db_gap_files] >> \
+    [annotate_topmed_files, annotate_db_gap_files] >> make_kg_tagged
 

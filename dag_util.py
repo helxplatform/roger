@@ -64,14 +64,6 @@ def get_executor_config(data_path='/opt/roger/data'):
                        "key": secret_key_name
                     }
                 }})
-    secrets.append({
-        "name": "AIRFLOW__CORE__FERNET_KEY",
-        "valueFrom": {
-            "secretKeyRef": {
-               "name": "airflow-config-secrets",
-               "key": "fernet-key"
-            }
-        }})
 
     k8s_executor_config = {
         "KubernetesExecutor": {
