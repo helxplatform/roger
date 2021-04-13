@@ -577,7 +577,7 @@ class DugUtil():
     @staticmethod
     def annotate_db_gap_files(config=None, to_string=False, files = None):
         with Dug(config, to_string=to_string) as dug:
-            if len(files) is None:
+            if files is None:
                 files = Util.dug_dd_xml_objects()
             parser_name = "DbGap"
             dug.annotate_files(parser_name=parser_name,
