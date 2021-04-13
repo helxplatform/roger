@@ -35,24 +35,26 @@ with DAG(
         chunk_size = 10
         chucked = [db_gap_files[start: start + chunk_size] for start in range(0, len(db_gap_files), chunk_size)]
         Variable.set("db_gap_chunked", chucked)
+
+
     try:
         db_gap_file_chunks = Variable.get("db_gap_chunked")
     except:
         db_gap_file_chunks = []
-    db_gap_task_set = []
+
+    bridge_task = create_python_task(dag, "bridge_task_set_db_gap_files", setup_db_gab_tasks)
     for index, chunk in enumerate(db_gap_file_chunks):
-        db_gap_task_set.append(
-            create_python_task(
-                dag,
-                f"db_gap_annotate-{index}",
-                DugUtil.annotate_db_gap_files,
-                {"files": chunk}
-            )
+        task = create_python_task(
+            dag,
+            f"db_gap_annotate-{index}",
+            DugUtil.annotate_db_gap_files,
+            {"files": chunk}
         )
+        bridge_task.set_downstream(task)
+        task.set_downstream(make_kg_tagged)
 
     dug_load_topmed_variables = create_python_task(dag, "annotate_topmed", DugUtil.annotate_topmed_files)
-    bridge_task = create_python_task(dag, "bridge_task_set_db_gap_files", setup_db_gab_tasks)
 
     intro >> [get_topmed_files, extract_db_gap_files] >> bridge_task >> \
-    [dug_load_topmed_variables, db_gap_task_set] >> make_kg_tagged
+    dug_load_topmed_variables >> make_kg_tagged
 
