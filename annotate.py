@@ -1,4 +1,5 @@
 from airflow.operators.bash_operator import BashOperator
+from airflow.operators.dummy_operator import DummyOperator
 from airflow.models import DAG
 from dug_helpers.dug_utils import DugUtil
 from dag_util import default_args, create_python_task
@@ -30,6 +31,9 @@ with DAG(
     annotate_topmed_files = create_python_task(dag, "annotate_topmed_files", DugUtil.annotate_topmed_files)
     annotate_db_gap_files = create_python_task(dag, "annotate_db_gap_files", DugUtil.annotate_db_gap_files)
 
-    intro >> [get_topmed_files, extract_db_gap_files] >> \
+    dummy_stepover = DummyOperator(
+        task_id="continue-(dummyop)",
+    )
+    intro >> [get_topmed_files, extract_db_gap_files] >> dummy_stepover >>\
     [annotate_topmed_files, annotate_db_gap_files] >> make_kg_tagged
 
