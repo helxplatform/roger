@@ -32,7 +32,7 @@ with DAG(
     annotate_db_gap_files = create_python_task(dag, "annotate_db_gap_files", DugUtil.annotate_db_gap_files)
 
     dummy_stepover = DummyOperator(
-        task_id="continue-(dummyop)",
+        task_id="continue",
     )
     intro >> [get_topmed_files, extract_db_gap_files] >> dummy_stepover >>\
     [annotate_topmed_files, annotate_db_gap_files] >> make_kg_tagged
