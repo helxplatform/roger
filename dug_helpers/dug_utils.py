@@ -579,7 +579,7 @@ class DugUtil():
         with Dug(config, to_string=to_string) as dug:
             if files is None:
                 files = Util.dug_dd_xml_objects()
-            parser_name = "DbGap"
+            parser_name = "DbGaP"
             dug.annotate_files(parser_name=parser_name,
                                parsable_files=files)
             output_log = dug.log_stream.getvalue() if to_string else ''
