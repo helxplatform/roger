@@ -35,5 +35,5 @@ with DAG(
         task_id="continue",
     )
     intro >> [get_topmed_files, extract_db_gap_files] >> dummy_stepover >>\
-    [annotate_topmed_files, annotate_db_gap_files] >> make_kg_tagged
+    [annotate_topmed_files, annotate_db_gap_files] #>> make_kg_tagged
 
