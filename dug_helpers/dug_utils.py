@@ -527,6 +527,9 @@ class Dug:
         # <= because we might have no results for some concepts from tranql
         size = int(len(concepts)*0.1)
         sample_concepts = {key: value for key, value in concepts.items() if value.kg_answers }
+        if len(concepts) == 0:
+            log.info(f"No Concepts found.")
+            return
         log.info(f"Found only {len(sample_concepts)} Concepts with Knowledge graph out of {len(concepts)}. {(len(sample_concepts)/ len(concepts))*100} %")
         # 2. pick elements that have concepts in the sample concepts set
         sample_elements = {}
@@ -661,6 +664,7 @@ class DugUtil():
         with Dug(config, to_string=to_string) as dug:
             elements_object_files = Util.dug_elements_objects()
             for elements_object_file in elements_object_files:
+                log.info(f"Validating {elements_object_file}")
                 dug.validate_indexed_elements(elements_object_file)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
