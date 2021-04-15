@@ -439,8 +439,10 @@ class Dug:
                 if not present:
                     log.error(f"Did not find expected variable {element.id} in search result.")
                     log.error(f"Concept id : {concept.id}, Search term: {search_term}")
-                    raise Exception(f"Validation exception - did not {element.id} in file {str(elements_file)} when searching"
-                                    f"for Concept ID : {concept.id} using Search Term : {search_term} ")
+                    raise Exception(f"Validation exception - did not find variable {element.id} "
+                                    f"from {str(elements_file)}"
+                                    f"when searching variable index with"
+                                    f" Concept ID : {concept.id} using Search Term : {search_term} ")
             else:
                 log.info(
                     f"{element.id} has no concepts annotated. Skipping validation for it."
@@ -558,8 +560,9 @@ class Dug:
             # validation here is that for any of these nodes we should get back
             # the variable.
             # make unique
-            search_terms = set(search_terms)
-            log.debug(f"Found {len(search_terms)} Search terms for concept {curie}")
+            search_terms_cap = 10
+            search_terms = list(set(search_terms))[:search_terms_cap]
+            log.debug(f"Using {len(search_terms)} Search terms for concept {curie}")
             for search_term in search_terms:
                 # avoids elastic failure due to some reserved characters
                 # 'search_phase_execution_exception', 'token_mgr_error: Lexical error ...
