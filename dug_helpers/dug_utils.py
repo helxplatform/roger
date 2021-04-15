@@ -439,7 +439,7 @@ class Dug:
                 if not present:
                     log.error(f"Did not find expected variable {element.id} in search result.")
                     log.error(f"Concept id : {concept.id}, Search term: {search_term}")
-                    exit(-1)
+                    exit(1)
             else:
                 log.info(
                     f"{element.id} has no concepts annotated. Skipping validation for it."
@@ -572,7 +572,7 @@ class Dug:
                 if not present:
                     log.error(f"Did not find expected variable {element.id} in search result.")
                     log.error(f"Concept id : {concept.id}, Search term: {search_term}")
-                    exit(-1)
+                    exit(1)
 
 
 class DugUtil():
