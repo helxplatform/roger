@@ -12,10 +12,10 @@ versions:
   - panther.json
   - foodb.json
   - pharos.json
-#  - intact.json
+  - intact.json
   - human-goa.json
   - uberongraph.json
-#  - viral-proteome.json
+  - viral-proteome.json
   version: v1.0
 - version: test
   files:
