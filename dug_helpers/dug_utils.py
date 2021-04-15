@@ -439,7 +439,8 @@ class Dug:
                 if not present:
                     log.error(f"Did not find expected variable {element.id} in search result.")
                     log.error(f"Concept id : {concept.id}, Search term: {search_term}")
-                    exit(1)
+                    raise Exception(f"Validation exception - did not {element.id} in file {str(elements_file)} when searching"
+                                    f"for Concept ID : {concept.id} using Search Term : {search_term} ")
             else:
                 log.info(
                     f"{element.id} has no concepts annotated. Skipping validation for it."
@@ -562,17 +563,16 @@ class Dug:
             for search_term in search_terms:
                 # avoids elastic failure due to some reserved characters
                 # 'search_phase_execution_exception', 'token_mgr_error: Lexical error ...
-                try:
-                    search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', search_term)
+                search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', search_term)
 
-                    searched_element_ids = Dug._search_elements(curie, search_term)
-                except:
-                    print(f'{search_term}')
+                searched_element_ids = Dug._search_elements(curie, search_term)
+
                 present = bool(len([x for x in sample_elements[curie] if x in searched_element_ids]))
                 if not present:
                     log.error(f"Did not find expected variable {element.id} in search result.")
                     log.error(f"Concept id : {concept.id}, Search term: {search_term}")
-                    exit(1)
+                    raise Exception(f"Validation error - Did not find {element.id} for"
+                                    f" Concept id : {concept.id}, Search term: {search_term}")
 
 
 class DugUtil():
