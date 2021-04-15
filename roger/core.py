@@ -440,7 +440,8 @@ class KGXModel:
     def merge (self):
         """ Merge nodes. Would be good to have something less computationally intensive. """
         for path in Util.kgx_objects ():
-            new_path = path.replace ('/kgx/', '/merge/')
+            path_sep = os.path.sep
+            new_path = path.replace (f'{path_sep}kgx{path_sep}', f'{path_sep}merge{path_sep}')
 
             source_stats = os.stat (path)
             if os.path.exists (new_path):
@@ -788,8 +789,8 @@ class BulkLoad:
                                 # cast it if it doesn't match type in schema keys i.e all_keys
                                 value = TypeConversionUtil.cast(obj[obj_key], all_keys[obj_key]) \
                                     if expected_type != current_type else value
-
-                            values.append(str(value))
+                            # escape quotes .
+                            values.append(str(value).replace("\"", "\\\""))
                         s = self.separator.join(values)
                         stream.write(s)
                         stream.write("\n")
