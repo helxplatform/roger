@@ -603,27 +603,6 @@ class DugUtil():
         return output_log
 
     @staticmethod
-    def load_and_annotate(config=None, to_string=False):
-        with Dug(config, to_string=to_string) as dug:
-            # This needs to be meta data driven (?)
-            # annotation:
-            #   - dir: <topmed_dir>
-            #     parser: "Dug parser name"
-            #     kg_type : <harmonized (Topmed graph) vs non-harmonized (Dbgap graph) > ?
-            topmed_files = Util.dug_topmed_objects()
-            dd_xml_files = Util.dug_dd_xml_objects()
-            # Parse db gap
-            parser_name = "DbGaP"
-            dug.annotate_files(parser_name=parser_name,
-                               parsable_files=dd_xml_files)
-            # Parse and annotate Topmed
-            parser_name = "TOPMedTag"
-            dug.annotate_files(parser_name=parser_name,
-                               parsable_files=topmed_files)
-            output_log = dug.log_stream.getvalue() if to_string else ''
-        return output_log
-
-    @staticmethod
     def make_kg_tagged(config=None, to_string=False):
         with Dug(config, to_string=to_string) as dug:
             output_base_path = Util.dug_kgx_path("")
@@ -649,7 +628,6 @@ class DugUtil():
             for file in elements_object_files:
                 dug.index_elements(file)
             output_log = dug.log_stream.getvalue() if to_string else ''
-            dug.search_obj.es.indices.refresh(config.get("indexing").get("variables_index"))
         return output_log
 
     @staticmethod
@@ -661,8 +639,6 @@ class DugUtil():
                 concepts = Util.read_object(file)
                 dug.index_concepts(concepts=concepts)
             output_log = dug.log_stream.getvalue() if to_string else ''
-            dug.search_obj.es.indices.refresh(config.get("indexing").get("concepts_index"))
-            dug.search_obj.es.indices.refresh(config.get("indexing").get("kg_index"))
         return output_log
 
     @staticmethod
@@ -742,7 +718,6 @@ class DugUtil():
             output_file_name = os.path.join(output_path, file.name)
             Util.copy_file_to_dir(file, output_file_name)
             log.info(f"Copied {file.name} to {output_file_name}")
-
 
     @staticmethod
     def extract_dbgap_zip_files(config=None, to_string=False):
