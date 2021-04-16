@@ -456,6 +456,7 @@ class Dug:
             query=search_term,
             size=1000
         )
+        log.debug(response)
         ids_dict = []
         for element_type in response:
             all_elements_ids = [e['id'] for e in
