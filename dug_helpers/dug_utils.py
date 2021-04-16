@@ -436,7 +436,6 @@ class Dug:
                 log.debug(f"Searching for Concept: {curie} and Search term: {search_term}")
                 all_elements_ids = Dug._search_elements(curie, search_term)
                 present = element.id in all_elements_ids
-                log.info()
                 if not present:
                     log.error(f"Did not find expected variable {element.id} in search result.")
                     log.error(f"Concept id : {concept.id}, Search term: {search_term}")
