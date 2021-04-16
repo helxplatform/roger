@@ -649,6 +649,7 @@ class DugUtil():
             for file in elements_object_files:
                 dug.index_elements(file)
             output_log = dug.log_stream.getvalue() if to_string else ''
+            dug.search_obj.es.indices.refresh(config.get("indexing").get("variables_index"))
         return output_log
 
     @staticmethod
@@ -660,6 +661,8 @@ class DugUtil():
                 concepts = Util.read_object(file)
                 dug.index_concepts(concepts=concepts)
             output_log = dug.log_stream.getvalue() if to_string else ''
+            dug.search_obj.es.indices.refresh(config.get("indexing").get("concepts_index"))
+            dug.search_obj.es.indices.refresh(config.get("indexing").get("kg_index"))
         return output_log
 
     @staticmethod
