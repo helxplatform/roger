@@ -33,7 +33,7 @@ clean:
 	$(RM) -rf ${KGX_DIR}
 
 get_input_files:
-    $(TIME) python ${CLI_WRAPPER} -gd
+	$(TIME) python ${CLI_WRAPPER} -gd
 
 annotate_and_normalize:
 	$(TIME) python ${CLI_WRAPPER} -l
