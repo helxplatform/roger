@@ -41,4 +41,4 @@ annotate_and_normalize:
 create_kgx_files:
 	$(TIME) python ${CLI_WRAPPER} -t
 
-all: annotate_and_normalize create_kgx_files
+all: get_input_files annotate_and_normalize create_kgx_files
