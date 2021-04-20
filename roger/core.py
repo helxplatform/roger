@@ -434,6 +434,7 @@ class KGXModel:
 
     def merge (self, config):
         """ Merge nodes. Would be good to have something less computationally intensive. """
+        start_time = time.time()
         provided_by = 'dataset-version-' + config.get('kgx',{}).get('dataset_version', '-NA')
         final_graph_file_name = f'merged_graph-{provided_by}.json'
         # TODO refine check
@@ -441,7 +442,6 @@ class KGXModel:
             log.info("Found existing merged graph for dataset... Nothing to be done.")
             return
         kgx_files = Util.kgx_objects()
-        graphs = []
         if not len(kgx_files): log.warning('No KGX files found to merge'); return
         graph_0 = self._get_kgx_graph(kgx_files[0], provided_by)
         log.debug(f"intial graph read {kgx_files[0]}")
@@ -449,14 +449,14 @@ class KGXModel:
             current_graph = self._get_kgx_graph(x, provided_by)
             graphs = [graph_0, current_graph]
             merged_graph = graph_merge.merge_all_graphs(graphs)
-            output_path = Util.merge_path(f"temp-merged_graph-{index}.json")
-            self._write_kgx_graph(output_path, merged_graph)
+            # output_path = Util.merge_path(f"temp-merged_graph-{index}.json")
+            # self._write_kgx_graph(output_path, merged_graph)
             log.info(f"added {x} to base graph")
             # free up memory
-            del graph_0, current_graph, graphs, merged_graph
+            del graph_0, current_graph, graphs #, merged_graph
             log.debug(f"memory freed")
             # Read back merged graph as inital graph
-            graph_0 = self._get_kgx_graph(output_path, provided_by)
+            graph_0 = merged_graph #self._get_kgx_graph(output_path, provided_by)
 
 
 
@@ -477,6 +477,7 @@ class KGXModel:
                 os.remove(tmp_file)
         log.info("Done removing temporary files...")
         log.info("Done merging.")
+        log.info(f"XX {time.time() - start_time}")
 
 
     def format_keys (self, keys, schema_type : SchemaType):
