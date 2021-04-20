@@ -427,7 +427,7 @@ class KGXModel:
         # create empty file.
         if not os.path.exists(out_file_name):
             Util.write_object({}, out_file_name)
-            output_args = {'filename': out_file_name, 'format': 'json'}
+            output_args = {'filename': out_file_name, 'format': 'jsonld'}
             out_transformer = Transformer(stream=False)
             out_transformer.transform(output_args=output_args, input_args=input_args)
 
@@ -446,18 +446,15 @@ class KGXModel:
         graph_0 = self._get_kgx_graph(kgx_files[0], provided_by)
         log.debug(f"intial graph read {kgx_files[0]}")
         for index, x in enumerate(kgx_files[1:-1]):
+            merge_time = time.time()
             current_graph = self._get_kgx_graph(x, provided_by)
             graphs = [graph_0, current_graph]
             merged_graph = graph_merge.merge_all_graphs(graphs)
+            log.info(f"Merging took : {time.time() - merge_time}")
             # output_path = Util.merge_path(f"temp-merged_graph-{index}.json")
             # self._write_kgx_graph(output_path, merged_graph)
             log.info(f"added {x} to base graph")
-            # free up memory
-            del graph_0, current_graph, graphs #, merged_graph
-            log.debug(f"memory freed")
-            # Read back merged graph as inital graph
             graph_0 = merged_graph #self._get_kgx_graph(output_path, provided_by)
-
 
 
         # finally merge last file
@@ -465,18 +462,11 @@ class KGXModel:
         merged_graph = graph_merge.merge_all_graphs([graph_0, current_graph])
         log.info (f"added {kgx_files[-1]} to base graph.")
         output_path = Util.merge_path(final_graph_file_name)
+        write_time = time.time()
         self._write_kgx_graph(output_path, merged_graph)
+        log.info(f"writing merged took : {time.time() - write_time}")
         log.info(f"wrote final graph to {output_path}")
 
-        # remove temp files
-        log.info("removing temporary files.... ")
-        temps = Util.merged_objects()
-        for tmp_file in temps:
-            if 'temp-merged_graph-' in tmp_file:
-                log.debug(f"removing {tmp_file}")
-                os.remove(tmp_file)
-        log.info("Done removing temporary files...")
-        log.info("Done merging.")
         log.info(f"XX {time.time() - start_time}")
 
 
