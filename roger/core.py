@@ -1,6 +1,6 @@
 import argparse
 import glob
-import json
+import orjson as json
 import os
 import ntpath
 import pathlib
@@ -129,7 +129,7 @@ class Util:
                 yaml.dump (obj, outfile)
         elif path.endswith (".json"):
             with open (path, "w") as stream:
-                json.dump (obj, stream, indent=2)
+                stream.write(str(json.dumps (obj).decode('utf-8')))
         elif path.endswith(".pickle"):
             with open (path, "wb") as stream:
                 pickle.dump(obj, file=stream)
