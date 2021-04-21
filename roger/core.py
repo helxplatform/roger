@@ -427,7 +427,7 @@ class KGXModel:
         # create empty file.
         if not os.path.exists(out_file_name):
             Util.write_object({}, out_file_name)
-            output_args = {'filename': out_file_name, 'format': 'jsonld'}
+            output_args = {'filename': out_file_name, 'format': 'jsonl'}
             out_transformer = Transformer(stream=False)
             out_transformer.transform(output_args=output_args, input_args=input_args)
 
