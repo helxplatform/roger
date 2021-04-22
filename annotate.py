@@ -17,7 +17,7 @@ with DAG(
     intro = BashOperator(task_id='Intro',
                          bash_command='echo running tranql translator && exit 0',
                          dag=dag)
-    # make_kg_tagged = create_python_task(dag, "create_kgx_files", DugUtil.make_kg_tagged)
+    make_kg_tagged = create_python_task(dag, "create_kgx_files", DugUtil.make_kg_tagged)
 
     # Unzip and get files, avoid this because
     # 1. it takes a bit of time making the dag itself, webserver hangs
@@ -35,5 +35,5 @@ with DAG(
         task_id="continue",
     )
     intro >> [get_topmed_files, extract_db_gap_files] >> dummy_stepover >>\
-    [annotate_topmed_files, annotate_db_gap_files] #>> make_kg_tagged
+    [annotate_topmed_files, annotate_db_gap_files] >> make_kg_tagged
 
