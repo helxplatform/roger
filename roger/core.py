@@ -2,6 +2,7 @@ import argparse
 import glob
 import json
 import os
+import orjson as json
 import ntpath
 import pathlib
 import redis
@@ -15,6 +16,7 @@ from bmt import Toolkit
 from collections import defaultdict
 from enum import Enum
 from io import StringIO
+from kgx.utils.kgx_utils import prepare_data_dict as kgx_merge_dict
 from roger.Config import get_default_config as get_config
 from roger.roger_util import get_logger
 from roger.components.data_conversion_utils import TypeConversionUtil
@@ -316,6 +318,10 @@ class KGXModel:
         self.biolink_version = self.config.get('kgx').get('biolink_model_version')
         log.debug(f"Trying to get biolink version : {self.biolink_version}")
         self.biolink = BiolinkModel(self.biolink_version)
+        self.redis_conn = redis.Redis(host=config.get('redisgraph').get('host'),
+                    port=config.get('redisgraph').get('port'),
+                    password=config.get('redisgraph').get('password'),
+                    db=1) # uses db1 for isolation @TODO make this config param.
 
     def get (self, dataset_version = "v1.0"):
         """ Read metadata for KGX files and downloads them locally.
@@ -437,57 +443,94 @@ class KGXModel:
     def diff_lists (self, L, R):
         return list(list(set(L)-set(R)) + list(set(R)-set(L)))
 
+    def read_items_from_redis(self, ids):
+        chunk_size = 10_000 # batch for pipeline
+        pipeline = self.redis_conn.pipeline()
+        response = {}
+        chunked_ids = [ids[start: start + chunk_size] for start in range(0, len(ids), chunk_size)]
+        for ids in chunked_ids:
+            for i in ids:
+                pipeline.get(i)
+            result = pipeline.execute()
+            for i, res in zip(ids, result):
+                if res:
+                    response.update({i: json.loads(res)})
+        return response
+
+    def write_items_to_redis(self, items):
+        chunk_size = 10_000  # batch for redis beyond this cap it might not be optimal, according to redis docs
+        pipeline = self.redis_conn.pipeline()
+        all_keys = list(items.keys())
+        chunked_keys = [all_keys[start: start + chunk_size] for start in range(0, len(all_keys), chunk_size)]
+        for keys in chunked_keys:
+            for key in keys:
+                pipeline.set(key, json.dumps(items[key]))
+            pipeline.execute()
+
+    def write_redis_back_to_jsonl(self, file_name, redis_key_pattern):
+        with open(file_name, 'w') as f:
+            cur, keys = self.redis_conn.scan(cursor=0, match=redis_key_pattern, count=200_000)
+            while cur != 0:
+                items = self.read_items_from_redis(keys)
+                # transform them into lines
+                items = [json.dumps(items[x]).decode('utf-8') + '\n' for x in items]
+                f.writelines(items)
+                log.info(f"wrote : {len(items)}")
+                cur, keys = self.redis_conn.scan(cursor=cur, match=redis_key_pattern, count=200_000)
+
+
     def merge (self):
         """ Merge nodes. Would be good to have something less computationally intensive. """
-        for path in Util.kgx_objects ():
-            path_sep = os.path.sep
-            new_path = path.replace (f'{path_sep}kgx{path_sep}', f'{path_sep}merge{path_sep}')
+        kgx_files = Util.kgx_objects()
+        start = time.time()
+        for file in kgx_files:
+            total_time = read_time = time.time()
+            current_kgx_data = Util.read_object(file)
+            read_time = read_time - time.time()
+            # prefix keys for fetching back and writing to file.
+            nodes = {f"node-{node['id']}": node for node in current_kgx_data['nodes']}
+            edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
+                     current_kgx_data['edges']}
+            read_from_redis_time = time.time()
+            # read nodes and edges scoped to current file
+            nodes_in_redis = self.read_items_from_redis(list(nodes.keys()))
+            edges_in_redis = self.read_items_from_redis(list(edges.keys()))
+            read_from_redis_time = time.time() - read_from_redis_time
+            merge_time = time.time()
+            log.info(f"Found matching {len(nodes_in_redis)} nodes {len(edges_in_redis)} edges from redis...")
+            for node_id in nodes_in_redis:
+                nodes[node_id] = kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
+            for edge_id in edges_in_redis:
+                edges[edge_id] = kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
 
-            source_stats = os.stat (path)
-            if os.path.exists (new_path):
-                dest_stats = os.stat (new_path)
-                if dest_stats.st_mtime > source_stats.st_mtime:
-                    log.info (f"merge {new_path} is up to date.")
-                    continue
+            merge_time = merge_time - time.time()
+            write_to_redis_time = time.time()
+            self.write_items_to_redis(nodes)
+            self.write_items_to_redis(edges)
+            write_to_redis_time -= time.time()
+            log.debug(
+                "path {:>45} read_file:{:>5} read_nodes_from_redis:{:>7} merge_time:{:>3} write_nodes_to_redis: {"
+                ":>3}".format(
+                    Util.trunc(file, 45), read_time, read_from_redis_time, merge_time, write_to_redis_time))
+            log.info(f"processing {file} took {time.time() - total_time}")
+        log.info(f"total time for dumping to redis : {time.time() - start}")
 
-            log.info (f"merging {path}")
-            graph = Util.read_object (path)
-            graph_nodes = graph.get ('nodes', [])
-            graph_map = { n['id'] : n for n in graph_nodes }
-            graph_keys = graph_map.keys ()
-            total_merge_time = 0
-            for path_2 in Util.kgx_objects ():
-                if path_2 == path:
-                    continue
-                start = Util.current_time_in_millis ()
-                other_graph = Util.read_object (path_2)
-                load_time = Util.current_time_in_millis () - start
+        # now we have all nodes and edges merged in redis we scan the whole redis back to disk
+        t = time.time()
+        log.info("getting all nodes")
+        start_nodes_jsonl = time.time()
+        nodes_file_path = Util.merge_path("nodes.jsonl")
+        self.write_redis_back_to_jsonl(nodes_file_path, "node-*")
+        log.info(f"writing nodes to took : {time.time() - start_nodes_jsonl}")
+        start_edge_jsonl = time.time()
+        log.info("getting all edges")
+        edge_output_file_path = Util.merge_path("edges.jsonl")
+        self.write_redis_back_to_jsonl("edges.jsonl", "edge-*")
+        log.info(f"writing edges took: {time.time() - start_edge_jsonl}")
+        log.info(f"total took: {start - time.time()}")
 
-                start = Util.current_time_in_millis ()                
-                other_nodes = other_graph.get('nodes', [])
-                other_map = { n['id'] : n for n in other_nodes }
-                other_keys = set(other_map.keys())
-                intersection = [ v for v in graph_keys if v in other_keys ]
-                difference = list(set(other_keys) - set(graph_keys))
-                scope_time = Util.current_time_in_millis () - start
-                
-                start = Util.current_time_in_millis ()
-                for i in intersection:
-                    self.merge_nodes (graph_map[i], other_map[i])
-                other_graph['nodes'] = [ other_map[i] for i in difference ]
-                merge_time = Util.current_time_in_millis () - start
-                
-                start = Util.current_time_in_millis ()
-                Util.write_object (other_graph, path_2.replace ('kgx', 'merge'))
-                write_time = Util.current_time_in_millis () - start
-                log.debug ("merged {:>45} load:{:>5} scope:{:>7} merge:{:>3}".format(
-                    Util.trunc(path_2, 45), load_time, scope_time, merge_time))
-                total_merge_time += load_time + scope_time + merge_time + write_time
-                
-            start = Util.current_time_in_millis ()
-            Util.write_object (graph, new_path)
-            rewrite_time = Util.current_time_in_millis () - start
-            log.info (f"{path} rewrite: {rewrite_time}. total merge time: {total_merge_time}")
+
+
 
     def format_keys (self, keys, schema_type : SchemaType):
         """ Format schema keys. Make source and destination first in edges. Make
