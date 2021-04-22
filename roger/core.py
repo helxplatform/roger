@@ -488,8 +488,7 @@ class KGXModel:
 
     def write_redis_back_to_jsonl(self, file_name, redis_key_pattern):
         dirname = os.path.dirname(file_name)
-        if not os.path.exists(dirname):
-            os.makedirs(dirname, exist_ok=True)
+        Util.mkdir(dirname)
         with open(file_name, 'w') as f:
             cur, keys = self.redis_conn.scan(cursor=0, match=redis_key_pattern, count=200_000)
             while cur != 0:
