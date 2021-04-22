@@ -487,6 +487,9 @@ class KGXModel:
             pipeline.execute()
 
     def write_redis_back_to_jsonl(self, file_name, redis_key_pattern):
+        dirname = os.path.dirname(file_name)
+        if not os.path.exists(dirname):
+            os.makedirs(dirname, exist_ok=True)
         with open(file_name, 'w') as f:
             cur, keys = self.redis_conn.scan(cursor=0, match=redis_key_pattern, count=200_000)
             while cur != 0:
@@ -650,6 +653,13 @@ class BulkLoad:
             glob.glob (Util.bulk_path ("edges/**.csv")))
 
     def create_nodes_csv_file(self):
+        if self.tables_up_to_date ():
+            log.info ("up to date.")
+            return
+        # clear out previous data
+        bulk_path = Util.bulk_path("nodes")
+        if os.path.exists(bulk_path):
+            shutil.rmtree(bulk_path)
         categories_schema = Util.read_schema (SchemaType.CATEGORY)
         state = defaultdict(lambda: None)
         log.info(f"processing nodes")
@@ -684,6 +694,13 @@ class BulkLoad:
 
     def create_edges_csv_file(self):
         """ Write predicate data for bulk load. """
+        if self.tables_up_to_date ():
+            log.info ("up to date.")
+            return
+        # Clear out previous data
+        bulk_path = Util.bulk_path("edges")
+        if os.path.exists(bulk_path):
+            shutil.rmtree(bulk_path)
         predicates_schema = Util.read_schema(SchemaType.PREDICATE)
         predicates = defaultdict(lambda: [])
         edges_file = Util.merge_path('edges.jsonl')
@@ -699,21 +716,6 @@ class BulkLoad:
         # if there are some items left (if loop ended before counter reached the specified value)
         if len(predicates):
             self.write_bulk(Util.bulk_path("edges"), predicates, predicates_schema, state=state, is_relation=True)
-
-    def create (self):
-        """ Check source times. """
-        if self.tables_up_to_date ():
-            log.info ("up to date.")
-            return
-        
-        """ Format the data for bulk load. """
-
-        bulk_path = Util.bulk_path("")
-        if os.path.exists(bulk_path): 
-            shutil.rmtree(bulk_path)
-
-        self.create_nodes_csv_file()
-        self.create_edges_csv_file()
 
     @staticmethod
     def create_redis_schema_header(attributes: dict, is_relation=False):
@@ -982,12 +984,27 @@ class RogerUtil:
     
     @staticmethod
     def create_schema (to_string=False, config=None):
-        output = None
-        with Roger (to_string, config=config) as roger:
-            roger.kgx.create_schema ()
-            output = roger.log_stream.getvalue () if to_string else None
+        o1 = RogerUtil.create_nodes_schema(to_string=to_string, config=config)
+        o2 = RogerUtil.create_edges_schema(to_string=to_string, config=config)
+        output = (o1 + o2 ) if to_string else None
         return output
-    
+
+    @staticmethod
+    def create_edges_schema(to_string=False, config=None):
+        output = None
+        with Roger(to_string, config=config) as roger:
+            roger.kgx.create_edges_schema()
+            output = roger.log_stream.getvalue() if to_string else None
+        return output
+
+    @staticmethod
+    def create_nodes_schema(to_string=False, config=None):
+        output = None
+        with Roger(to_string, config=config) as roger:
+            roger.kgx.create_nodes_schema()
+            output = roger.log_stream.getvalue() if to_string else None
+        return output
+
     @staticmethod
     def merge_nodes (to_string=False, config=None):
         output = None
@@ -998,10 +1015,25 @@ class RogerUtil:
     
     @staticmethod
     def create_bulk_load (to_string=False, config=None):
+        o1 = RogerUtil.create_bulk_nodes(to_string=to_string, config=config)
+        o2 = RogerUtil.create_bulk_edges(to_string=to_string, config=config)
+        output = (o1 + o2) if to_string else None
+        return output
+
+    @staticmethod
+    def create_bulk_nodes(to_string=False, config=None):
         output = None
-        with Roger (to_string, config=config) as roger:
-            roger.bulk.create ()
-            output = roger.log_stream.getvalue () if to_string else None
+        with Roger(to_string, config=config) as roger:
+            roger.bulk.create_nodes_csv_file()
+            output = roger.log_stream.getvalue() if to_string else None
+        return output
+
+    @staticmethod
+    def create_bulk_edges(to_string=False, config=None):
+        output = None
+        with Roger(to_string, config=config) as roger:
+            roger.bulk.create_edges_csv_file()
+            output = roger.log_stream.getvalue() if to_string else None
         return output
 
     @staticmethod
