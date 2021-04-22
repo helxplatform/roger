@@ -131,7 +131,7 @@ class Util:
                 yaml.dump (obj, outfile)
         elif path.endswith (".json"):
             with open (path, "w") as stream:
-                json.dump (obj, stream, indent=2)
+                stream.write(json.dumps (obj, stream).decode('utf-8'))
         elif path.endswith(".pickle"):
             with open (path, "wb") as stream:
                 pickle.dump(obj, file=stream)
@@ -308,6 +308,13 @@ class Util:
             log.debug ("no source found. up to date")
             return True
         return max(source) < min(target_time_list)
+
+    @staticmethod
+    def json_line_iter(jsonl_file_path):
+        f = open(file=jsonl_file_path,mode='r')
+        for line in f:
+            yield json.loads(line)
+        f.close()
         
 class KGXModel:
     """ Abstractions for transforming Knowledge Graph Exchange formatted data. """
@@ -365,6 +372,57 @@ class KGXModel:
         log.info("Done coping dug KGX files.")
         return
 
+    def create_nodes_schema(self):
+        """
+        Extracts schema for nodes based on biolink leaf types
+        :return:
+        """
+
+        category_schemas = defaultdict(lambda: None)
+        category_error_nodes = set()
+        merged_nodes_file = Util.merge_path("nodes.jsonl")
+        log.info(f"Processing : {merged_nodes_file}")
+        for node in Util.json_line_iter(merged_nodes_file):
+            if not node['category']:
+                category_error_nodes.add(node['id'])
+                node['category'] = [BiolinkModel.root_type]
+            node_type = self.biolink.get_leaf_class(node['category'])
+            category_schemas[node_type] = category_schemas.get(node_type, {})
+            for k in node.keys():
+                current_type = type(node[k]).__name__
+                if k not in category_schemas[node_type]:
+                    category_schemas[node_type][k] = current_type
+                else:
+                    previous_type = category_schemas[node_type][k]
+                    category_schemas[node_type][k] = TypeConversionUtil.compare_types(previous_type, current_type)
+        if len(category_error_nodes):
+            log.warn(f"some nodes didn't have category assigned. KGX file has errors."
+                      f"Nodes {len(category_error_nodes)}."
+                      f"Showing first 10: {list(category_error_nodes)[:10]}."
+                      f"These will be treated as {BiolinkModel.root_type}.")
+        """ Write node schemas. """
+        self.write_schema(category_schemas, SchemaType.CATEGORY)
+
+    def create_edges_schema(self):
+        """
+        Create unified schema for all edges in an edges jsonl file.
+        :return:
+        """
+        predicate_schemas = defaultdict(lambda: None)
+        merged_edges_file = Util.merge_path("edges.jsonl")
+        """ Infer predicate schemas. """
+        for edge in Util.json_line_iter(merged_edges_file):
+            predicate = edge['predicate']
+            predicate_schemas[predicate] = predicate_schemas.get(predicate, {})
+            for k in edge.keys():
+                current_type = type(edge[k]).__name__
+                if k not in predicate_schemas[predicate]:
+                    predicate_schemas[predicate][k] = current_type
+                else:
+                    previous_type = predicate_schemas[predicate][k]
+                    predicate_schemas[predicate][k] = TypeConversionUtil.compare_types(previous_type, current_type)
+        self.write_schema(predicate_schemas, SchemaType.PREDICATE)
+
     def create_schema (self):
         """
         Determine the schema of each type of object. We have to do this to make it possible
@@ -375,47 +433,8 @@ class KGXModel:
             log.info (f"schema is up to date.")
             return
 
-        predicate_schemas = defaultdict(lambda:None)
-        category_schemas = defaultdict(lambda:None)        
-        for subgraph in Util.kgx_objects ():
-            """ Read a kgx data file. """
-            log.debug (f"analyzing schema of {subgraph}.")
-            basename = os.path.basename (subgraph).replace (".json", "")
-            graph = Util.read_object (subgraph)
-            """ Infer predicate schemas. """
-            for edge in graph['edges']:
-                predicate = edge['predicate']
-                predicate_schemas[predicate] = predicate_schemas.get(predicate, {})
-                for k in edge.keys ():
-                    current_type = type(edge[k]).__name__
-                    if k not in predicate_schemas[predicate]:
-                        predicate_schemas[predicate][k] = current_type
-                    else:
-                        previous_type = predicate_schemas[predicate][k]
-                        predicate_schemas[predicate][k] = TypeConversionUtil.compare_types(previous_type, current_type)
-            """ Infer node schemas. """
-            category_error_nodes = set()
-            for node in graph['nodes']:
-                if not node['category']:
-                    category_error_nodes.add(node['id'])
-                    node['category'] = [BiolinkModel.root_type]
-                node_type = self.biolink.get_leaf_class (node['category'])
-                category_schemas[node_type] = category_schemas.get(node_type, {})
-                for k in node.keys ():
-                    current_type = type(node[k]).__name__
-                    if  k not in category_schemas[node_type]:
-                        category_schemas[node_type][k] = current_type
-                    else:
-                        previous_type = category_schemas[node_type][k]
-                        category_schemas[node_type][k] = TypeConversionUtil.compare_types(previous_type, current_type)
-            if len(category_error_nodes):
-                log.warn(f"some nodes didn't have category assigned. KGX file has errors."
-                          f"Nodes {len(category_error_nodes)}."
-                          f"Showing first 10: {list(category_error_nodes)[:10]}."
-                          f"These will be treated as {BiolinkModel.root_type}.")
-        """ Write node and predicate schemas. """
-        self.write_schema (predicate_schemas, SchemaType.PREDICATE)
-        self.write_schema (category_schemas, SchemaType.CATEGORY)
+        self.create_nodes_schema()
+        self.create_edges_schema()
 
     def schema_up_to_date (self):
         return Util.is_up_to_date (
@@ -525,11 +544,9 @@ class KGXModel:
         start_edge_jsonl = time.time()
         log.info("getting all edges")
         edge_output_file_path = Util.merge_path("edges.jsonl")
-        self.write_redis_back_to_jsonl("edges.jsonl", "edge-*")
+        self.write_redis_back_to_jsonl(edge_output_file_path, "edge-*")
         log.info(f"writing edges took: {time.time() - start_edge_jsonl}")
         log.info(f"total took: {start - time.time()}")
-
-
 
 
     def format_keys (self, keys, schema_type : SchemaType):
@@ -632,6 +649,57 @@ class BulkLoad:
             targets=glob.glob (Util.bulk_path ("nodes/**.csv")) + \
             glob.glob (Util.bulk_path ("edges/**.csv")))
 
+    def create_nodes_csv_file(self):
+        categories_schema = Util.read_schema (SchemaType.CATEGORY)
+        state = defaultdict(lambda: None)
+        log.info(f"processing nodes")
+        """ Write node data for bulk load. """
+
+        categories = defaultdict(lambda: [])
+        category_error_nodes = set()
+        merged_nodes_file = Util.merge_path("nodes.jsonl")
+        counter = 1
+        for node in Util.json_line_iter(merged_nodes_file):
+            if not node['category']:
+                category_error_nodes.add(node['id'])
+                node['category'] = [BiolinkModel.root_type]
+            index = self.biolink.get_leaf_class(node['category'])
+            categories[index].append(node)
+            if len(category_error_nodes):
+                log.error(f"some nodes didn't have category assigned. KGX file has errors."
+                          f"Nodes {len(category_error_nodes)}. They will be typed {BiolinkModel.root_type}"
+                          f"Showing first 10: {list(category_error_nodes)[:10]}.")
+            # flush every 100K
+            if counter % 100_000 == 0:
+                self.write_bulk(Util.bulk_path("nodes"), categories, categories_schema,
+                                state=state, is_relation=False)
+                # reset variables.
+                category_error_nodes = set()
+                categories = defaultdict(lambda: [])
+            counter += 1
+        # write back if any thing left.
+        if len(categories):
+            self.write_bulk(Util.bulk_path("nodes"), categories, categories_schema,
+                            state=state, is_relation=False)
+
+    def create_edges_csv_file(self):
+        """ Write predicate data for bulk load. """
+        predicates_schema = Util.read_schema(SchemaType.PREDICATE)
+        predicates = defaultdict(lambda: [])
+        edges_file = Util.merge_path('edges.jsonl')
+        counter = 1
+        state = {}
+        for edge in Util.json_line_iter(edges_file):
+            predicates[edge['predicate']].append(edge)
+            # write out every 100K , to avoid large predicate dict.
+            if counter % 100_000 == 0:
+                self.write_bulk(Util.bulk_path("edges"), predicates, predicates_schema, state=state, is_relation=True)
+                predicates = defaultdict(lambda : [])
+            counter += 1
+        # if there are some items left (if loop ended before counter reached the specified value)
+        if len(predicates):
+            self.write_bulk(Util.bulk_path("edges"), predicates, predicates_schema, state=state, is_relation=True)
+
     def create (self):
         """ Check source times. """
         if self.tables_up_to_date ():
@@ -639,51 +707,13 @@ class BulkLoad:
             return
         
         """ Format the data for bulk load. """
-        predicates_schema = Util.read_schema (SchemaType.PREDICATE)
-        categories_schema = Util.read_schema (SchemaType.CATEGORY)
+
         bulk_path = Util.bulk_path("")
         if os.path.exists(bulk_path): 
             shutil.rmtree(bulk_path)
 
-        state = defaultdict(lambda:None)
-        for subgraph in Util.merged_objects ():
-            log.info (f"processing {subgraph}")
-            graph = Util.read_object (subgraph)
-
-            """ Write node data for bulk load. """
-            categories = defaultdict(lambda: [])
-            category_error_nodes = set()
-            for node in graph['nodes']:
-                if not node['category']:
-                    category_error_nodes.add(node['id'])
-                    node['category'] = [BiolinkModel.root_type]
-                index = self.biolink.get_leaf_class (node['category'])
-                categories[index].append (node)
-            if len(category_error_nodes):
-                log.error(f"some nodes didn't have category assigned. KGX file has errors."
-                          f"Nodes {len(category_error_nodes)}. They will be typed {BiolinkModel.root_type}"
-                          f"Showing first 10: {list(category_error_nodes)[:10]}.")
-            self.write_bulk (Util.bulk_path("nodes"), categories, categories_schema,
-                        state=state, f=subgraph, is_relation=False)
-
-            """ Write predicate data for bulk load. """
-            predicates = defaultdict(lambda: [])
-            for edge in graph['edges']:
-                predicates[edge['predicate']].append (edge)
-            self.write_bulk (Util.bulk_path("edges"), predicates, predicates_schema, is_relation=True)
-            
-    def cleanup (self, v):
-        """ Filter problematic text. 
-        :param v: A value to filter and clean.
-        """
-        if isinstance(v, list):
-            v = [ self.cleanup(val) for val in v ]
-        elif isinstance (v, str):
-            """ Some values contain the CSV separator character. 'fix' that. """
-            if len(v) > 1 and v[0] == '[' and v[-1] == ']':
-                v = v.replace ("[", "@").replace ("]", "@") #f" {v}"
-            v = v.replace ("|","^")
-        return v
+        self.create_nodes_csv_file()
+        self.create_edges_csv_file()
 
     @staticmethod
     def create_redis_schema_header(attributes: dict, is_relation=False):
@@ -749,13 +779,14 @@ class BulkLoad:
                 clustered_by_set_values[keys_with_values].append(obj)
         return clustered_by_set_values, improper_keys
 
-    def write_bulk(self, bulk_path, obj_map, schema, state={}, is_relation=False, f=None):
+    def write_bulk(self, bulk_path, obj_map, schema, state={}, is_relation=False):
         """ Write a bulk load group of objects.
         :param bulk_path: Path to the bulk loader object to write.
         :param obj_map: A map of biolink type to list of objects.
         :param schema: The schema (nodes or predicates) containing identifiers.
         :param state: Track state of already written objects to avoid duplicates.
         """
+
         os.makedirs (bulk_path, exist_ok=True)
         processed_objects_id = state.get('processed_id', set())
         called_x_times = state.get('called_times', 0)
