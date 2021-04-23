@@ -501,39 +501,39 @@ class KGXModel:
 
     def merge (self):
         """ Merge nodes. Would be good to have something less computationally intensive. """
-        # kgx_files = Util.kgx_objects()
-        # start = time.time()
-        # for file in kgx_files:
-        #     total_time = read_time = time.time()
-        #     current_kgx_data = Util.read_object(file)
-        #     read_time = read_time - time.time()
-        #     # prefix keys for fetching back and writing to file.
-        #     nodes = {f"node-{node['id']}": node for node in current_kgx_data['nodes']}
-        #     edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
-        #              current_kgx_data['edges']}
-        #     read_from_redis_time = time.time()
-        #     # read nodes and edges scoped to current file
-        #     nodes_in_redis = self.read_items_from_redis(list(nodes.keys()))
-        #     edges_in_redis = self.read_items_from_redis(list(edges.keys()))
-        #     read_from_redis_time = time.time() - read_from_redis_time
-        #     merge_time = time.time()
-        #     log.info(f"Found matching {len(nodes_in_redis)} nodes {len(edges_in_redis)} edges from redis...")
-        #     for node_id in nodes_in_redis:
-        #         nodes[node_id] = kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
-        #     for edge_id in edges_in_redis:
-        #         edges[edge_id] = kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
-        #
-        #     merge_time = merge_time - time.time()
-        #     write_to_redis_time = time.time()
-        #     self.write_items_to_redis(nodes)
-        #     self.write_items_to_redis(edges)
-        #     write_to_redis_time -= time.time()
-        #     log.debug(
-        #         "path {:>45} read_file:{:>5} read_nodes_from_redis:{:>7} merge_time:{:>3} write_nodes_to_redis: {"
-        #         ":>3}".format(
-        #             Util.trunc(file, 45), read_time, read_from_redis_time, merge_time, write_to_redis_time))
-        #     log.info(f"processing {file} took {time.time() - total_time}")
-        # log.info(f"total time for dumping to redis : {time.time() - start}")
+        kgx_files = Util.kgx_objects()
+        start = time.time()
+        for file in kgx_files:
+            total_time = read_time = time.time()
+            current_kgx_data = Util.read_object(file)
+            read_time = read_time - time.time()
+            # prefix keys for fetching back and writing to file.
+            nodes = {f"node-{node['id']}": node for node in current_kgx_data['nodes']}
+            edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
+                     current_kgx_data['edges']}
+            read_from_redis_time = time.time()
+            # read nodes and edges scoped to current file
+            nodes_in_redis = self.read_items_from_redis(list(nodes.keys()))
+            edges_in_redis = self.read_items_from_redis(list(edges.keys()))
+            read_from_redis_time = time.time() - read_from_redis_time
+            merge_time = time.time()
+            log.info(f"Found matching {len(nodes_in_redis)} nodes {len(edges_in_redis)} edges from redis...")
+            for node_id in nodes_in_redis:
+                nodes[node_id] = kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
+            for edge_id in edges_in_redis:
+                edges[edge_id] = kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
+
+            merge_time = merge_time - time.time()
+            write_to_redis_time = time.time()
+            self.write_items_to_redis(nodes)
+            self.write_items_to_redis(edges)
+            write_to_redis_time -= time.time()
+            log.debug(
+                "path {:>45} read_file:{:>5} read_nodes_from_redis:{:>7} merge_time:{:>3} write_nodes_to_redis: {"
+                ":>3}".format(
+                    Util.trunc(file, 45), read_time, read_from_redis_time, merge_time, write_to_redis_time))
+            log.info(f"processing {file} took {time.time() - total_time}")
+        log.info(f"total time for dumping to redis : {time.time() - start}")
 
         # now we have all nodes and edges merged in redis we scan the whole redis back to disk
         start = t = time.time()
