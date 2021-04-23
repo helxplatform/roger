@@ -536,7 +536,7 @@ class KGXModel:
         log.info(f"total time for dumping to redis : {time.time() - start}")
 
         # now we have all nodes and edges merged in redis we scan the whole redis back to disk
-        start = t = time.time()
+        t = time.time()
         log.info("getting all nodes")
         start_nodes_jsonl = time.time()
         nodes_file_path = Util.merge_path("nodes.jsonl")
