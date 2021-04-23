@@ -500,7 +500,6 @@ class KGXModel:
                 items = [json.dumps(items[x]).decode('utf-8') + '\n' for x in items]
                 f.writelines(items)
                 log.info(f"wrote : {len(items)}")
-                cur, keys = self.redis_conn.scan(cursor=cur, match=redis_key_pattern, count=200_000)
 
 
     def merge (self):
