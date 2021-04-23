@@ -489,9 +489,13 @@ class KGXModel:
     def write_redis_back_to_jsonl(self, file_name, redis_key_pattern):
         Util.mkdir(file_name)
         with open(file_name, 'w') as f:
-            cur, keys = self.redis_conn.scan(cursor=0, match=redis_key_pattern, count=200_000)
-            while cur != 0:
-                items = self.read_items_from_redis(keys)
+            start = time.time()
+            keys = self.redis_conn.keys(redis_key_pattern)
+            log.info(f"Grabbing {redis_key_pattern} from redis too {time.time() - start}")
+            chunk_size = 500_000
+            chunked_keys = [keys[start: start + chunk_size] for start in range(0, len(keys), chunk_size) ]
+            for chunk in chunked_keys:
+                items = self.read_items_from_redis(chunk)
                 # transform them into lines
                 items = [json.dumps(items[x]).decode('utf-8') + '\n' for x in items]
                 f.writelines(items)
