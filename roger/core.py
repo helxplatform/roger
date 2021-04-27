@@ -180,6 +180,16 @@ class Util:
         return os.path.join (data_root, "bulk", name)
 
     @staticmethod
+    def metrics_path (name):
+        """
+        Path to write metrics to
+        :param name:
+        :return:
+        """
+        data_root = get_config()['data_root']
+        return os.path.join(data_root, "metrics", name)
+
+    @staticmethod
     def dug_kgx_path(name):
         data_root = get_config()['data_root']
         return os.path.join (data_root, "dug", "kgx",  name)
@@ -329,6 +339,7 @@ class KGXModel:
                     port=config.get('redisgraph').get('port'),
                     password=config.get('redisgraph').get('password'),
                     db=1) # uses db1 for isolation @TODO make this config param.
+        self.enable_metrics = self.config.get('enable_metrics', False)
 
     def get (self, dataset_version = "v1.0"):
         """ Read metadata for KGX files and downloads them locally.
@@ -505,11 +516,14 @@ class KGXModel:
     def merge (self):
         """ Merge nodes. Would be good to have something less computationally intensive. """
         kgx_files = Util.kgx_objects()
+        metrics = {}
         start = time.time()
         for file in kgx_files:
+            current_metric = {}
             total_time = read_time = time.time()
             current_kgx_data = Util.read_object(file)
-            read_time = read_time - time.time()
+            read_time = time.time() - read_time
+            current_metric['read_kgx_file_time'] = read_time
             # prefix keys for fetching back and writing to file.
             nodes = {f"node-{node['id']}": node for node in current_kgx_data['nodes']}
             edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
@@ -519,38 +533,56 @@ class KGXModel:
             nodes_in_redis = self.read_items_from_redis(list(nodes.keys()))
             edges_in_redis = self.read_items_from_redis(list(edges.keys()))
             read_from_redis_time = time.time() - read_from_redis_time
+            current_metric['read_redis_time'] = read_from_redis_time
             merge_time = time.time()
             log.info(f"Found matching {len(nodes_in_redis)} nodes {len(edges_in_redis)} edges from redis...")
             for node_id in nodes_in_redis:
                 nodes[node_id] = kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
             for edge_id in edges_in_redis:
                 edges[edge_id] = kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
-
-            merge_time = merge_time - time.time()
+            merge_time = time.time() - merge_time
+            current_metric['merge_time'] = merge_time
             write_to_redis_time = time.time()
             self.write_items_to_redis(nodes)
             self.write_items_to_redis(edges)
-            write_to_redis_time -= time.time()
+            write_to_redis_time = time.time()  - write_to_redis_time
+            current_metric['write_to_redis_time'] = write_to_redis_time
             log.debug(
                 "path {:>45} read_file:{:>5} read_nodes_from_redis:{:>7} merge_time:{:>3} write_nodes_to_redis: {"
                 ":>3}".format(
                     Util.trunc(file, 45), read_time, read_from_redis_time, merge_time, write_to_redis_time))
-            log.info(f"processing {file} took {time.time() - total_time}")
+            total_file_processing_time = time.time() - total_time
+            current_metric['total_processing_time'] = total_file_processing_time
+            current_metric['total_nodes_in_kgx_file'] = len(nodes)
+            current_metric['total_edges_in_kgx_file'] = len(edges)
+            current_metric['nodes_found_in_redis'] = len(nodes_in_redis)
+            current_metric['edges_found_in_redis'] = len(edges_in_redis)
+            log.info(f"processing {file} took {total_file_processing_time}")
+            metrics[str(file)] = current_metric
         log.info(f"total time for dumping to redis : {time.time() - start}")
 
         # now we have all nodes and edges merged in redis we scan the whole redis back to disk
+        write_merge_metric = {}
         t = time.time()
         log.info("getting all nodes")
         start_nodes_jsonl = time.time()
         nodes_file_path = Util.merge_path("nodes.jsonl")
         self.write_redis_back_to_jsonl(nodes_file_path, "node-*")
         log.info(f"writing nodes to took : {time.time() - start_nodes_jsonl}")
+        write_merge_metric['nodes_writing_time'] = time.time() - start_nodes_jsonl
         start_edge_jsonl = time.time()
         log.info("getting all edges")
         edge_output_file_path = Util.merge_path("edges.jsonl")
         self.write_redis_back_to_jsonl(edge_output_file_path, "edge-*")
+        write_merge_metric['edges_writing_time'] = time.time() - start_edge_jsonl
         log.info(f"writing edges took: {time.time() - start_edge_jsonl}")
-        log.info(f"total took: {start - time.time()}")
+        write_merge_metric['total_time'] = time.time() - t
+        metrics['write_jsonl'] = write_merge_metric
+        metrics['total_time'] = time.time() - start
+        log.info(f"total took: {time.time() - start}")
+        if self.enable_metrics:
+            path = Util.metrics_path('merge_metrics.yaml')
+            Util.write_object(metrics, path)
 
 
     def format_keys (self, keys, schema_type : SchemaType):
