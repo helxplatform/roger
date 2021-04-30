@@ -854,7 +854,7 @@ class BulkLoad:
                 # we are sure that the schemas match.
 
                 # biolink:<TYPE> is not valid name so we need to remove :
-                file_key = key.replace('biolink:', '')
+                file_key = key.replace(':', '~')
 
                 out_file = f"{bulk_path}/{file_key}.csv-{index}-{called_x_times}" if not out_file else out_file
                 state['file_paths'][key][set_attributes] = out_file  # store back file name
@@ -925,12 +925,12 @@ class BulkLoad:
         args = []
         if len(nodes) > 0:
             bulk_path_root = Util.bulk_path('nodes') + os.path.sep
-            nodes_with_type = [ f"biolink:{ x.replace(bulk_path_root, '').split('.')[0]} {x}"
+            nodes_with_type = [ f"{ x.replace(bulk_path_root, '').split('.')[0].replace('~')} {x}"
                                 for x in nodes ]
             args.extend(("-N " + " -N ".join(nodes_with_type)).split())
         if len(edges) > 0:
             bulk_path_root = Util.bulk_path('edges') + os.path.sep
-            edges_with_type = [ f"biolink:{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0]} {x}"
+            edges_with_type = [ f"{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0].replace('~')} {x}"
                                for x in edges]
             args.extend(("-R " + " -R ".join(edges_with_type)).split())
         args.extend([f"--separator={self.separator}"])
