@@ -925,12 +925,12 @@ class BulkLoad:
         args = []
         if len(nodes) > 0:
             bulk_path_root = Util.bulk_path('nodes') + os.path.sep
-            nodes_with_type = [ f"{ x.replace(bulk_path_root, '').split('.')[0].replace('~')} {x}"
+            nodes_with_type = [ f"{ x.replace(bulk_path_root, '').split('.')[0].replace('~', ':')} {x}"
                                 for x in nodes ]
             args.extend(("-N " + " -N ".join(nodes_with_type)).split())
         if len(edges) > 0:
             bulk_path_root = Util.bulk_path('edges') + os.path.sep
-            edges_with_type = [ f"{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0].replace('~')} {x}"
+            edges_with_type = [ f"{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0].replace('~', ':')} {x}"
                                for x in edges]
             args.extend(("-R " + " -R ".join(edges_with_type)).split())
         args.extend([f"--separator={self.separator}"])
