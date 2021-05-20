@@ -1,6 +1,5 @@
 import argparse
 import glob
-import json
 import os
 import orjson as json
 import ntpath
@@ -17,6 +16,7 @@ from collections import defaultdict
 from enum import Enum
 from io import StringIO
 from kgx.utils.kgx_utils import prepare_data_dict as kgx_merge_dict
+from roger import ROGER_DATA_DIR
 from roger.Config import get_default_config as get_config
 from roger.roger_util import get_logger
 from roger.components.data_conversion_utils import TypeConversionUtil
@@ -131,7 +131,7 @@ class Util:
                 yaml.dump (obj, outfile)
         elif path.endswith (".json"):
             with open (path, "w") as stream:
-                stream.write(json.dumps (obj, stream).decode('utf-8'))
+                stream.write(str(json.dumps (obj).decode('utf-8')))
         elif path.endswith(".pickle"):
             with open (path, "wb") as stream:
                 pickle.dump(obj, file=stream)
@@ -143,8 +143,7 @@ class Util:
     def kgx_path (name):
         """ Form a KGX object path.
         :path name: Name of the KGX object. """
-        data_root = get_config()['data_root']
-        return os.path.join (data_root, "kgx", name)
+        return str(ROGER_DATA_DIR / "kgx" / name)
 
     @staticmethod
     def kgx_objects ():
@@ -156,8 +155,7 @@ class Util:
     def merge_path (name):
         """ Form a merged KGX object path.
         :path name: Name of the merged KGX object. """
-        data_root = get_config()['data_root']
-        return os.path.join (data_root, "merge", name)
+        return str(ROGER_DATA_DIR / 'merge' / name)
 
     @staticmethod
     def merged_objects ():
@@ -169,15 +167,13 @@ class Util:
     def schema_path (name):
         """ Path to a schema object.
         :param name: Name of the object to get a path for. """
-        data_root = get_config()['data_root']
-        return os.path.join (data_root, "schema", name)
+        return str(ROGER_DATA_DIR / 'schema' / name)
 
     @staticmethod
     def bulk_path (name):
         """ Path to a bulk load object.
         :param name: Name of the object. """
-        data_root = get_config()['data_root']
-        return os.path.join (data_root, "bulk", name)
+        return str(ROGER_DATA_DIR / 'bulk' / name)
 
     @staticmethod
     def metrics_path (name):
@@ -191,18 +187,15 @@ class Util:
 
     @staticmethod
     def dug_kgx_path(name):
-        data_root = get_config()['data_root']
-        return os.path.join (data_root, "dug", "kgx",  name)
+        return str(ROGER_DATA_DIR / "dug" / "kdx" / name)
 
     @staticmethod
     def dug_annotation_path(name):
-        data_root = get_config()['data_root']
-        return os.path.join(data_root, "dug", "annotations", name)
+        return str(ROGER_DATA_DIR / "dug" / "annotations" / name)
 
     @staticmethod
     def dug_expanded_concepts_path(name):
-        data_root = get_config()['data_root']
-        return os.path.join(data_root, "dug", "expanded_concepts", name)
+        return str(ROGER_DATA_DIR / 'dug' / 'expanded_concepts' / name)
 
     @staticmethod
     def dug_expanded_concept_objects():
@@ -211,8 +204,7 @@ class Util:
 
     @staticmethod
     def dug_crawl_path(name):
-        data_root = get_config()['data_root']
-        return os.path.join(data_root, "dug", "crawl", name)
+        return str(ROGER_DATA_DIR / 'dug' / 'crawl' / name)
 
     @staticmethod
     def dug_kgx_objects():
@@ -233,9 +225,14 @@ class Util:
         return sorted(glob.glob(concepts_file_path))
 
     @staticmethod
-    def dug_input_files_path(name):
-        data_root = get_config()['data_root']
-        return os.path.join(data_root, "dug", "input_files", name)
+    def dug_input_files_path(name) -> pathlib.Path:
+        path = ROGER_DATA_DIR / "dug" / "input_files" / name
+        if not path.exists():
+            log.info(f"Input file path: {path} does not exist, creating")
+            path.mkdir(parents=True, exist_ok=True)
+        else:
+            log.info(f"Input file path: {path} already exists")
+        return path
 
     @staticmethod
     def mkdir(path):
@@ -246,7 +243,8 @@ class Util:
     @staticmethod
     def dug_topmed_path(name):
         """ Topmed source files"""
-        return os.path.join(Util.dug_input_files_path(''), 'topmed', name)
+        home = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(home, "../..", "dug_helpers", "dug_data", "topmed_data", name)
 
     @staticmethod
     def dug_topmed_objects():
@@ -254,9 +252,9 @@ class Util:
         return sorted(glob.glob(topmed_file_pattern))
 
     @staticmethod
-    def dug_dd_xml_path(name):
+    def dug_dd_xml_path():
         """ Topmed source files"""
-        return os.path.join(Util.dug_input_files_path(''), 'db_gap', name)
+        return Util.dug_input_files_path('db_gap')
 
     @staticmethod
     def get_files_recursive(file_name_filter, current_dir):
@@ -273,7 +271,7 @@ class Util:
 
     @staticmethod
     def dug_dd_xml_objects():
-        file_path = pathlib.Path(Util.dug_dd_xml_path(''))
+        file_path = Util.dug_dd_xml_path()
         files = Util.get_files_recursive(lambda file_name: not file_name.startswith('._') and file_name.endswith('.xml'), file_path)
         return sorted([str(f) for f in files])
 
@@ -497,6 +495,17 @@ class KGXModel:
                 pipeline.set(key, json.dumps(items[key]))
             pipeline.execute()
 
+    def delete_keys(self, items):
+        # deletes keys
+        chunk_size = 10_000
+        pipeline = self.redis_conn.pipeline()
+        all_keys = list(items)
+        chunked_keys = [all_keys[start: start + chunk_size] for start in range(0, len(all_keys), chunk_size)]
+        for keys in chunked_keys:
+            for key in keys:
+                pipeline.delete(key)
+            pipeline.execute()
+
     def write_redis_back_to_jsonl(self, file_name, redis_key_pattern):
         Util.mkdir(file_name)
         with open(file_name, 'w') as f:
@@ -507,11 +516,22 @@ class KGXModel:
             chunked_keys = [keys[start: start + chunk_size] for start in range(0, len(keys), chunk_size) ]
             for chunk in chunked_keys:
                 items = self.read_items_from_redis(chunk)
+                self.delete_keys(chunk)
                 # transform them into lines
                 items = [json.dumps(items[x]).decode('utf-8') + '\n' for x in items]
                 f.writelines(items)
                 log.info(f"wrote : {len(items)}")
 
+    def sort_node_types(self, node_dict):
+        categories = node_dict.get('category')
+        if not categories:
+            return node_dict
+        leaf_type = self.biolink.get_leaf_class(categories)
+        # brings leaf class in the top
+        categories = [leaf_type] + [x for x in categories if x != leaf_type]
+        node_dict['category'] = categories
+        log.info(node_dict)
+        return node_dict
 
     def merge (self):
         """ Merge nodes. Would be good to have something less computationally intensive. """
@@ -525,7 +545,7 @@ class KGXModel:
             read_time = time.time() - read_time
             current_metric['read_kgx_file_time'] = read_time
             # prefix keys for fetching back and writing to file.
-            nodes = {f"node-{node['id']}": node for node in current_kgx_data['nodes']}
+            nodes = {f"node-{node['id']}": self.sort_node_types(node) for node in current_kgx_data['nodes']}
             edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
                      current_kgx_data['edges']}
             read_from_redis_time = time.time()
@@ -583,7 +603,6 @@ class KGXModel:
         if self.enable_metrics:
             path = Util.metrics_path('merge_metrics.yaml')
             Util.write_object(metrics, path)
-
 
     def format_keys (self, keys, schema_type : SchemaType):
         """ Format schema keys. Make source and destination first in edges. Make
@@ -665,6 +684,7 @@ class BiolinkModel:
         """ Return the leaf classes in the provided list of names. """
         leaves = list(self.find_biolink_leaves(names))
         return leaves[0]
+
 
 class BulkLoad:
     """ Tools for creating a Redisgraph bulk load dataset. """
@@ -907,8 +927,14 @@ class BulkLoad:
         state['called_times'] = called_x_times
 
     def insert (self):
-        redisgraph = self.config.get('redisgraph', {})
-        bulk_loader = self.config.get('bulk_loader', {})
+
+        redisgraph = {
+            'host': os.getenv('REDIS_HOST'),
+            'port': os.getenv('REDIS_PORT', 6379),
+            'password': os.getenv('REDIS_PASSWORD'),
+            'graph': os.getenv('REDIS_GRAPH'),
+        }
+        redisgraph = self.config.redisgraph
         nodes = sorted(glob.glob (Util.bulk_path ("nodes/**.csv*")))
         edges = sorted(glob.glob (Util.bulk_path ("edges/**.csv*")))
         graph = redisgraph['graph']
@@ -916,10 +942,10 @@ class BulkLoad:
 
         try:
             log.info (f"deleting graph {graph} in preparation for bulk load.")
-            db = self.get_redisgraph (redisgraph)
+            db = self.get_redisgraph()
             db.redis_graph.delete ()
         except redis.exceptions.ResponseError:
-            log.info ("no graph to delete")
+            log.info("no graph to delete")
             
         log.info (f"bulk loading graph: {graph}")        
         args = []
@@ -940,17 +966,24 @@ class BulkLoad:
         args.extend(['--enforce-schema'])
         args.extend([f"{redisgraph['graph']}"])
         """ standalone_mode=False tells click not to sys.exit() """
-        bulk_insert (args, standalone_mode=False)
+        log.debug(f"Calling bulk_insert with extended args: {args}")
+        try:
+            bulk_insert (args, standalone_mode=False)
+        except Exception as e:
+            log.error(f"Unexpected {e.__class__.__name__}: {e}")
+            raise
 
-    def get_redisgraph (self, redisgraph):
-        return RedisGraph (host=redisgraph['host'],
-                           port=redisgraph['port'],
-                           password=redisgraph.get('password', ''),
-                           graph=redisgraph['graph'])
-    
-    def validate (self):
-        redisgraph = self.config.get('redisgraph', {})
-        db = self.get_redisgraph (redisgraph)
+    def get_redisgraph(self):
+        return RedisGraph(
+            host=self.config.redisgraph.host,
+            port=self.config.redisgraph.port,
+            password=self.config.redisgraph.password,
+            graph=self.config.redisgraph.graph,
+        )
+
+    def validate(self):
+
+        db = self.get_redisgraph()
         validation_queries = config.get('validation', {}).get('queries', [])
         for key, query in validation_queries.items ():
             text = query['query']
@@ -962,7 +995,8 @@ class BulkLoad:
                 db.query (instance)
                 duration = Util.current_time_in_millis () - start
                 log.info (f"Query {key}:{name} ran in {duration}ms: {instance}") 
-            
+
+
 class Roger:
     """ Consolidate Roger functionality for a cleaner interface. """
 

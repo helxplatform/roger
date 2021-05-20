@@ -9,14 +9,15 @@ from airflow.operators.bash_operator import BashOperator
 from airflow.models import DAG
 from airflow.operators.dummy_operator import DummyOperator
 from roger.core import RogerUtil
-from dag_util import get_executor_config, default_args, create_python_task
+from roger.dag_util import get_executor_config, default_args, create_python_task
 
 
 """ Build the workflow's tasks and DAG. """
 with DAG(
     dag_id='tranql_translate',
     default_args=default_args,
-    schedule_interval=None
+    schedule_interval=None,
+    concurrency=16,
 ) as dag:
 
     """ Build the workflow tasks. """

@@ -1,8 +1,9 @@
+from airflow.models import DAG
 from airflow.operators.bash_operator import BashOperator
 from airflow.operators.dummy_operator import DummyOperator
-from airflow.models import DAG
-from dug_helpers.dug_utils import DugUtil
-from dag_util import default_args, create_python_task
+
+from dug_helpers.dug_utils import DugUtil, get_topmed_files, extract_dbgap_zip_files
+from roger.dag_util import default_args, create_python_task
 
 DAG_ID = 'annotate_dug'
 
@@ -17,7 +18,7 @@ with DAG(
     intro = BashOperator(task_id='Intro',
                          bash_command='echo running tranql translator && exit 0',
                          dag=dag)
-    make_kg_tagged = create_python_task(dag, "create_kgx_files", DugUtil.make_kg_tagged)
+    # make_kg_tagged = create_python_task(dag, "create_kgx_files", DugUtil.make_kg_tagged)
 
     # Unzip and get files, avoid this because
     # 1. it takes a bit of time making the dag itself, webserver hangs
@@ -25,8 +26,8 @@ with DAG(
     # making it redundant
     # 3. tasks like intro would fail because they don't have the data dir mounted.
 
-    get_topmed_files = create_python_task(dag, "get_topmed_data", DugUtil.get_topmed_files)
-    extract_db_gap_files = create_python_task(dag, "get_dbgab_data", DugUtil.extract_dbgap_zip_files)
+    get_topmed_files = create_python_task(dag, "get_topmed_data", get_topmed_files)
+    extract_db_gap_files = create_python_task(dag, "get_dbgab_data", extract_dbgap_zip_files)
 
     annotate_topmed_files = create_python_task(dag, "annotate_topmed_files", DugUtil.annotate_topmed_files)
     annotate_db_gap_files = create_python_task(dag, "annotate_db_gap_files", DugUtil.annotate_db_gap_files)
@@ -35,5 +36,5 @@ with DAG(
         task_id="continue",
     )
     intro >> [get_topmed_files, extract_db_gap_files] >> dummy_stepover >>\
-    [annotate_topmed_files, annotate_db_gap_files] >> make_kg_tagged
+    [annotate_topmed_files, annotate_db_gap_files] #>> make_kg_tagged
 
