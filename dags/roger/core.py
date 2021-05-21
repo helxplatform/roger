@@ -182,12 +182,11 @@ class Util:
         :param name:
         :return:
         """
-        data_root = get_config()['data_root']
-        return os.path.join(data_root, "metrics", name)
+        return str(ROGER_DATA_DIR / "metrics" / name)
 
     @staticmethod
     def dug_kgx_path(name):
-        return str(ROGER_DATA_DIR / "dug" / "kdx" / name)
+        return str(ROGER_DATA_DIR / "dug" / "kgx" / name)
 
     @staticmethod
     def dug_annotation_path(name):
@@ -330,12 +329,13 @@ class KGXModel:
         if not config:
             config = get_config()
         self.config = config
-        self.biolink_version = self.config.get('kgx').get('biolink_model_version')
+        self.biolink_version = self.config.kgx.biolink_model_version
         log.debug(f"Trying to get biolink version : {self.biolink_version}")
         self.biolink = BiolinkModel(self.biolink_version)
-        self.redis_conn = redis.Redis(host=config.get('redisgraph').get('host'),
-                    port=config.get('redisgraph').get('port'),
-                    password=config.get('redisgraph').get('password'),
+        self.redis_conn = redis.Redis(
+                    host=self.config.redisgraph.host,
+                    port=self.config.redisgraph.port,
+                    password=self.config.redisgraph.password,
                     db=1) # uses db1 for isolation @TODO make this config param.
         self.enable_metrics = self.config.get('enable_metrics', False)
 
@@ -530,7 +530,6 @@ class KGXModel:
         # brings leaf class in the top
         categories = [leaf_type] + [x for x in categories if x != leaf_type]
         node_dict['category'] = categories
-        log.info(node_dict)
         return node_dict
 
     def merge (self):
