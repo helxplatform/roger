@@ -325,13 +325,16 @@ class Util:
         
 class KGXModel:
     """ Abstractions for transforming Knowledge Graph Exchange formatted data. """
-    def __init__(self, biolink, config=None):
+    def __init__(self, biolink=None, config=None):
         if not config:
             config = get_config()
         self.config = config
         self.biolink_version = self.config.kgx.biolink_model_version
         log.debug(f"Trying to get biolink version : {self.biolink_version}")
-        self.biolink = BiolinkModel(self.biolink_version)
+        if biolink == None:
+            self.biolink = BiolinkModel(self.biolink_version)
+        else:
+            self.biolink = biolink
         self.redis_conn = redis.Redis(
                     host=self.config.redisgraph.host,
                     port=self.config.redisgraph.port,
