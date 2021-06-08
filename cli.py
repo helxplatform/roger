@@ -46,6 +46,8 @@ if __name__ == "__main__":
     parser.add_argument('-vv', '--validate-variables', help="Validates indexing of variables",
                         action="store_true")
 
+    parser.add_argument('-gs', '--generate-index-summary', help="Generate metrics about variables, corresponding concepts types and KG links",
+                        action="store_true")
     args = parser.parse_args ()
 
     if args.data_root is not None:
@@ -96,5 +98,8 @@ if __name__ == "__main__":
 
     if args.validate_concepts:
         DugUtil.validate_indexed_concepts(config=config)
+
+    if args.generate_index_summary:
+        DugUtil.generate_indexing_summary(config=config)
 
     sys.exit (0)

@@ -652,6 +652,23 @@ class DugUtil():
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
+    @staticmethod
+    def generate_indexing_summary(config=None, to_string=False):
+        with Dug(config, to_string=to_string) as dug:
+            get_data_set_name = lambda file: os.path.split(os.path.dirname(file))[-1]
+            annotated_elements_files_dict = {
+                get_data_set_name(file): file for file in Util.dug_elements_objects()
+            }
+            id_type_bucket_by_curie_prefix = {}
+            for file_name, path in annotated_elements_files_dict.items():
+                elements = Util.read_object(path)
+                category_bucket = {}
+                for element in elements:
+                    for curie, concept in element.concepts.items():
+                        for curie, identifier in concept.identifiers.items():
+                            id_type_bucket_by_curie_prefix[identifier.id_type] = id_type_bucket_by_curie_prefix.get(identifier.id_type, 0)
+                            id_type_bucket_by_curie_prefix[identifier.id_type] += 1
+            log.info(id_type_bucket_by_curie_prefix)
 
 def extract_dbgap_zip_files(**_kwargs):
     zip_file_path = DUG_DATA_DIR / 'dd_xml_data' / 'bdc_dbgap_data_dicts.tar.gz'
