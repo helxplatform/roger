@@ -450,6 +450,11 @@ class Dug:
             concept.set_search_terms()
             concept.set_optional_terms()
             concept.clean()
+            identifier = concept.identifiers.get(concept_id)
+            if not concept.name:
+                concept.name = identifier.label or identifier.search_text[0] if len(identifier.search_text) else ''
+            if not concept.type:
+                concept.type = identifier.types[0]
             percent_complete = int((counter / total) * 100)
             if percent_complete % 10 == 0:
                 log.info(f"{percent_complete}%")
