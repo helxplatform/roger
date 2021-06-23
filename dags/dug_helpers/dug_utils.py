@@ -558,6 +558,7 @@ class DugUtil():
             if files is None:
                 files = Util.dug_topmed_objects()
             parser_name = "TOPMedTag"
+            log.info(files)
             dug.annotate_files(parser_name=parser_name,
                                parsable_files=files)
             output_log = dug.log_stream.getvalue() if to_string else ''
