@@ -246,7 +246,7 @@ class Util:
 
     @staticmethod
     def dug_topmed_objects():
-        topmed_file_pattern = Util.dug_topmed_path("topmed_*.csv")
+        topmed_file_pattern = str(Util.dug_topmed_path("topmed_*.csv"))
         return sorted(glob.glob(topmed_file_pattern))
 
     @staticmethod
