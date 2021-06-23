@@ -276,7 +276,7 @@ class Dug:
             nodes.append({
                 "id": tag_id,
                 "name": tag.name,
-                "description": tag.description,
+                "description": tag.description.replace("'", "`"),
                 "category": ["biolink:InformationContentEntity"]
             })
             """ Link ontology identifiers we've found for this tag via nlp. """
