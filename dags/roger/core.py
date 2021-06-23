@@ -131,7 +131,7 @@ class Util:
                 yaml.dump (obj, outfile)
         elif path.endswith (".json"):
             with open (path, "w") as stream:
-                stream.write(str(json.dumps (obj).decode('utf-8')))
+                stream.write(str(json.dumps (obj))).decode('utf-8')))
         elif path.endswith(".pickle"):
             with open (path, "wb") as stream:
                 pickle.dump(obj, file=stream)
@@ -242,7 +242,7 @@ class Util:
     @staticmethod
     def dug_topmed_path(name):
         """ Topmed source files"""
-        return Util.dug_input_files_path('topmed_data') / name
+        return Util.dug_input_files_path('topmed') / name
 
     @staticmethod
     def dug_topmed_objects():
