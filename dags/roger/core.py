@@ -998,7 +998,7 @@ class BulkLoad:
 
     def wait_for_tranql(self):
         retry_secs = 3
-        tranql_endpoint = self.config.get("tranql_endpoint")
+        tranql_endpoint = self.config.tranql_endpoint
         graph_name = self.config["redisgraph"]["graph"]
         test_query = "SELECT disease-> phenotypic_feature " \
                      f"FROM 'redis:{graph_name}'" \
