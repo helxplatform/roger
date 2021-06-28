@@ -289,6 +289,9 @@ class Util:
         """ Build a URI.
         :param path: The path of an object.
         :param key: The key of a configuration value to prepend to the object. """
+        # Incase config has http://..../ or http://... remove / and add back to
+        # avoid double http://...//
+        root_url = config[key].rstrip('/')
         return f"{config[key]}/{path}"
 
     @staticmethod
@@ -351,6 +354,7 @@ class KGXModel:
                 log.info(f"Getting KGX file version {item['version']}")
                 for file_name in item['files']:
                     start = Util.current_time_in_millis ()
+                    file_name = dataset_version + "/" + file_name
                     file_url = Util.get_uri (file_name, "base_data_uri")
                     subgraph_basename = os.path.basename (file_name)
                     subgraph_path = Util.kgx_path (subgraph_basename)
@@ -990,7 +994,32 @@ class BulkLoad:
                 instance = Template (text).safe_substitute (arg)
                 db.query (instance)
                 duration = Util.current_time_in_millis () - start
-                log.info (f"Query {key}:{name} ran in {duration}ms: {instance}") 
+                log.info (f"Query {key}:{name} ran in {duration}ms: {instance}")
+
+    def wait_for_tranql(self):
+        retry_secs = 3
+        tranql_endpoint = self.config.get("tranql_endpoint")
+        graph_name = self.config["redisgraph"]["graph"]
+        test_query = "SELECT disease-> phenotypic_feature " \
+                     f"FROM 'redis:{graph_name}'" \
+                     f"WHERE  disease='MONDO:0004979'"
+        is_done_loading = False
+        try:
+            while not is_done_loading:
+                response = requests.post(tranql_endpoint, data=test_query)
+                response_code = response.status_code
+                response = response.json()
+                is_done_loading = "message" in response and response_code == 200
+                if is_done_loading:
+                    break
+                else:
+                    log.info(f"Tranql responsed with response: {response}")
+                    log.info(f"Retrying in {retry_secs} secs...")
+                time.sleep(retry_secs)
+        except ConnectionError as e:
+            # convert exception to be more readable.
+            raise ConnectionError(f"Attempting to contact {tranql_endpoint} failed due to connection error. "
+                      f"Please check status of Tranql server.")
 
 
 class Roger:
@@ -1112,6 +1141,14 @@ class RogerUtil:
         with Roger (to_string, config=config) as roger:
             roger.bulk.validate ()
             output = roger.log_stream.getvalue () if to_string else None
+        return output
+
+    @staticmethod
+    def check_tranql(to_string=False, config=None):
+        output = None
+        with Roger(to_string, config=config) as roger:
+            roger.bulk.wait_for_tranql()
+            output = roger.log_stream.getvalue() if to_string else None
         return output
 
 if __name__ == "__main__":
