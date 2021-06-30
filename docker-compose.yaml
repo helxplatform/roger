@@ -60,6 +60,7 @@ x-airflow-common:
     ROGER_KGX_DATASET__VERSION: "v1.0"
   volumes:
     - ./dags:/opt/airflow/dags
+    - ./data:/opt/airflow/data
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
   user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}"
