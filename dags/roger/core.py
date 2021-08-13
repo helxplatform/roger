@@ -101,6 +101,8 @@ class Util:
         elif path.endswith(".pickle"):
             with open(file=path, mode="rb") as stream:
                 obj = pickle.load(stream)
+        elif path.endswith(".jsonl"):
+            obj = Util.read_data(path)
         return obj
 
     @staticmethod
@@ -135,6 +137,9 @@ class Util:
         elif path.endswith(".pickle"):
             with open (path, "wb") as stream:
                 pickle.dump(obj, file=stream)
+        elif path.endswith(".jsonl"):
+            with open (path, "w", encoding="utf-8") as stream:
+                stream.write(obj)
         else:
             """ Raise an exception if invalid. """
             raise ValueError (f"Unrecognized extension: {path}")
@@ -320,7 +325,7 @@ class Util:
 
     @staticmethod
     def json_line_iter(jsonl_file_path):
-        f = open(file=jsonl_file_path,mode='r')
+        f = open(file=jsonl_file_path, mode='r')
         for line in f:
             yield json.loads(line)
         f.close()
@@ -344,6 +349,95 @@ class KGXModel:
                     db=1) # uses db1 for isolation @TODO make this config param.
         self.enable_metrics = self.config.get('enable_metrics', False)
 
+    def get_kgx_json_format(self, files: list, dataset_version: str):
+        """
+        Gets Json formatted kgx files. These files have a the following structure:
+        {"nodes": [{"id":"..."},...], "edges": [{"id":...},...}] }
+
+        Parameters
+        ----------
+        files : list of file names
+        dataset_version : dataset version from dataset meta-data information
+
+        Returns None
+        -------
+
+        """
+        for file_name in files:
+            start = Util.current_time_in_millis()
+            file_name = dataset_version + "/" + file_name
+            file_url = Util.get_uri(file_name, "kgx_base_data_uri")
+            subgraph_basename = os.path.basename(file_name)
+            subgraph_path = Util.kgx_path(subgraph_basename)
+            if os.path.exists(subgraph_path):
+                log.info(f"cached kgx: {subgraph_path}")
+                continue
+            subgraph = Util.read_object(file_url)
+            Util.write_object(subgraph, subgraph_path)
+            total_time = Util.current_time_in_millis() - start
+            edges = len(subgraph['edges'])
+            nodes = len(subgraph['nodes'])
+            log.debug("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
+                Util.trunc(subgraph_path, 45), edges, nodes, total_time))
+
+    def get_kgx_jsonl_format(self, files, dataset_version):
+        """
+        gets pairs of jsonl formatted kgx files. Files is expected to have
+        all the pairs. I.e if kgx_1_nodes.jsonl exists its expected that kgx_1_edges.jsonl
+        exists in the same path.
+        File names should have strings *nodes*.jsonl and *edges*.jsonl.
+        Parameters
+        ----------
+        files
+        dataset_version
+
+        Returns
+        -------
+
+        """
+        # make a paired list
+        paired_up = []
+        for file_name in files:
+            if "nodes" in file_name:
+                paired_up.append([file_name, file_name.replace('nodes', 'edges')])
+        error = False
+        # validate that all pairs exist
+
+        if len(files) / 2 != len(paired_up):
+            log.error("Error paired up kgx jsonl files don't match list of files specified in metadata.yaml")
+            error = True
+        for pairs in paired_up:
+            if pairs[0] not in files:
+                log.error(f"{pairs[0]} not in original list of files from metadata.yaml")
+                error = True
+            if pairs[1] not in files:
+                error = True
+                log.error(f"{pairs[1]} not in original list of files from metadata.yaml")
+        if error:
+            raise Exception("Metadata.yaml has inconsistent jsonl files")
+        for pairs in paired_up:
+            nodes = 0
+            edges = 0
+            start = Util.current_time_in_millis()
+            for p in pairs:
+                file_name = dataset_version + "/" + p
+                file_url = Util.get_uri(file_name, "kgx_base_data_uri")
+                subgraph_basename = os.path.basename(file_name)
+                subgraph_path = Util.kgx_path(subgraph_basename)
+                if os.path.exists(subgraph_path):
+                    log.info(f"cached kgx: {subgraph_path}")
+                    continue
+                data = Util.read_object(file_url)
+                Util.write_object(data, subgraph_path)
+                if "edges" in p:
+                    edges = len(data.split('\n'))
+                else:
+                    nodes = len(data.split('\n'))
+            total_time = Util.current_time_in_millis() - start
+            log.debug("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
+                Util.trunc(subgraph_path, 45), edges, nodes, total_time))
+
+
     def get (self, dataset_version = "v1.0"):
         """ Read metadata for KGX files and downloads them locally.
         :param dataset_version: Data version to operate on.
@@ -352,23 +446,14 @@ class KGXModel:
         data_set_list = self.config.kgx.data_sets
         for item in metadata['kgx']['versions']:
             if item['version'] == dataset_version and item['name'] in data_set_list:
-                log.info(f"Getting KGX dataset {item['name']} , version {item['version']}")
-                for file_name in item['files']:
-                    start = Util.current_time_in_millis ()
-                    file_name = dataset_version + "/" + file_name
-                    file_url = Util.get_uri (file_name, "kgx_base_data_uri")
-                    subgraph_basename = os.path.basename (file_name)
-                    subgraph_path = Util.kgx_path (subgraph_basename)
-                    if os.path.exists (subgraph_path):
-                        log.info (f"cached kgx: {subgraph_path}")
-                        continue
-                    subgraph = Util.read_object(file_url)
-                    Util.write_object (subgraph, subgraph_path)
-                    total_time = Util.current_time_in_millis () - start
-                    edges = len(subgraph['edges'])
-                    nodes = len(subgraph['nodes'])
-                    log.debug ("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format (
-                        Util.trunc(subgraph_path, 45), edges, nodes, total_time))
+                log.info(f"Getting KGX dataset {item['name']} , version {item['version']}, format {item['format']}")
+                if item['format'] == 'json':
+                    self.get_kgx_json_format(item['files'], item['version'])
+                elif item['format'] == 'jsonl':
+                    self.get_kgx_jsonl_format(item['files'], item['version'])
+                else:
+                    raise ValueError(f"Unrecognized format in metadata.yaml: {item['format']}, valid formats are `json` "
+                                     f"and `jsonl`.")
         # Fetchs kgx generated from Dug Annotation workflow.
         self.fetch_dug_kgx()
 
@@ -636,23 +721,6 @@ class BiolinkModel:
     def __init__(self, bl_version='1.5.0'):
         self.bl_url = f'https://raw.githubusercontent.com/biolink/biolink-model/{bl_version}/biolink-model.yaml'
         self.toolkit = Toolkit(self.bl_url)
-
-    """ Programmatic model of Biolink. """
-    def to_camel_case(self, snake_str):
-        """ Convert a snake case string to camel case. """
-        components = snake_str.split('_')
-        return ''.join(x.title() for x in components)
-
-    def get_class(self, name):
-        """ Get a Python class from a string name. """
-        return getattr(sys.modules["biolink.model"], name)
-
-    def is_derived (self, a_class_name, classes):
-        """ Return true if the class derives from any of the provided classes. """
-        for c in classes:
-            if isinstance (self.get_class(self.to_camel_case(a_class_name)), c):
-                return True
-        return False
 
     def find_biolink_leaves(self, biolink_concepts):
         """
