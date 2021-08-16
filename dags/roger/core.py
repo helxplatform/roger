@@ -151,9 +151,9 @@ class Util:
         return str(ROGER_DATA_DIR / "kgx" / name)
 
     @staticmethod
-    def kgx_objects ():
+    def kgx_objects (format="json"):
         """ A list of KGX objects. """
-        kgx_pattern = Util.kgx_path("**.json")
+        kgx_pattern = Util.kgx_path(f"**.{format}")
         return sorted(glob.glob (kgx_pattern))
     
     @staticmethod
@@ -325,7 +325,7 @@ class Util:
 
     @staticmethod
     def json_line_iter(jsonl_file_path):
-        f = open(file=jsonl_file_path, mode='r')
+        f = open(file=jsonl_file_path, mode='r', encoding='utf-8')
         for line in f:
             yield json.loads(line)
         f.close()
@@ -553,15 +553,6 @@ class KGXModel:
         log.info (f"writing schema: {file_name}")
         dictionary = { k : v for k, v in schema.items () }
         Util.write_object (dictionary, file_name)
-        
-    def merge_nodes (self, L, R):
-        for k in L.keys ():
-            R_v = R.get (k, None)
-            if R_v == '' or R_v == None:
-                L[k] = R_v
-
-    def diff_lists (self, L, R):
-        return list(list(set(L)-set(R)) + list(set(R)-set(L)))
 
     def read_items_from_redis(self, ids):
         chunk_size = 10_000 # batch for pipeline
@@ -600,7 +591,7 @@ class KGXModel:
 
     def write_redis_back_to_jsonl(self, file_name, redis_key_pattern):
         Util.mkdir(file_name)
-        with open(file_name, 'w') as f:
+        with open(file_name, 'w', encoding='utf-8') as f:
             start = time.time()
             keys = self.redis_conn.keys(redis_key_pattern)
             log.info(f"Grabbing {redis_key_pattern} from redis too {time.time() - start}")
@@ -643,52 +634,80 @@ class KGXModel:
         node_dict['category'] = categories
         return node_dict
 
+    def merge_node_and_edges (self, nodes, edges, current_metric , data_set_name ):
+        read_time = current_metric['read_kgx_file_time']
+        total_time = current_metric['total_processing_time']
+        # prefix keys for fetching back and writing to file.
+        nodes = {f"node-{node['id']}": self.sort_node_types(node) for node in nodes}
+        edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
+                 edges}
+        read_from_redis_time = time.time()
+        # read nodes and edges scoped to current file
+        nodes_in_redis = self.read_items_from_redis(list(nodes.keys()))
+        edges_in_redis = self.read_items_from_redis(list(edges.keys()))
+        read_from_redis_time = time.time() - read_from_redis_time
+        current_metric['read_redis_time'] = read_from_redis_time
+        merge_time = time.time()
+        log.info(f"Found matching {len(nodes_in_redis)} nodes {len(edges_in_redis)} edges from redis...")
+        for node_id in nodes_in_redis:
+            nodes[node_id] = self.kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
+        for edge_id in edges_in_redis:
+            edges[edge_id] = self.kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
+        merge_time = time.time() - merge_time
+        current_metric['merge_time'] = merge_time
+        write_to_redis_time = time.time()
+        self.write_items_to_redis(nodes)
+        self.write_items_to_redis(edges)
+        write_to_redis_time = time.time() - write_to_redis_time
+        current_metric['write_to_redis_time'] = write_to_redis_time
+        log.debug(
+            "path {:>45} read_file:{:>5} read_nodes_from_redis:{:>7} merge_time:{:>3} write_nodes_to_redis: {"
+            ":>3}".format(
+                Util.trunc(data_set_name, 45), read_time, read_from_redis_time, merge_time, write_to_redis_time))
+        total_file_processing_time = time.time() - total_time
+        current_metric['total_processing_time'] = total_file_processing_time
+        current_metric['total_nodes_in_kgx_file'] = len(nodes)
+        current_metric['total_edges_in_kgx_file'] = len(edges)
+        current_metric['nodes_found_in_redis'] = len(nodes_in_redis)
+        current_metric['edges_found_in_redis'] = len(edges_in_redis)
+        log.info(f"processing {data_set_name} took {total_file_processing_time}")
+        return current_metric
+
     def merge (self):
         """ Merge nodes. Would be good to have something less computationally intensive. """
-        kgx_files = Util.kgx_objects()
+        data_set_version = self.config.get('kgx', {}).get('dataset_version')
         metrics = {}
         start = time.time()
-        for file in kgx_files:
+        json_format_files = Util.kgx_objects("json")
+        jsonl_format_files = set([
+            x.replace(f'nodes_{data_set_version}.jsonl', '').replace(f'edges_{data_set_version}.jsonl', '') for x in Util.kgx_objects("jsonl")
+        ])
+
+        for file in json_format_files:
             current_metric = {}
             total_time = read_time = time.time()
             current_kgx_data = Util.read_object(file)
             read_time = time.time() - read_time
             current_metric['read_kgx_file_time'] = read_time
-            # prefix keys for fetching back and writing to file.
-            nodes = {f"node-{node['id']}": self.sort_node_types(node) for node in current_kgx_data['nodes']}
-            edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
-                     current_kgx_data['edges']}
-            read_from_redis_time = time.time()
-            # read nodes and edges scoped to current file
-            nodes_in_redis = self.read_items_from_redis(list(nodes.keys()))
-            edges_in_redis = self.read_items_from_redis(list(edges.keys()))
-            read_from_redis_time = time.time() - read_from_redis_time
-            current_metric['read_redis_time'] = read_from_redis_time
-            merge_time = time.time()
-            log.info(f"Found matching {len(nodes_in_redis)} nodes {len(edges_in_redis)} edges from redis...")
-            for node_id in nodes_in_redis:
-                nodes[node_id] = self.kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
-            for edge_id in edges_in_redis:
-                edges[edge_id] = self.kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
-            merge_time = time.time() - merge_time
-            current_metric['merge_time'] = merge_time
-            write_to_redis_time = time.time()
-            self.write_items_to_redis(nodes)
-            self.write_items_to_redis(edges)
-            write_to_redis_time = time.time()  - write_to_redis_time
-            current_metric['write_to_redis_time'] = write_to_redis_time
-            log.debug(
-                "path {:>45} read_file:{:>5} read_nodes_from_redis:{:>7} merge_time:{:>3} write_nodes_to_redis: {"
-                ":>3}".format(
-                    Util.trunc(file, 45), read_time, read_from_redis_time, merge_time, write_to_redis_time))
-            total_file_processing_time = time.time() - total_time
-            current_metric['total_processing_time'] = total_file_processing_time
-            current_metric['total_nodes_in_kgx_file'] = len(nodes)
-            current_metric['total_edges_in_kgx_file'] = len(edges)
-            current_metric['nodes_found_in_redis'] = len(nodes_in_redis)
-            current_metric['edges_found_in_redis'] = len(edges_in_redis)
-            log.info(f"processing {file} took {total_file_processing_time}")
-            metrics[str(file)] = current_metric
+            current_metric['total_processing_time'] = total_time
+            self.merge_node_and_edges(nodes=current_kgx_data['nodes'],
+                                      edges=current_kgx_data['edges'],
+                                      current_metric=current_metric,
+                                      data_set_name=file)
+
+        for file in jsonl_format_files:
+            current_metric = {}
+            total_time = read_time = time.time()
+            edges = Util.json_line_iter(Util.kgx_path(file + f'edges_{data_set_version}.jsonl'))
+            nodes = Util.json_line_iter(Util.kgx_path(file + f'nodes_{data_set_version}.jsonl'))
+            read_time = time.time() - read_time
+            current_metric['read_kgx_file_time'] = read_time
+            current_metric['total_processing_time'] = total_time
+            self.merge_node_and_edges(nodes=nodes,
+                                      edges=edges,
+                                      current_metric=current_metric,
+                                      data_set_name=file)
+
         log.info(f"total time for dumping to redis : {time.time() - start}")
 
         # now we have all nodes and edges merged in redis we scan the whole redis back to disk

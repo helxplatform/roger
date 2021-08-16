@@ -15,7 +15,7 @@ kgx_base_data_uri: https://stars.renci.org/var/kgx_data/
 annotation_base_data_uri: https://stars.renci.org/var/dug/
 
 kgx:
-  biolink_model_version: 1.5.0
+  biolink_model_version: 2.1.0
   dataset_version: v3.0
   data_sets:
     - baseline-graph
