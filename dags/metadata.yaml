@@ -46,30 +46,32 @@ kgx:
     name: sparc-kgx
     format: json
   - files:
-      - biolink_edges_v3.0.jsonl
-      - biolink_nodes_v3.0.jsonl
-      - ctd_edges_v3.0.jsonl
-      - ctd_nodes_v3.0.jsonl
-      - drugcentral_edges_v3.0.jsonl
-      - drugcentral_nodes_v3.0.jsonl
-      - gtopdb_edges_v3.0.jsonl
-      - gtopdb_nodes_v3.0.jsonl
-      - hetio_edges_v3.0.jsonl
-      - hetio_nodes_v3.0.jsonl
-      - hgnc_edges_v3.0.jsonl
-      - hgnc_nodes_v3.0.jsonl
-      - hmdb_edges_v3.0.jsonl
-      - hmdb_nodes_v3.0.jsonl
-      - humangoa_edges_v3.0.jsonl
-      - humangoa_nodes_v3.0.jsonl
-      - intact_edges_v3.0.jsonl
-      - intact_nodes_v3.0.jsonl
-      - panther_edges_v3.0.jsonl
-      - panther_nodes_v3.0.jsonl
-      - pharos_edges_v3.0.jsonl
-      - pharos_nodes_v3.0.jsonl
-      - ubergraph_edges_v3.0.jsonl
-      - ubergraph_nodes_v3.0.jsonl
+      - Biolink_edges_v3.0.jsonl
+      - Biolink_nodes_v3.0.jsonl
+      - CTD_edges_v3.0.jsonl
+      - CTD_nodes_v3.0.jsonl
+      - DrugCentral_edges_v3.0.jsonl
+      - DrugCentral_nodes_v3.0.jsonl
+      - GtoPdb_edges_v3.0.jsonl
+      - GtoPdb_nodes_v3.0.jsonl
+      - Hetio_edges_v3.0.jsonl
+      - Hetio_nodes_v3.0.jsonl
+      - HGNC_edges_v3.0.jsonl
+      - HGNC_nodes_v3.0.jsonl
+      - HMDB_edges_v3.0.jsonl
+      - HMDB_nodes_v3.0.jsonl
+      - HumanGOA_edges_v3.0.jsonl
+      - HumanGOA_nodes_v3.0.jsonl
+      - IntAct_edges_v3.0.jsonl
+      - IntAct_nodes_v3.0.jsonl
+      - OntologicalHierarchy_edges_v3.0.jsonl
+      - OntologicalHierarchy_nodes_v3.0.jsonl
+      - PANTHER_edges_v3.0.jsonl
+      - PANTHER_nodes_v3.0.jsonl
+      - PHAROS_edges_v3.0.jsonl
+      - PHAROS_nodes_v3.0.jsonl
+      - UberGraph_edges_v3.0.jsonl
+      - UberGraph_nodes_v3.0.jsonl
     version: v3.0
     name: baseline-graph
     format: jsonl
