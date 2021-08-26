@@ -1129,7 +1129,7 @@ class Roger:
             self.log_stream = StringIO()
             self.string_handler = logging.StreamHandler (self.log_stream)
             log.addHandler (self.string_handler)
-        self.biolink = BiolinkModel ()
+        self.biolink = BiolinkModel (config.kgx.biolink_model_version)
         self.kgx = KGXModel (self.biolink, config=config)
         self.bulk = BulkLoad (self.biolink, config=config)
 
