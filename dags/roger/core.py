@@ -1145,7 +1145,7 @@ class Roger:
         :param traceback: The stack trace explaining the exception. 
         """
         if exception_type or exception_value or traceback:
-            log.error (exc_info=(exception_type, exception_value, traceback))
+            log.error (msg="Error:", exc_info=(exception_type, exception_value, traceback))
         if self.has_string_handler:
             log.removeHandler (self.string_handler)
         
