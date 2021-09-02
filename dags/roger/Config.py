@@ -89,7 +89,8 @@ class DugInputsConfig(DictLike):
             for data_set_config
             in config_dict.get("data_sets", [])
         ]
-        return cls(data_sets=data_sets)
+        config = S3Config(**config_dict.pop("s3", {}))
+        return cls(data_sets=data_sets, s3_config=config)
 
 
 @dataclass
