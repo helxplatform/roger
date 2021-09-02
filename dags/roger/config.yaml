@@ -21,10 +21,17 @@ kgx:
     - baseline-graph
 
 dug_inputs:
-  dataset_version: v1.0
+  s3:
+    host: ""
+    bucket_name: ""
+    access_key: ""
+    secret_key: ""
+    prefix: ""
   data_sets:
-    - topmed
-    - bdc-dbGaP
+    - name: topmed
+      version: v2.0
+    - name: bdc
+      version: v1.0
 
 #https://github.com/RedisGraph/redisgraph-bulk-loader/blob/master/redisgraph_bulk_loader/bulk_insert.py#L43
 bulk_loader:

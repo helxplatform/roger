@@ -56,17 +56,40 @@ class KgxConfig(DictLike):
         self.data_sets = [data_set.strip(" ") for data_set in self.data_sets.split(",")] \
             if isinstance(self.data_sets, str) else self.data_sets
 
+
 @dataclass
-class DugInputsConfig(DictLike):
-    dataset_version: str = "v1.0"
-    data_sets: List = field(default_factory=lambda: ['topmed', 'bdc-dbGaP'])
+class DatasourceConfig(DictLike):
+    name: str
+    version: str
 
     def __post_init__(self):
-        # Convert strings to list. In cases where this is passed as env variable with a single value
-        # cast it to a list. eg ROGER_KGX_DATA__SET="spark,baseline-data" could be converted to
-        # config.kgx.data_set = ["spark", "baseline-data"]
-        self.data_sets = [data_set.strip(" ") for data_set in self.data_sets.split(",")] \
-            if isinstance(self.data_sets, str) else self.data_sets
+        self.name = self.name.strip()
+        self.version = self.version.strip()
+
+
+@dataclass
+class S3Config(DictLike):
+    host: str
+    bucket_name: str
+    access_key: str
+    secret_key: str
+
+    prefix: str = ""
+
+
+@dataclass
+class DugInputsConfig(DictLike):
+    s3_config: "S3Config"
+    data_sets: List[DatasourceConfig] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, config_dict: dict):
+        data_sets = [
+            DatasourceConfig(**data_set_config)
+            for data_set_config
+            in config_dict.get("data_sets", [])
+        ]
+        return cls(data_sets=data_sets)
 
 
 @dataclass
@@ -101,7 +124,6 @@ class AnnotationConfig(DictLike):
     ontology_greenlist: List[str] = field(default_factory=lambda: [
         "PATO", "CHEBI", "MONDO", "UBERON", "HP", "MESH", "UMLS"
     ])
-
 
 
 @dataclass
@@ -142,7 +164,7 @@ class RogerConfig(DictLike):
         self.redisgraph = RedisConfig(**kwargs.pop('redisgraph', {}))
         self.logging = LoggingConfig(**kwargs.pop('logging', {}))
         self.kgx = KgxConfig(**kwargs.pop('kgx', {}))
-        self.dug_inputs = DugInputsConfig(**kwargs.pop('dug_inputs', {}))
+        self.dug_inputs = DugInputsConfig.from_dict(kwargs.pop('dug_inputs', {}))
         self.bulk_loader = BulkLoaderConfig(**kwargs.pop('bulk_loader', {}))
         self.annotation = AnnotationConfig(**kwargs.pop('annotation', {}))
         self.indexing = IndexingConfig(**kwargs.pop('indexing', {}))

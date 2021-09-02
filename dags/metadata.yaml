@@ -47,21 +47,19 @@ kgx:
     - panther.json
     name: test
 dug_inputs:
-  versions:
-    - name: topmed
-      version: v1.0
+  bdc:
+    v1.0:
+      files:
+        - bdc_dbgap_data_dicts.tar.gz
+      format: dbGaP
+  nida:
+    v1.0:
+      files:
+        - nida-12studies.tar.gz
+      format: dbGaP
+  topmed:
+    v2.0:
       files:
         - topmed_variables_v2.0.csv
         - topmed_tags_v2.0.json
       format: topmed
-    - name: bdc-dbGaP
-      version: v1.0
-      files:
-        - bdc_dbgap_data_dicts.tar.gz
-      format: dbGaP
-    - name: nida
-      version: v1.0
-      files:
-        - nida-12studies.tar.gz
-      format: dbGaP
-

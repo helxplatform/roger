@@ -18,9 +18,10 @@ from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement
 from dug.core.search import Search
 
-from roger.Config import RogerConfig
+from roger.Config import RogerConfig, DugInputsConfig, DatasourceConfig
 from roger.core import Util
 from roger.roger_util import get_logger
+from utils.s3 import S3Utils
 
 log = get_logger()
 
@@ -202,7 +203,7 @@ class Dug:
                 "id": element.id,
                 "name": element.name,
                 "category": ["biolink:ClinicalModifier"],
-                "description": element.description.replace("'", '`') # bulk loader parsing issue
+                "description": element.description.replace("'", '`')  # bulk loader parsing issue
             }
             if element.id not in written_nodes:
                 nodes.append(variable_node)
@@ -693,7 +694,7 @@ def get_dbgap_files(config: RogerConfig, to_string=False) -> List[str]:
     """
     Fetches dbgap data files to input file directory
     """
-    meta_data = Util.read_relative_object ("../metadata.yaml")
+    meta_data = Util.read_relative_object("../metadata.yaml")
     data_format = "dbGaP"
     output_dir: Path = Util.dug_input_files_path("db_gap")
     current_version = config.dug_inputs.dataset_version
@@ -719,21 +720,58 @@ def get_topmed_files(config: RogerConfig, to_string=False) -> List[str]:
     """
     Fetches topmed data files to input file directory
     """
+
     meta_data = Util.read_relative_object("../metadata.yaml")
-    data_format = "topmed"
+    expected_data_format = "topmed"
     output_dir: Path = Util.dug_input_files_path("topmed")
-    current_version = config.dug_inputs.dataset_version
-    data_sets = config.dug_inputs.data_sets
-    pulled_files = []
-    for item in meta_data["dug_inputs"]["versions"]:
-        if item["version"] == current_version and item["name"] in data_sets and item["format"] == data_format:
-            for filename in item["files"]:
-                remote_host = config.annotation_base_data_uri
-                fetch = FileFetcher(
-                    remote_host=remote_host,
-                    remote_dir=current_version,
-                    local_dir=output_dir)
-                fetch(filename)
-                pulled_files.append(filename)
-    return [str(output_dir / filename) for filename in pulled_files]
+
+    input_configs: DugInputsConfig = config.dug_inputs
+    pulled_files: List[str] = []
+
+    datasource_config: DatasourceConfig
+    for datasource_config in input_configs.data_sets:
+        files: List[str] = validate_datasource_config(datasource_config, meta_data, expected_data_format)
+
+        for file_name in files:
+            local_path = load_datasource(datasource_config, file_name, output_dir, input_configs.s3_config)
+            pulled_files.append(local_path)
+    return pulled_files
+
+
+def validate_datasource_config(
+        datasource_config: DatasourceConfig,
+        meta_data: dict,
+        expected_data_format: str) -> List[str]:
+    datasource_metadata = meta_data["dug_inputs"].get(datasource_config.name)
+    if datasource_metadata is None:
+        # TODO log incorrect config
+        raise RuntimeError("")
+    version_metadata = datasource_metadata.get(datasource_config.version)
+    if version_metadata is None:
+        # TODO log incorrect config
+        raise RuntimeError("")
+    data_format = version_metadata["format"]
+    if data_format != expected_data_format:
+        # TODO log incorrect config
+        raise RuntimeError("")
+
+    files: List[str] = version_metadata["files"]
+    return files
+
+
+def load_datasource(
+        datasource_config,
+        file_name,
+        output_dir,
+        s3_config,
+    ):
+
+    s3 = S3Utils(
+        s3_config
+    )
+    s3_root = Path(s3_config.prefix)  # TODO determine how we should structure our data source bucket
+    remote_path = str(s3_root / datasource_config.name / datasource_config.version / file_name)
+    local_path = str(output_dir / datasource_config.name / datasource_config.version / file_name)
+    s3.get(remote_path, local_path)
+    return local_path
 

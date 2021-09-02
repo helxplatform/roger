@@ -2,35 +2,31 @@ from contextlib import contextmanager
 
 import boto3
 
+from roger.Config import S3Config
+
 
 class S3Utils:
 
     def __init__(
             self,
-            host,
-            bucket_name,
-            access_key,
-            secret_key,
+            s3_config: S3Config
             ):
-        self.host = host
-        self.bucket_name = bucket_name
-        self.access_key = access_key
-        self.secret_key = secret_key
+        self.config = s3_config
 
     @contextmanager
     def connect(
             self,
     ):
         session = boto3.session.Session(
-            aws_access_key_id=self.access_key,
-            aws_secret_access_key=self.secret_key,
+            aws_access_key_id=self.config.access_key,
+            aws_secret_access_key=self.config.secret_key,
         )
 
         s3 = session.resource(
             's3',
-            endpoint_url=self.host,
+            endpoint_url=self.config.host,
         )
-        bucket = s3.Bucket(self.bucket_name)
+        bucket = s3.Bucket(self.config.bucket_name)
         yield bucket
 
     def get(self, remote_file_name: str, local_file_name: str):
