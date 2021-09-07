@@ -653,6 +653,9 @@ class KGXModel:
             nodes[node_id] = self.kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
         for edge_id in edges_in_redis:
             edges[edge_id] = self.kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
+        # add predicate labels to edges;
+        for edge_id in edges:
+            edges[edge_id]['predicate_label'] = self.biolink.get_label(edges[edge_id]['predicate'])
         merge_time = time.time() - merge_time
         current_metric['merge_time'] = merge_time
         write_to_redis_time = time.time()
@@ -772,6 +775,9 @@ class BiolinkModel:
         """ Return the leaf classes in the provided list of names. """
         leaves = list(self.find_biolink_leaves(names))
         return leaves[0]
+
+    def get_label(self, class_name):
+        return self.toolkit.get_element(class_name).name
 
 
 class BulkLoad:
