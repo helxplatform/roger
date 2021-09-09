@@ -777,7 +777,11 @@ class BiolinkModel:
         return leaves[0]
 
     def get_label(self, class_name):
-        return self.toolkit.get_element(class_name).name
+        element = self.toolkit.get_element(class_name)
+        if element:
+            name = element.name
+            return name
+        return class_name.replace("biolink:", "").replace("_", " ")
 
 
 class BulkLoad:
