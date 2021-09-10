@@ -606,7 +606,13 @@ class KGXModel:
                 log.info(f"wrote : {len(items)}")
 
     def kgx_merge_dict(self, dict_1, dict_2):
-        merged = kgx_merge_dict(dict_1, dict_2)
+        # collect values that are same first
+        merged = {}
+        # if properties match up with value treat as one
+        merged = {x: dict_1[x] for x in dict_2 if dict_1.get(x) == dict_2.get(x)}
+        unique_dict_1_props = {x: dict_1[x] for x in dict_1 if x not in merged.keys()}
+        unique_dict_2_props = {x: dict_2[x] for x in dict_2 if x not in merged.keys()}
+        merged.update(kgx_merge_dict(unique_dict_1_props, unique_dict_2_props))
         for keys in merged:
             attribute = merged[keys]
             # When mergeing array's for bulk loading
