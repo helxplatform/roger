@@ -609,8 +609,11 @@ class KGXModel:
         # collect values that are same first
         merged = {}
         # if properties match up with value treat as one
-        merged = {x: dict_1[x] for x in dict_2 if dict_1.get(x) == dict_2.get(x)}
+        # get dict_1 intersection dict_2 ,
+        merged = {x: dict_1[x] for x in dict_1 if dict_1.get(x) == dict_2.get(x)}
+        # get dict_1 disjoint dict 2
         unique_dict_1_props = {x: dict_1[x] for x in dict_1 if x not in merged.keys()}
+        # get dict_2 disjoint dict 1
         unique_dict_2_props = {x: dict_2[x] for x in dict_2 if x not in merged.keys()}
         merged.update(kgx_merge_dict(unique_dict_1_props, unique_dict_2_props))
         for keys in merged:
