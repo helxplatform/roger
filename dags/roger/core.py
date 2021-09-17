@@ -250,6 +250,16 @@ class Util:
         return sorted(glob.glob(topmed_file_pattern))
 
     @staticmethod
+    def dug_nida_path(name):
+        """ NIDA source files"""
+        return Util.dug_input_files_path('nida') / name
+
+    @staticmethod
+    def dug_nida_objects():
+        nida_file_pattern = str(Util.dug_nida_path("NIDA-*.xml"))
+        return sorted(glob.glob(nida_file_pattern))
+
+    @staticmethod
     def dug_dd_xml_path():
         """ Topmed source files"""
         return Util.dug_input_files_path('db_gap')
@@ -353,10 +363,11 @@ class KGXModel:
         for item in metadata['kgx']['versions']:
             if item['version'] == dataset_version and item['name'] in data_set_list:
                 log.info(f"Getting KGX dataset {item['name']} , version {item['version']}")
-                for file_name in item['files']:
+                for nfile, file_name in enumerate(item['files']):
                     start = Util.current_time_in_millis ()
                     file_name = dataset_version + "/" + file_name
                     file_url = Util.get_uri (file_name, "kgx_base_data_uri")
+                    log.debug ("#{}/{} read: {}".format(nfile+1, len(item['files']), file_url))
                     subgraph_basename = os.path.basename (file_name)
                     subgraph_path = Util.kgx_path (subgraph_basename)
                     if os.path.exists (subgraph_path):
@@ -367,8 +378,8 @@ class KGXModel:
                     total_time = Util.current_time_in_millis () - start
                     edges = len(subgraph['edges'])
                     nodes = len(subgraph['nodes'])
-                    log.debug ("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format (
-                        Util.trunc(subgraph_path, 45), edges, nodes, total_time))
+                    log.debug ("#{}/{} edges:{:>7} nodes: {:>7} time:{:>8} wrote: {}".format (
+                        nfile+1, len(item['files']), edges, nodes, total_time/1000, subgraph_path))
         # Fetchs kgx generated from Dug Annotation workflow.
         self.fetch_dug_kgx()
 
@@ -378,14 +389,14 @@ class KGXModel:
         :return:
         """
         dug_kgx_files = Util.dug_kgx_objects()
-        log.info(f"Coping dug KGX files to {Util.kgx_path('')}. Found {len(dug_kgx_files)} kgx files to copy.")
+        log.info(f"Copying dug KGX files to {Util.kgx_path('')}. Found {len(dug_kgx_files)} kgx files to copy.")
         for file in dug_kgx_files:
             file_name = ntpath.basename(file)
             dest = Util.kgx_path(file_name)
             Util.write_object({}, dest)
             log.info(f"Copying from {file} to {dest}.")
             Util.copy_file_to_dir(file, dest)
-        log.info("Done coping dug KGX files.")
+        log.info("Done copying dug KGX files.")
         return
 
     def create_nodes_schema(self):
