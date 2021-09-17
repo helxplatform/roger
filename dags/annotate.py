@@ -2,7 +2,7 @@ from airflow.models import DAG
 from airflow.operators.bash_operator import BashOperator
 from airflow.operators.dummy_operator import DummyOperator
 
-from dug_helpers.dug_utils import DugUtil, get_topmed_files, get_dbgap_files
+from dug_helpers.dug_utils import DugUtil, get_topmed_files, get_dbgap_files, get_nida_files
 from roger.dag_util import default_args, create_python_task
 
 DAG_ID = 'annotate_dug'
@@ -26,11 +26,13 @@ with DAG(
     # making it redundant
     # 3. tasks like intro would fail because they don't have the data dir mounted.
 
-    get_topmed_files = create_python_task(dag, "get_topmed_data", get_topmed_files)
-    extract_db_gap_files = create_python_task(dag, "get_dbgap_data", get_dbgap_files)
+    prepare_topmed_files = create_python_task(dag, "get_topmed_data", get_topmed_files)
+    prepare_db_gap_files = create_python_task(dag, "get_dbgap_data", get_dbgap_files)
+    prepare_nida_files   = create_python_task(dag, "get_nida_files", get_nida_files)
 
     annotate_topmed_files = create_python_task(dag, "annotate_topmed_files", DugUtil.annotate_topmed_files)
     annotate_db_gap_files = create_python_task(dag, "annotate_db_gap_files", DugUtil.annotate_db_gap_files)
+    annotate_nida_files   = create_python_task(dag, "annotate_nida_files", DugUtil.annotate_nida_files)
 
     make_kg_tagged = create_python_task(dag, "make_tagged_kgx", DugUtil.make_kg_tagged)
 
@@ -39,8 +41,9 @@ with DAG(
     )
 
     #intro >> run_printlog
-    intro >> get_topmed_files >> annotate_topmed_files >> dummy_stepover
-    intro >> extract_db_gap_files >> annotate_db_gap_files >> dummy_stepover
+    intro >> prepare_topmed_files >> annotate_topmed_files >> dummy_stepover
+    intro >> prepare_db_gap_files >> annotate_db_gap_files >> dummy_stepover
+    intro >> prepare_nida_files   >> annotate_nida_files   >> dummy_stepover
     dummy_stepover >> make_kg_tagged
 
     #intro >> [get_topmed_files, extract_db_gap_files] >> dummy_stepover >>\
