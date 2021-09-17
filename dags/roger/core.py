@@ -268,6 +268,16 @@ class Util:
         return sorted(glob.glob(topmed_file_pattern))
 
     @staticmethod
+    def dug_nida_path(name):
+        """ NIDA source files"""
+        return Util.dug_input_files_path('nida') / name
+
+    @staticmethod
+    def dug_nida_objects():
+        nida_file_pattern = str(Util.dug_nida_path("NIDA-*.xml"))
+        return sorted(glob.glob(nida_file_pattern))
+
+    @staticmethod
     def dug_dd_xml_path():
         """ Topmed source files"""
         return Util.dug_input_files_path('db_gap')
@@ -494,8 +504,7 @@ class KGXModel:
         :return:
         """
         dug_kgx_files = Util.dug_kgx_objects()
-        all_kgx_files = []
-        log.info(f"Coping dug KGX files to {Util.kgx_path('')}. Found {len(dug_kgx_files)} kgx files to copy.")
+        log.info(f"Copying dug KGX files to {Util.kgx_path('')}. Found {len(dug_kgx_files)} kgx files to copy.")
         for file in dug_kgx_files:
             file_name = ntpath.basename(file)
             dest = Util.kgx_path(file_name)
@@ -503,8 +512,8 @@ class KGXModel:
             Util.write_object({}, dest)
             log.info(f"Copying from {file} to {dest}.")
             Util.copy_file_to_dir(file, dest)
-        log.info("Done coping dug KGX files.")
-        return all_kgx_files
+        log.info("Done copying dug KGX files.")
+        return
 
     def create_nodes_schema(self):
         """
