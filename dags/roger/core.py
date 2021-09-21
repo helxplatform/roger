@@ -386,9 +386,7 @@ class KGXModel:
         -------
 
         """
-        all_kgx_files = []
-        log.info(f"getting {files}")
-        for file_name in files:
+        for nfile, file_name in enumerate(files):
             start = Util.current_time_in_millis()
             file_name = dataset_version + "/" + file_name
             file_url = Util.get_uri(file_name, "kgx_base_data_uri")
@@ -398,14 +396,14 @@ class KGXModel:
             if os.path.exists(subgraph_path):
                 log.info(f"cached kgx: {subgraph_path}")
                 continue
+            log.debug ("#{}/{} read: {}".format(nfile+1, len(files), file_url))
             subgraph = Util.read_object(file_url)
             Util.write_object(subgraph, subgraph_path)
             total_time = Util.current_time_in_millis() - start
             edges = len(subgraph['edges'])
             nodes = len(subgraph['nodes'])
-            log.debug("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
-                Util.trunc(subgraph_path, 45), edges, nodes, total_time))
-        return all_kgx_files
+            log.debug("#{}/{} edges:{:>7} nodes: {:>7} time:{:>8} wrote: {}".format(
+                nfile+1, len(files), edges, nodes, total_time/1000, subgraph_path))
 
     def get_kgx_jsonl_format(self, files, dataset_version):
         """
@@ -467,7 +465,6 @@ class KGXModel:
             total_time = Util.current_time_in_millis() - start
             log.debug("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
                 Util.trunc(subgraph_path, 45), edges, nodes, total_time))
-        return all_kgx_files
 
     def get (self, dataset_version = "v1.0"):
         """ Read metadata for KGX files and downloads them locally.
