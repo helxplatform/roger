@@ -4,6 +4,7 @@ from airflow.operators.dummy_operator import DummyOperator
 
 from dug_helpers.dug_utils import DugUtil, get_topmed_files, get_dbgap_files, get_nida_files
 from roger.dag_util import default_args, create_python_task
+import os
 
 DAG_ID = 'annotate_dug'
 
@@ -18,21 +19,11 @@ with DAG(
     intro = BashOperator(task_id='Intro',
                          bash_command='echo running tranql translator && exit 0',
                          dag=dag)
-    # make_kg_tagged = create_python_task(dag, "create_kgx_files", DugUtil.make_kg_tagged)
 
     # Unzip and get files, avoid this because
     # 1. it takes a bit of time making the dag itself, webserver hangs
-    # 2. Every task in this dag would still need to execute this part
-    # making it redundant
+    # 2. Every task in this dag would still need to execute this part making it redundant
     # 3. tasks like intro would fail because they don't have the data dir mounted.
-
-    prepare_topmed_files = create_python_task(dag, "get_topmed_data", get_topmed_files)
-    prepare_db_gap_files = create_python_task(dag, "get_dbgap_data", get_dbgap_files)
-    prepare_nida_files   = create_python_task(dag, "get_nida_files", get_nida_files)
-
-    annotate_topmed_files = create_python_task(dag, "annotate_topmed_files", DugUtil.annotate_topmed_files)
-    annotate_db_gap_files = create_python_task(dag, "annotate_db_gap_files", DugUtil.annotate_db_gap_files)
-    annotate_nida_files   = create_python_task(dag, "annotate_nida_files", DugUtil.annotate_nida_files)
 
     make_kg_tagged = create_python_task(dag, "make_tagged_kgx", DugUtil.make_kg_tagged)
 
@@ -41,10 +32,22 @@ with DAG(
     )
 
     #intro >> run_printlog
-    intro >> prepare_topmed_files >> annotate_topmed_files >> dummy_stepover
-    intro >> prepare_db_gap_files >> annotate_db_gap_files >> dummy_stepover
-    intro >> prepare_nida_files   >> annotate_nida_files   >> dummy_stepover
-    dummy_stepover >> make_kg_tagged
+    envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed")
+    data_sets = envspec.split(",")
 
-    #intro >> [get_topmed_files, extract_db_gap_files] >> dummy_stepover >>\
-    #[annotate_topmed_files, annotate_db_gap_files] >> make_kg_tagged
+    for i, data_set in enumerate(data_sets):
+        if data_set == "topmed":
+            prepare_files = create_python_task(dag, "get_topmed_data", get_topmed_files)
+            annotate_files = create_python_task(dag, "annotate_topmed_files", DugUtil.annotate_topmed_files)
+        elif data_set == "bdc-dbGaP":
+            prepare_files = create_python_task(dag, "get_dbgap_data", get_dbgap_files)
+            annotate_files = create_python_task(dag, "annotate_db_gap_files", DugUtil.annotate_db_gap_files)
+        elif data_set == "nida":
+            prepare_files = create_python_task(dag, "get_nida_files", get_nida_files)
+            annotate_files = create_python_task(dag, "annotate_nida_files", DugUtil.annotate_nida_files)
+
+        intro >> prepare_files
+        prepare_files >> annotate_files
+        annotate_files >> dummy_stepover
+
+    dummy_stepover >> make_kg_tagged
