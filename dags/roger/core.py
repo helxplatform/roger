@@ -4,10 +4,12 @@ import os
 import orjson as json
 import ntpath
 import pathlib
+import queue
 import redis
 import requests
 import shutil
 import sys
+import threading
 import time
 import yaml
 import pickle
@@ -23,6 +25,7 @@ from roger.components.data_conversion_utils import TypeConversionUtil
 from redisgraph_bulk_loader.bulk_insert import bulk_insert
 from roger.roger_db import RedisGraph
 from string import Template
+from urllib.request import urlretrieve
 
 log = get_logger ()
 config = get_config ()
@@ -352,7 +355,43 @@ class Util:
         for line in f:
             yield json.loads(line)
         f.close()
-        
+
+    @staticmethod
+    def downloadfile(thread_num, inputq, doneq):
+        url = ""
+        t0 = 0
+        pct = 0
+
+        def downloadprogress(blocknumber, readsize, totalfilesize):
+            nonlocal thread_num
+            nonlocal url, t0, pct
+            blocks_expected = int(totalfilesize/readsize) + (1 if totalfilesize%readsize != 0 else 0)
+            t1 = int(Util.current_time_in_millis()/1000)
+            elapsed_delta = t1 - t0
+            pct = int(100 * blocknumber / blocks_expected)
+            if elapsed_delta >= 15: # every n seconds
+                log.debug(f"thread-{thread_num} {pct}% of size:{totalfilesize} ({blocknumber}/{blocks_expected}) url:{url}")
+                t0 = t1
+
+        num_files_processed = 0
+        while inputq.empty() is False:
+            t0 = int(Util.current_time_in_millis()/1000)
+            url, dst = inputq.get()
+            num_files_processed += 1
+            log.debug(f"thread-{thread_num} downloading {url}")
+            try:
+                path, httpMessage = urlretrieve(url, dst, reporthook=downloadprogress)
+                if pct < 100:
+                    httpMessageKeys = httpMessage.keys()
+                    log.debug(f"thread-{thread_num} urlretrieve path:'{path}' http-keys:{httpMessageKeys} httpMessage:'{httpMessage.as_string()}")
+            except Exception as e:
+                log.error(f"thread-{thread_num} downloadfile excepton: {e}")
+                continue
+            log.debug(f"thread-{thread_num} downloaded {dst}")
+        doneq.put((thread_num,num_files_processed))
+        log.debug(f"thread-{thread_num} done!")
+        return
+
 class KGXModel:
     """ Abstractions for transforming Knowledge Graph Exchange formatted data. """
     def __init__(self, biolink=None, config=None):
@@ -386,6 +425,39 @@ class KGXModel:
         -------
 
         """
+        file_tuple_q = queue.Queue()
+        thread_done_q = queue.Queue()
+        for nfile, file_name in enumerate(files):
+            # file_url or skip
+            file_name = dataset_version + "/" + file_name
+            file_url = Util.get_uri(file_name, "kgx_base_data_uri")
+            subgraph_basename = os.path.basename(file_name)
+            subgraph_path = Util.kgx_path(subgraph_basename)
+            if os.path.exists(subgraph_path):
+                log.info(f"cached kgx: {subgraph_path}")
+                continue
+            log.debug ("#{}/{} to get: {}".format(nfile+1, len(files), file_url))
+            # folder
+            dirname = os.path.dirname (subgraph_path)
+            if not os.path.exists (dirname):
+                os.makedirs (dirname, exist_ok=True)
+            # add to queue
+            file_tuple_q.put((file_url,subgraph_path))
+
+        # start threads for each file download
+        threads = []
+        for thread_num in range(len(files)): # len(files)
+            th = threading.Thread(target=Util.downloadfile, args=(thread_num, file_tuple_q, thread_done_q))
+            th.start()
+            threads.append(th)
+
+        # wait for each thread to complete
+        for nwait in range(len(threads)):
+            thread_num, num_files_processed = thread_done_q.get()
+            th = threads[thread_num]
+            th.join()
+            log.debug(f"#{nwait+1}/{len(threads)} joined: thread-{thread_num} processed: {num_files_processed} file(s)")
+
         for nfile, file_name in enumerate(files):
             start = Util.current_time_in_millis()
             file_name = dataset_version + "/" + file_name
