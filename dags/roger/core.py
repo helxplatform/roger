@@ -377,6 +377,7 @@ class KGXModel:
 
         """
         all_kgx_files = []
+        log.info(f"getting {files}")
         for file_name in files:
             start = Util.current_time_in_millis()
             file_name = dataset_version + "/" + file_name
@@ -413,6 +414,7 @@ class KGXModel:
         """
         # make a paired list
         paired_up = []
+        log.info(f"getting {files}")
         for file_name in files:
             if "nodes" in file_name:
                 paired_up.append([file_name, file_name.replace('nodes', 'edges')])
