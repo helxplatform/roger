@@ -58,7 +58,7 @@ x-airflow-common:
     ROGER_ELASTICSEARCH_NBOOST__HOST: "$NBOOST_API_HOST"
     ROGER_REDISGRAPH_HOST: "$REDIS_HOST"
     ROGER_REDISGRAPH_PASSWORD: "$REDIS_PASSWORD"
-    ROGER_KGX_DATASET__VERSION: "v2.0"
+    ROGER_KGX_DATASET__VERSION: "v3.0"
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
