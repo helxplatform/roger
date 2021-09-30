@@ -356,7 +356,7 @@ class Util:
             t1 = int(Util.current_time_in_millis()/1000)
             elapsed_delta = t1 - t0
             pct = int(100 * blocknumber / blocks_expected)
-            if elapsed_delta >= 15: # every n seconds
+            if elapsed_delta >= 30: # every n seconds
                 log.debug(f"thread-{thread_num} {pct}% of size:{totalfilesize} ({blocknumber}/{blocks_expected}) url:{url}")
                 t0 = t1
 
@@ -498,6 +498,37 @@ class KGXModel:
                 log.error(f"{pairs[1]} not in original list of files from metadata.yaml")
         if error:
             raise Exception("Metadata.yaml has inconsistent jsonl files")
+
+        file_tuple_q = queue.Queue()
+        thread_done_q = queue.Queue()
+        for npairs, pairs in enumerate(paired_up):
+            for npair, p in enumerate(pairs):
+                file_name = dataset_version + "/" + p
+                file_url = Util.get_uri(file_name, "kgx_base_data_uri")
+                subgraph_basename = os.path.basename(file_name)
+                subgraph_path = Util.kgx_path(subgraph_basename)
+                log.debug ("#{}.{}/{} read: {}".format(npairs+1, npair+1, len(paired_up), file_url))
+                # folder
+                dirname = os.path.dirname (subgraph_path)
+                if not os.path.exists (dirname):
+                    os.makedirs (dirname, exist_ok=True)
+                # add to queue
+                file_tuple_q.put((file_url,subgraph_path))
+
+        # start threads for each file download
+        threads = []
+        for thread_num in range(file_tuple_q.qsize()):
+            th = threading.Thread(target=Util.downloadfile, args=(thread_num, file_tuple_q, thread_done_q))
+            th.start()
+            threads.append(th)
+
+        # wait for each thread to complete
+        for nwait in range(len(threads)):
+            thread_num, num_files_processed = thread_done_q.get()
+            th = threads[thread_num]
+            th.join()
+            log.debug(f"#{nwait+1}/{len(threads)} joined: thread-{thread_num} processed: {num_files_processed} file(s)")
+
         for pairs in paired_up:
             nodes = 0
             edges = 0
