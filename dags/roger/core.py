@@ -433,6 +433,9 @@ class KGXModel:
                 log.error(f"{pairs[1]} not in original list of files from metadata.yaml")
         if error:
             raise Exception("Metadata.yaml has inconsistent jsonl files")
+
+        log.info(f"Paired files : {paired_up}")
+
         for pairs in paired_up:
             nodes = 0
             edges = 0
