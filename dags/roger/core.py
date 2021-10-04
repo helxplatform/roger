@@ -437,6 +437,7 @@ class KGXModel:
         log.info(f"Paired files : {paired_up}")
 
         for pairs in paired_up:
+            log.info(f" grabbing pair: {pairs}")
             nodes = 0
             edges = 0
             start = Util.current_time_in_millis()
