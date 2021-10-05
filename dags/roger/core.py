@@ -434,10 +434,8 @@ class KGXModel:
         if error:
             raise Exception("Metadata.yaml has inconsistent jsonl files")
 
-        log.info(f"Paired files : {paired_up}")
 
         for pairs in paired_up:
-            log.info(f" grabbing pair: {pairs}")
             nodes = 0
             edges = 0
             start = Util.current_time_in_millis()
@@ -459,7 +457,7 @@ class KGXModel:
             total_time = Util.current_time_in_millis() - start
             log.debug("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
                 Util.trunc(subgraph_path, 45), edges, nodes, total_time))
-            return all_kgx_files
+        return all_kgx_files
 
     def get (self, dataset_version = "v1.0"):
         """ Read metadata for KGX files and downloads them locally.
