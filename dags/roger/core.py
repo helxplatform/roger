@@ -101,6 +101,8 @@ class Util:
         elif path.endswith(".pickle"):
             with open(file=path, mode="rb") as stream:
                 obj = pickle.load(stream)
+        elif path.endswith(".jsonl"):
+            obj = Util.read_data(path)
         return obj
 
     @staticmethod
@@ -135,6 +137,9 @@ class Util:
         elif path.endswith(".pickle"):
             with open (path, "wb") as stream:
                 pickle.dump(obj, file=stream)
+        elif path.endswith(".jsonl"):
+            with open (path, "w", encoding="utf-8") as stream:
+                stream.write(obj)
         else:
             """ Raise an exception if invalid. """
             raise ValueError (f"Unrecognized extension: {path}")
@@ -146,9 +151,9 @@ class Util:
         return str(ROGER_DATA_DIR / "kgx" / name)
 
     @staticmethod
-    def kgx_objects ():
+    def kgx_objects (format="json"):
         """ A list of KGX objects. """
-        kgx_pattern = Util.kgx_path("**.json")
+        kgx_pattern = Util.kgx_path(f"**.{format}")
         return sorted(glob.glob (kgx_pattern))
     
     @staticmethod
@@ -234,10 +239,23 @@ class Util:
         return path
 
     @staticmethod
-    def mkdir(path):
-        directory = os.path.dirname(path)
+    def mkdir(path, is_dir=False):
+        directory = os.path.dirname(path) if not is_dir else path
         if not os.path.exists(directory):
             os.makedirs(directory)
+
+    @staticmethod
+    def remove(path):
+        if os.path.exists(path):
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+
+    @staticmethod
+    def clear_dir(path):
+        Util.remove(path)
+        Util.mkdir(path, is_dir=True)
 
     @staticmethod
     def dug_topmed_path(name):
@@ -320,7 +338,7 @@ class Util:
 
     @staticmethod
     def json_line_iter(jsonl_file_path):
-        f = open(file=jsonl_file_path,mode='r')
+        f = open(file=jsonl_file_path, mode='r', encoding='utf-8')
         for line in f:
             yield json.loads(line)
         f.close()
@@ -344,6 +362,103 @@ class KGXModel:
                     db=1) # uses db1 for isolation @TODO make this config param.
         self.enable_metrics = self.config.get('enable_metrics', False)
 
+    def get_kgx_json_format(self, files: list, dataset_version: str):
+        """
+        Gets Json formatted kgx files. These files have a the following structure:
+        {"nodes": [{"id":"..."},...], "edges": [{"id":...},...}] }
+
+        Parameters
+        ----------
+        files : list of file names
+        dataset_version : dataset version from dataset meta-data information
+
+        Returns None
+        -------
+
+        """
+        all_kgx_files = []
+        log.info(f"getting {files}")
+        for file_name in files:
+            start = Util.current_time_in_millis()
+            file_name = dataset_version + "/" + file_name
+            file_url = Util.get_uri(file_name, "kgx_base_data_uri")
+            subgraph_basename = os.path.basename(file_name)
+            subgraph_path = Util.kgx_path(subgraph_basename)
+            all_kgx_files.append(subgraph_path)
+            if os.path.exists(subgraph_path):
+                log.info(f"cached kgx: {subgraph_path}")
+                continue
+            subgraph = Util.read_object(file_url)
+            Util.write_object(subgraph, subgraph_path)
+            total_time = Util.current_time_in_millis() - start
+            edges = len(subgraph['edges'])
+            nodes = len(subgraph['nodes'])
+            log.debug("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
+                Util.trunc(subgraph_path, 45), edges, nodes, total_time))
+        return all_kgx_files
+
+    def get_kgx_jsonl_format(self, files, dataset_version):
+        """
+        gets pairs of jsonl formatted kgx files. Files is expected to have
+        all the pairs. I.e if kgx_1_nodes.jsonl exists its expected that kgx_1_edges.jsonl
+        exists in the same path.
+        File names should have strings *nodes*.jsonl and *edges*.jsonl.
+        Parameters
+        ----------
+        files
+        dataset_version
+
+        Returns
+        -------
+
+        """
+        # make a paired list
+        paired_up = []
+        log.info(f"getting {files}")
+        for file_name in files:
+            if "nodes" in file_name:
+                paired_up.append([file_name, file_name.replace('nodes', 'edges')])
+        error = False
+        # validate that all pairs exist
+        all_kgx_files = []
+        if len(files) / 2 != len(paired_up):
+            log.error("Error paired up kgx jsonl files don't match list of files specified in metadata.yaml")
+            error = True
+        for pairs in paired_up:
+            if pairs[0] not in files:
+                log.error(f"{pairs[0]} not in original list of files from metadata.yaml")
+                error = True
+            if pairs[1] not in files:
+                error = True
+                log.error(f"{pairs[1]} not in original list of files from metadata.yaml")
+        if error:
+            raise Exception("Metadata.yaml has inconsistent jsonl files")
+
+
+        for pairs in paired_up:
+            nodes = 0
+            edges = 0
+            start = Util.current_time_in_millis()
+            for p in pairs:
+                file_name = dataset_version + "/" + p
+                file_url = Util.get_uri(file_name, "kgx_base_data_uri")
+                subgraph_basename = os.path.basename(file_name)
+                subgraph_path = Util.kgx_path(subgraph_basename)
+                all_kgx_files.append(subgraph_path)
+                if os.path.exists(subgraph_path):
+                    log.info(f"cached kgx: {subgraph_path}")
+                    continue
+                data = Util.read_object(file_url)
+                Util.write_object(data, subgraph_path)
+                if "edges" in p:
+                    edges = len(data.split('\n'))
+                else:
+                    nodes = len(data.split('\n'))
+            total_time = Util.current_time_in_millis() - start
+            log.debug("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
+                Util.trunc(subgraph_path, 45), edges, nodes, total_time))
+        return all_kgx_files
+
     def get (self, dataset_version = "v1.0"):
         """ Read metadata for KGX files and downloads them locally.
         :param dataset_version: Data version to operate on.
@@ -352,25 +467,26 @@ class KGXModel:
         data_set_list = self.config.kgx.data_sets
         for item in metadata['kgx']['versions']:
             if item['version'] == dataset_version and item['name'] in data_set_list:
-                log.info(f"Getting KGX dataset {item['name']} , version {item['version']}")
-                for file_name in item['files']:
-                    start = Util.current_time_in_millis ()
-                    file_name = dataset_version + "/" + file_name
-                    file_url = Util.get_uri (file_name, "kgx_base_data_uri")
-                    subgraph_basename = os.path.basename (file_name)
-                    subgraph_path = Util.kgx_path (subgraph_basename)
-                    if os.path.exists (subgraph_path):
-                        log.info (f"cached kgx: {subgraph_path}")
-                        continue
-                    subgraph = Util.read_object(file_url)
-                    Util.write_object (subgraph, subgraph_path)
-                    total_time = Util.current_time_in_millis () - start
-                    edges = len(subgraph['edges'])
-                    nodes = len(subgraph['nodes'])
-                    log.debug ("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format (
-                        Util.trunc(subgraph_path, 45), edges, nodes, total_time))
+                log.info(f"Getting KGX dataset {item['name']} , version {item['version']}, format {item['format']}")
+                if item['format'] == 'json':
+                    kgx_files_remote = self.get_kgx_json_format(item['files'], item['version'])
+                elif item['format'] == 'jsonl':
+                    kgx_files_remote = self.get_kgx_jsonl_format(item['files'], item['version'])
+                else:
+                    raise ValueError(f"Unrecognized format in metadata.yaml: {item['format']}, valid formats are `json` "
+                                     f"and `jsonl`.")
         # Fetchs kgx generated from Dug Annotation workflow.
-        self.fetch_dug_kgx()
+        new_files = self.fetch_dug_kgx() + kgx_files_remote
+        all_files_in_dir = Util.kgx_objects(format="json") + Util.kgx_objects(format="jsonl")
+        files_to_remove = [x for x in all_files_in_dir if x not in new_files]
+        if len(files_to_remove):
+            log.info(f"Found some old files to remove from kgx dir : {files_to_remove}")
+            for file in files_to_remove:
+                Util.remove(file)
+                log.info(f"removed {file}")
+        log.info("Done.")
+
+
 
     def fetch_dug_kgx(self):
         """
@@ -378,15 +494,17 @@ class KGXModel:
         :return:
         """
         dug_kgx_files = Util.dug_kgx_objects()
+        all_kgx_files = []
         log.info(f"Coping dug KGX files to {Util.kgx_path('')}. Found {len(dug_kgx_files)} kgx files to copy.")
         for file in dug_kgx_files:
             file_name = ntpath.basename(file)
             dest = Util.kgx_path(file_name)
+            all_kgx_files.append(dest)
             Util.write_object({}, dest)
             log.info(f"Copying from {file} to {dest}.")
             Util.copy_file_to_dir(file, dest)
         log.info("Done coping dug KGX files.")
-        return
+        return all_kgx_files
 
     def create_nodes_schema(self):
         """
@@ -468,15 +586,6 @@ class KGXModel:
         log.info (f"writing schema: {file_name}")
         dictionary = { k : v for k, v in schema.items () }
         Util.write_object (dictionary, file_name)
-        
-    def merge_nodes (self, L, R):
-        for k in L.keys ():
-            R_v = R.get (k, None)
-            if R_v == '' or R_v == None:
-                L[k] = R_v
-
-    def diff_lists (self, L, R):
-        return list(list(set(L)-set(R)) + list(set(R)-set(L)))
 
     def read_items_from_redis(self, ids):
         chunk_size = 10_000 # batch for pipeline
@@ -513,9 +622,15 @@ class KGXModel:
                 pipeline.delete(key)
             pipeline.execute()
 
+    def delete_all_keys(self):
+        all_keys = self.redis_conn.keys("*")
+        log.info(f"found {len(all_keys)} to delete.")
+        self.delete_keys(all_keys)
+        log.info(f"deleted keys.")
+
     def write_redis_back_to_jsonl(self, file_name, redis_key_pattern):
         Util.mkdir(file_name)
-        with open(file_name, 'w') as f:
+        with open(file_name, 'w', encoding='utf-8') as f:
             start = time.time()
             keys = self.redis_conn.keys(redis_key_pattern)
             log.info(f"Grabbing {redis_key_pattern} from redis too {time.time() - start}")
@@ -530,7 +645,16 @@ class KGXModel:
                 log.info(f"wrote : {len(items)}")
 
     def kgx_merge_dict(self, dict_1, dict_2):
-        merged = kgx_merge_dict(dict_1, dict_2)
+        # collect values that are same first
+        merged = {}
+        # if properties match up with value treat as one
+        # get dict_1 intersection dict_2 ,
+        merged = {x: dict_1[x] for x in dict_1 if dict_1.get(x) == dict_2.get(x)}
+        # get dict_1 disjoint dict 2
+        unique_dict_1_props = {x: dict_1[x] for x in dict_1 if x not in merged.keys()}
+        # get dict_2 disjoint dict 1
+        unique_dict_2_props = {x: dict_2[x] for x in dict_2 if x not in merged.keys()}
+        merged.update(kgx_merge_dict(unique_dict_1_props, unique_dict_2_props))
         for keys in merged:
             attribute = merged[keys]
             # When mergeing array's for bulk loading
@@ -558,52 +682,86 @@ class KGXModel:
         node_dict['category'] = categories
         return node_dict
 
+    def merge_node_and_edges (self, nodes, edges, current_metric , data_set_name ):
+        read_time = current_metric['read_kgx_file_time']
+        total_time = current_metric['total_processing_time']
+        # prefix keys for fetching back and writing to file.
+        nodes = {f"node-{node['id']}": self.sort_node_types(node) for node in nodes}
+        edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
+                 edges}
+        read_from_redis_time = time.time()
+        # read nodes and edges scoped to current file
+        nodes_in_redis = self.read_items_from_redis(list(nodes.keys()))
+        edges_in_redis = self.read_items_from_redis(list(edges.keys()))
+        read_from_redis_time = time.time() - read_from_redis_time
+        current_metric['read_redis_time'] = read_from_redis_time
+        merge_time = time.time()
+        log.info(f"Found matching {len(nodes_in_redis)} nodes {len(edges_in_redis)} edges from redis...")
+        for node_id in nodes_in_redis:
+            nodes[node_id] = self.kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
+        for edge_id in edges_in_redis:
+            edges[edge_id] = self.kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
+        # add predicate labels to edges;
+        for edge_id in edges:
+            edges[edge_id]['predicate_label'] = self.biolink.get_label(edges[edge_id]['predicate'])
+        merge_time = time.time() - merge_time
+        current_metric['merge_time'] = merge_time
+        write_to_redis_time = time.time()
+        self.write_items_to_redis(nodes)
+        self.write_items_to_redis(edges)
+        write_to_redis_time = time.time() - write_to_redis_time
+        current_metric['write_to_redis_time'] = write_to_redis_time
+        log.debug(
+            "path {:>45} read_file:{:>5} read_nodes_from_redis:{:>7} merge_time:{:>3} write_nodes_to_redis: {"
+            ":>3}".format(
+                Util.trunc(data_set_name, 45), read_time, read_from_redis_time, merge_time, write_to_redis_time))
+        total_file_processing_time = time.time() - total_time
+        current_metric['total_processing_time'] = total_file_processing_time
+        current_metric['total_nodes_in_kgx_file'] = len(nodes)
+        current_metric['total_edges_in_kgx_file'] = len(edges)
+        current_metric['nodes_found_in_redis'] = len(nodes_in_redis)
+        current_metric['edges_found_in_redis'] = len(edges_in_redis)
+        log.info(f"processing {data_set_name} took {total_file_processing_time}")
+        return current_metric
+
     def merge (self):
         """ Merge nodes. Would be good to have something less computationally intensive. """
-        kgx_files = Util.kgx_objects()
+        data_set_version = self.config.get('kgx', {}).get('dataset_version')
         metrics = {}
         start = time.time()
-        for file in kgx_files:
+        json_format_files = Util.kgx_objects("json")
+        jsonl_format_files = set([
+            x.replace(f'nodes_{data_set_version}.jsonl', '').replace(f'edges_{data_set_version}.jsonl', '') for x in Util.kgx_objects("jsonl")
+        ])
+
+        log.info("Deleting any redis merge keys from previous run....")
+        self.delete_all_keys()
+
+        for file in json_format_files:
             current_metric = {}
             total_time = read_time = time.time()
             current_kgx_data = Util.read_object(file)
             read_time = time.time() - read_time
             current_metric['read_kgx_file_time'] = read_time
-            # prefix keys for fetching back and writing to file.
-            nodes = {f"node-{node['id']}": self.sort_node_types(node) for node in current_kgx_data['nodes']}
-            edges = {f"edge-{edge['subject']}-{edge['object']}-{edge['predicate']}": edge for edge in
-                     current_kgx_data['edges']}
-            read_from_redis_time = time.time()
-            # read nodes and edges scoped to current file
-            nodes_in_redis = self.read_items_from_redis(list(nodes.keys()))
-            edges_in_redis = self.read_items_from_redis(list(edges.keys()))
-            read_from_redis_time = time.time() - read_from_redis_time
-            current_metric['read_redis_time'] = read_from_redis_time
-            merge_time = time.time()
-            log.info(f"Found matching {len(nodes_in_redis)} nodes {len(edges_in_redis)} edges from redis...")
-            for node_id in nodes_in_redis:
-                nodes[node_id] = self.kgx_merge_dict(nodes[node_id], nodes_in_redis[node_id])
-            for edge_id in edges_in_redis:
-                edges[edge_id] = self.kgx_merge_dict(edges[edge_id], edges_in_redis[edge_id])
-            merge_time = time.time() - merge_time
-            current_metric['merge_time'] = merge_time
-            write_to_redis_time = time.time()
-            self.write_items_to_redis(nodes)
-            self.write_items_to_redis(edges)
-            write_to_redis_time = time.time()  - write_to_redis_time
-            current_metric['write_to_redis_time'] = write_to_redis_time
-            log.debug(
-                "path {:>45} read_file:{:>5} read_nodes_from_redis:{:>7} merge_time:{:>3} write_nodes_to_redis: {"
-                ":>3}".format(
-                    Util.trunc(file, 45), read_time, read_from_redis_time, merge_time, write_to_redis_time))
-            total_file_processing_time = time.time() - total_time
-            current_metric['total_processing_time'] = total_file_processing_time
-            current_metric['total_nodes_in_kgx_file'] = len(nodes)
-            current_metric['total_edges_in_kgx_file'] = len(edges)
-            current_metric['nodes_found_in_redis'] = len(nodes_in_redis)
-            current_metric['edges_found_in_redis'] = len(edges_in_redis)
-            log.info(f"processing {file} took {total_file_processing_time}")
-            metrics[str(file)] = current_metric
+            current_metric['total_processing_time'] = total_time
+            self.merge_node_and_edges(nodes=current_kgx_data['nodes'],
+                                      edges=current_kgx_data['edges'],
+                                      current_metric=current_metric,
+                                      data_set_name=file)
+
+        for file in jsonl_format_files:
+            current_metric = {}
+            total_time = read_time = time.time()
+            edges = Util.json_line_iter(Util.kgx_path(file + f'edges_{data_set_version}.jsonl'))
+            nodes = Util.json_line_iter(Util.kgx_path(file + f'nodes_{data_set_version}.jsonl'))
+            read_time = time.time() - read_time
+            current_metric['read_kgx_file_time'] = read_time
+            current_metric['total_processing_time'] = total_time
+            self.merge_node_and_edges(nodes=nodes,
+                                      edges=edges,
+                                      current_metric=current_metric,
+                                      data_set_name=file)
+
         log.info(f"total time for dumping to redis : {time.time() - start}")
 
         # now we have all nodes and edges merged in redis we scan the whole redis back to disk
@@ -637,23 +795,6 @@ class BiolinkModel:
         self.bl_url = f'https://raw.githubusercontent.com/biolink/biolink-model/{bl_version}/biolink-model.yaml'
         self.toolkit = Toolkit(self.bl_url)
 
-    """ Programmatic model of Biolink. """
-    def to_camel_case(self, snake_str):
-        """ Convert a snake case string to camel case. """
-        components = snake_str.split('_')
-        return ''.join(x.title() for x in components)
-
-    def get_class(self, name):
-        """ Get a Python class from a string name. """
-        return getattr(sys.modules["biolink.model"], name)
-
-    def is_derived (self, a_class_name, classes):
-        """ Return true if the class derives from any of the provided classes. """
-        for c in classes:
-            if isinstance (self.get_class(self.to_camel_case(a_class_name)), c):
-                return True
-        return False
-
     def find_biolink_leaves(self, biolink_concepts):
         """
         Given a list of biolink concepts, returns the leaves removing any parent concepts.
@@ -685,6 +826,13 @@ class BiolinkModel:
         """ Return the leaf classes in the provided list of names. """
         leaves = list(self.find_biolink_leaves(names))
         return leaves[0]
+
+    def get_label(self, class_name):
+        element = self.toolkit.get_element(class_name)
+        if element:
+            name = element.name
+            return name
+        return class_name.replace("biolink:", "").replace("_", " ")
 
 
 class BulkLoad:
@@ -1042,7 +1190,7 @@ class Roger:
             self.log_stream = StringIO()
             self.string_handler = logging.StreamHandler (self.log_stream)
             log.addHandler (self.string_handler)
-        self.biolink = BiolinkModel ()
+        self.biolink = BiolinkModel (config.kgx.biolink_model_version)
         self.kgx = KGXModel (self.biolink, config=config)
         self.bulk = BulkLoad (self.biolink, config=config)
 
@@ -1058,7 +1206,7 @@ class Roger:
         :param traceback: The stack trace explaining the exception. 
         """
         if exception_type or exception_value or traceback:
-            log.error ("{} {} {}".format (exception_type, exception_value, traceback))
+            log.error (msg="Error:", exc_info=(exception_type, exception_value, traceback))
         if self.has_string_handler:
             log.removeHandler (self.string_handler)
         

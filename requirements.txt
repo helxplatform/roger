@@ -8,7 +8,8 @@ elasticsearch==7.11.0
 flatten-dict
 git+git://github.com/biolink/biolink-model-toolkit@0.4.0#egg=bmt
 git+git://github.com/biolink/kgx@1.0.0#egg=kgx
-git+git://github.com/helxplatform/dug@2.4.0#egg=dug
+git+git://github.com/helxplatform/dug@2.5.0#egg=dug
+kgx==1.5.1
 orjson~=3.6.2
 pathlib~=1.0.1
 psycopg2-binary==2.8.6
