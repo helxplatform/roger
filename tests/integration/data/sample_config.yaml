@@ -19,8 +19,17 @@ kgx:
 kgx_base_data_uri: ""
 
 dug_inputs:
-  data_sets: ['topmed', 'bdc-dbGaP']
-  dataset_version: 'v1.0'
+  s3:
+    host: ""
+    bucket_name: ""
+    access_key: ""
+    secret_key: ""
+    prefix: ""
+  data_sets:
+    - name: topmed
+      version: v2.0
+    - name: bdc
+      version: v1.0
 
 annotation_base_data_uri: ""
 

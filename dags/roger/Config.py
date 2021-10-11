@@ -69,11 +69,10 @@ class DatasourceConfig(DictLike):
 
 @dataclass
 class S3Config(DictLike):
-    host: str
-    bucket_name: str
-    access_key: str
-    secret_key: str
-
+    host: str = ""
+    bucket_name: str = ""
+    access_key: str = ""
+    secret_key: str = ""
     prefix: str = ""
 
 

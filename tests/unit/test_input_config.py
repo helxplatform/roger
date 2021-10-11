@@ -35,6 +35,13 @@ def test_input_config_init(name, version):
 
 def test_dug_input_configs():
     config_dict = {
+        's3': {
+            "host": "",
+            "bucket_name": "",
+            "access_key": "",
+            "secret_key": "",
+            "prefix": "",
+        },
         'data_sets': [
             {
                 'name': 'topmed',
