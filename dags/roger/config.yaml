@@ -23,7 +23,7 @@ kgx:
 dug_inputs:
   s3:
     host: ""
-    bucket_name: ""
+    bucket: ""
     access_key: ""
     secret_key: ""
     prefix: ""

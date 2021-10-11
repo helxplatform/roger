@@ -26,7 +26,7 @@ class S3Utils:
             's3',
             endpoint_url=self.config.host,
         )
-        bucket = s3.Bucket(self.config.bucket_name)
+        bucket = s3.Bucket(self.config.bucket)
         yield bucket
 
     def get(self, remote_file_name: str, local_file_name: str):
