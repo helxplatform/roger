@@ -586,24 +586,6 @@ class KGXModel:
                 else:
                     raise ValueError(f"Unrecognized format in metadata.yaml: {item['format']}, valid formats are `json` "
                                      f"and `jsonl`.")
-                # for nfile, file_name in enumerate(item['files']):
-                #     start = Util.current_time_in_millis ()
-                #     file_name = dataset_version + "/" + file_name
-                #     file_url = Util.get_uri (file_name, "kgx_base_data_uri")
-                #     log.debug ("#{}/{} read: {}".format(nfile+1, len(item['files']), file_url))
-                #     subgraph_basename = os.path.basename (file_name)
-                #     subgraph_path = Util.kgx_path (subgraph_basename)
-                #     if os.path.exists (subgraph_path):
-                #         log.info (f"cached kgx: {subgraph_path}")
-                #         continue
-                #     subgraph = Util.read_object(file_url)
-                #     Util.write_object (subgraph, subgraph_path)
-                #     total_time = Util.current_time_in_millis () - start
-                #     edges = len(subgraph['edges'])
-                #     nodes = len(subgraph['nodes'])
-                #     log.debug ("#{}/{} edges:{:>7} nodes: {:>7} time:{:>8} wrote: {}".format (
-                #         nfile+1, len(item['files']), edges, nodes, total_time/1000, subgraph_path))
-
         # Fetchs kgx generated from Dug Annotation workflow.
         new_files = self.fetch_dug_kgx() + kgx_files_remote
         all_files_in_dir = Util.kgx_objects(format="json") + Util.kgx_objects(format="jsonl")
