@@ -35,6 +35,8 @@ with DAG(
     envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed")
     data_sets = envspec.split(",")
 
+    clear_annotation_items = create_python_task(dag, "clear_annotation_files", DugUtil.clear_annotation_cached)
+
     for i, data_set in enumerate(data_sets):
         if data_set == "topmed":
             prepare_files = create_python_task(dag, "get_topmed_data", get_topmed_files)
@@ -47,7 +49,8 @@ with DAG(
             annotate_files = create_python_task(dag, "annotate_nida_files", DugUtil.annotate_nida_files)
 
         intro >> prepare_files
-        prepare_files >> annotate_files
+        prepare_files >> clear_annotation_items
+        clear_annotation_items >> annotate_files
         annotate_files >> dummy_stepover
 
     dummy_stepover >> make_kg_tagged

@@ -458,6 +458,7 @@ class KGXModel:
             th.join()
             log.debug(f"#{nwait+1}/{len(threads)} joined: thread-{thread_num} processed: {num_files_processed} file(s)")
 
+        all_kgx_files = []
         for nfile, file_name in enumerate(files):
             start = Util.current_time_in_millis()
             file_name = dataset_version + "/" + file_name
@@ -476,6 +477,7 @@ class KGXModel:
             nodes = len(subgraph['nodes'])
             log.debug("#{}/{} edges:{:>7} nodes: {:>7} time:{:>8} wrote: {}".format(
                 nfile+1, len(files), edges, nodes, total_time/1000, subgraph_path))
+        return all_kgx_files
 
     def get_kgx_jsonl_format(self, files, dataset_version):
         """
@@ -500,7 +502,6 @@ class KGXModel:
                 paired_up.append([file_name, file_name.replace('nodes', 'edges')])
         error = False
         # validate that all pairs exist
-        all_kgx_files = []
         if len(files) / 2 != len(paired_up):
             log.error("Error paired up kgx jsonl files don't match list of files specified in metadata.yaml")
             error = True
@@ -544,6 +545,7 @@ class KGXModel:
             th.join()
             log.debug(f"#{nwait+1}/{len(threads)} joined: thread-{thread_num} processed: {num_files_processed} file(s)")
 
+        all_kgx_files = []
         for pairs in paired_up:
             nodes = 0
             edges = 0
@@ -566,6 +568,7 @@ class KGXModel:
             total_time = Util.current_time_in_millis() - start
             log.debug("wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
                 Util.trunc(subgraph_path, 45), edges, nodes, total_time))
+        return all_kgx_files
 
     def get (self, dataset_version = "v1.0"):
         """ Read metadata for KGX files and downloads them locally.
@@ -576,23 +579,31 @@ class KGXModel:
         for item in metadata['kgx']['versions']:
             if item['version'] == dataset_version and item['name'] in data_set_list:
                 log.info(f"Getting KGX dataset {item['name']} , version {item['version']}")
-                for nfile, file_name in enumerate(item['files']):
-                    start = Util.current_time_in_millis ()
-                    file_name = dataset_version + "/" + file_name
-                    file_url = Util.get_uri (file_name, "kgx_base_data_uri")
-                    log.debug ("#{}/{} read: {}".format(nfile+1, len(item['files']), file_url))
-                    subgraph_basename = os.path.basename (file_name)
-                    subgraph_path = Util.kgx_path (subgraph_basename)
-                    if os.path.exists (subgraph_path):
-                        log.info (f"cached kgx: {subgraph_path}")
-                        continue
-                    subgraph = Util.read_object(file_url)
-                    Util.write_object (subgraph, subgraph_path)
-                    total_time = Util.current_time_in_millis () - start
-                    edges = len(subgraph['edges'])
-                    nodes = len(subgraph['nodes'])
-                    log.debug ("#{}/{} edges:{:>7} nodes: {:>7} time:{:>8} wrote: {}".format (
-                        nfile+1, len(item['files']), edges, nodes, total_time/1000, subgraph_path))
+                if item['format'] == 'json':
+                    kgx_files_remote = self.get_kgx_json_format(item['files'], item['version'])
+                elif item['format'] == 'jsonl':
+                    kgx_files_remote = self.get_kgx_jsonl_format(item['files'], item['version'])
+                else:
+                    raise ValueError(f"Unrecognized format in metadata.yaml: {item['format']}, valid formats are `json` "
+                                     f"and `jsonl`.")
+                # for nfile, file_name in enumerate(item['files']):
+                #     start = Util.current_time_in_millis ()
+                #     file_name = dataset_version + "/" + file_name
+                #     file_url = Util.get_uri (file_name, "kgx_base_data_uri")
+                #     log.debug ("#{}/{} read: {}".format(nfile+1, len(item['files']), file_url))
+                #     subgraph_basename = os.path.basename (file_name)
+                #     subgraph_path = Util.kgx_path (subgraph_basename)
+                #     if os.path.exists (subgraph_path):
+                #         log.info (f"cached kgx: {subgraph_path}")
+                #         continue
+                #     subgraph = Util.read_object(file_url)
+                #     Util.write_object (subgraph, subgraph_path)
+                #     total_time = Util.current_time_in_millis () - start
+                #     edges = len(subgraph['edges'])
+                #     nodes = len(subgraph['nodes'])
+                #     log.debug ("#{}/{} edges:{:>7} nodes: {:>7} time:{:>8} wrote: {}".format (
+                #         nfile+1, len(item['files']), edges, nodes, total_time/1000, subgraph_path))
+
         # Fetchs kgx generated from Dug Annotation workflow.
         new_files = self.fetch_dug_kgx() + kgx_files_remote
         all_files_in_dir = Util.kgx_objects(format="json") + Util.kgx_objects(format="jsonl")
@@ -612,6 +623,7 @@ class KGXModel:
         :return:
         """
         dug_kgx_files = Util.dug_kgx_objects()
+        all_kgx_files = []
         log.info(f"Copying dug KGX files to {Util.kgx_path('')}. Found {len(dug_kgx_files)} kgx files to copy.")
         for file in dug_kgx_files:
             file_name = ntpath.basename(file)
@@ -621,7 +633,7 @@ class KGXModel:
             log.info(f"Copying from {file} to {dest}.")
             Util.copy_file_to_dir(file, dest)
         log.info("Done copying dug KGX files.")
-        return
+        return all_kgx_files
 
     def create_nodes_schema(self):
         """
