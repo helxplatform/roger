@@ -400,6 +400,8 @@ class KGXModel:
             config = get_config()
         self.config = config
         self.biolink_version = self.config.kgx.biolink_model_version
+        self.merge_db_id = self.config.kgx.merge_db_id
+        self.merge_db_name = f'db{self.merge_db_id}'
         log.debug(f"Trying to get biolink version : {self.biolink_version}")
         if biolink == None:
             self.biolink = BiolinkModel(self.biolink_version)
@@ -409,7 +411,7 @@ class KGXModel:
                     host=self.config.redisgraph.host,
                     port=self.config.redisgraph.port,
                     password=self.config.redisgraph.password,
-                    db=1) # uses db1 for isolation @TODO make this config param.
+                    db=self.merge_db_id)
         self.enable_metrics = self.config.get('enable_metrics', False)
 
     def get_kgx_json_format(self, files: list, dataset_version: str):
@@ -728,7 +730,12 @@ class KGXModel:
 
     def batch_keys(self, batch_size):
         from itertools import zip_longest
-        keyspace = self.redis_conn.info('keyspace').get('db1', {}) .get('keys', 1)
+        keyspace = self.redis_conn.info('keyspace')
+        if self.merge_db_name not in keyspace:
+            log.info(f"found 0 keys to delete.")
+            return []
+        else:
+            keyspace = keyspace[self.merge_db_name]['keys']
         log.info(f"found {keyspace} keys to delete.")
         args = [self.redis_conn.scan_iter('*', batch_size)] * (keyspace + batch_size // batch_size)
         return zip_longest(*args)
