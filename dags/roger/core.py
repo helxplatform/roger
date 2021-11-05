@@ -757,10 +757,9 @@ class KGXModel:
         pipeline = self.redis_conn.pipeline()
         all_keys = list(items)
         is_items_zip_iter = isinstance(items, zip_longest)
+        # flatten for efficient pipeline chunking
         if is_items_zip_iter:
             all_keys = reduce(lambda x, y: x + [i for i in y if i], all_keys, [])
-        # flatten for efficient pipeline chunking
-        all_keys = reduce(lambda x, y: x + [i for i in y if i], all_keys, [])
         log.info(f"grabbed {len(all_keys)}. Starting deletion in chunks of {chunk_size}")
         chunked_keys = [all_keys[start: start + chunk_size] for start in range(0, len(all_keys), chunk_size)]
         for keys in chunked_keys:
