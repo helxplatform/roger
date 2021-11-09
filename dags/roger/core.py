@@ -1255,7 +1255,7 @@ class BulkLoad:
             edges_with_type = [ f"{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0].replace('~', ':')} {x}"
                                for x in edges]
             args.extend(("-R " + " -R ".join(edges_with_type)).split())
-        args.extend([f'--max-buffer-size={64}'])
+        args.extend([f'--max-buffer-size={1}'])
         args.extend([f"--separator={self.separator}"])
         args.extend([f"--host={redisgraph['host']}"])
         args.extend([f"--port={redisgraph['port']}"])
