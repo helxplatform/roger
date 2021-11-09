@@ -6,7 +6,7 @@ flatten-dict
 psycopg2-binary==2.8.6
 redis==3.5.3
 redisgraph==2.4.1
-redisgraph-bulk-loader
+redisgraph-bulk-loader==0.9.5
 requests<2.24.0
 pytest==6.2.2
 PyYAML==5.3.1
