@@ -72,6 +72,8 @@ kgx:
       - PHAROS_nodes_v3.0.jsonl
       - UberGraph_edges_v3.0.jsonl
       - UberGraph_nodes_v3.0.jsonl
+      - cde/annotated_edges_v3.0.jsonl
+      - cde/annotated_nodes_v3.0.jsonl
     version: v3.0
     name: baseline-graph
     format: jsonl
