@@ -212,6 +212,11 @@ class Util:
         return sorted(glob.glob(file_pattern))
 
     @staticmethod
+    def dug_extracted_elements_objects():
+        file_pattern = Util.dug_expanded_concepts_path(os.path.join('*', 'extracted_graph_elements.pickle'))
+        return sorted(glob.glob(file_pattern))
+
+    @staticmethod
     def dug_crawl_path(name):
         return str(ROGER_DATA_DIR / 'dug' / 'crawl' / name)
 
