@@ -430,9 +430,11 @@ class Dug:
         """
         crawl_dir = Util.dug_crawl_path('crawl_output')
         output_file_name = os.path.join(data_set_name, 'expanded_concepts.pickle')
+        extracted_dug_elements_file_name = os.path.join(data_set_name, 'extracted_graph_elements.pickle')
         output_file = Util.dug_expanded_concepts_path(output_file_name)
+        extracted_output_file = Util.dug_expanded_concepts_path(extracted_dug_elements_file_name)
         Path(crawl_dir).mkdir(parents=True, exist_ok=True)
-
+        extracted_dug_elements = []
         log.debug("Creating Dug Crawler object")
         crawler = Crawler(
             crawl_file="",
@@ -450,11 +452,13 @@ class Dug:
             crawler.expand_concept(concept)
             concept.set_search_terms()
             concept.set_optional_terms()
+            extracted_dug_elements += crawler.expand_to_dug_element(concept)
             concept.clean()
             percent_complete = int((counter / total) * 100)
             if percent_complete % 10 == 0:
                 log.info(f"{percent_complete}%")
         Util.write_object(obj=concepts, path=output_file)
+        Util.write_object(obj=extracted_dug_elements, path=extracted_output_file)
 
     def index_concepts(self, concepts):
         log.info("Indexing Concepts")
@@ -632,6 +636,16 @@ class DugUtil():
         with Dug(config, to_string=to_string) as dug:
             dug.clear_variables_index()
             elements_object_files = Util.dug_elements_objects()
+            for file in elements_object_files:
+                dug.index_elements(file)
+            output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    @staticmethod
+    def index_extracted_elements(config=None, to_string=False):
+        with Dug(config, to_string=to_string) as dug:
+            dug.clear_variables_index()
+            elements_object_files = Util.dug_extracted_elements_objects()
             for file in elements_object_files:
                 dug.index_elements(file)
             output_log = dug.log_stream.getvalue() if to_string else ''
