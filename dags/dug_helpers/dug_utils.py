@@ -46,6 +46,7 @@ class Dug:
         graph_name = self.config["redisgraph"]["graph"]
         source = f"redis:{graph_name}"
         self.tranql_queries: dict = self.factory.build_tranql_queries(source)
+        self.node_to_element_queries: list = self.factory.build_element_extraction_parameters(source)
 
         indexing_config = config.indexing
         self.variables_index = indexing_config.get('variables_index')
@@ -442,7 +443,7 @@ class Dug:
             annotator=None,
             tranqlizer=self.tranqlizer,
             tranql_queries=self.tranql_queries,
-            http_session=self.cached_session
+            http_session=self.cached_session,
         )
         crawler.crawlspace = crawl_dir
         counter = 0
@@ -452,7 +453,16 @@ class Dug:
             crawler.expand_concept(concept)
             concept.set_search_terms()
             concept.set_optional_terms()
-            extracted_dug_elements += crawler.expand_to_dug_element(concept)
+            for query in self.node_to_element_queries:
+                casting_config = query['casting_config']
+                tranql_source = query['tranql_source']
+                dug_element_type = query['output_dug_type']
+                extracted_dug_elements += crawler.expand_to_dug_element(
+                    concept=concept,
+                    casting_config=casting_config,
+                    dug_element_type=dug_element_type,
+                    tranql_source=tranql_source
+                )
             concept.clean()
             percent_complete = int((counter / total) * 100)
             if percent_complete % 10 == 0:
@@ -556,6 +566,7 @@ class Dug:
     def clear_concepts_index(self):
         self.clear_index(self.concepts_index)
 
+
 class DugUtil():
 
     @staticmethod
@@ -644,7 +655,6 @@ class DugUtil():
     @staticmethod
     def index_extracted_elements(config=None, to_string=False):
         with Dug(config, to_string=to_string) as dug:
-            dug.clear_variables_index()
             elements_object_files = Util.dug_extracted_elements_objects()
             for file in elements_object_files:
                 dug.index_elements(file)
