@@ -22,7 +22,7 @@ kgx:
     - baseline-graph
 
 dug_inputs:
-  data_source: s3
+  data_source: ""
   dataset_version: v1.0
   data_sets:
     - topmed
@@ -69,6 +69,9 @@ indexing:
     "chemical_mixture_to_disease": ["chemical_mixture", "disease"]
     "phen_to_anat": ["phenotypic_feature", "anatomical_entity"]
   tranql_endpoint: "http://tranql:8081/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+  node_to_element_queries:
+    cde:
+      node_type: biolink:Publication
 
 elasticsearch:
   host: elasticsearch
