@@ -117,7 +117,8 @@ class IndexingConfig(DictLike):
         "anat_to_pheno": ["anatomical_entity", "phenotypic_feature"],
     })
     tranql_endpoint: str = "http://tranql:8081/tranql/query?dynamic_id_resolution=true&asynchronous=false"
-
+    # by default skips node to element queries
+    node_to_element_queries: dict = field(default_factory=lambda: {})
 
 @dataclass
 class ElasticsearchConfig(DictLike):
@@ -178,6 +179,7 @@ class RogerConfig(DictLike):
                 'min_tranql_score': self.indexing.tranql_min_score,
             },
             ontology_greenlist=self.annotation.ontology_greenlist,
+            node_to_element_queries=self.indexing.node_to_element_queries,
         )
 
     @property
