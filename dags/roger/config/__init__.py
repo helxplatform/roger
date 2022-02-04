@@ -120,12 +120,21 @@ class IndexingConfig(DictLike):
     # by default skips node to element queries
     node_to_element_queries: dict = field(default_factory=lambda: {})
 
+    def __post_init__(self):
+        node_to_el_enabled = True if self.node_to_element_queries.get("enabled").lower() == "true" else False
+        final_node_to_element_queries = {}
+        if node_to_el_enabled:
+            for key in filter(lambda k: k != "enabled", self.node_to_element_queries.keys()):
+                final_node_to_element_queries[key] = self.node_to_element_queries[key]
+        self.node_to_element_queries = final_node_to_element_queries
+
 @dataclass
 class ElasticsearchConfig(DictLike):
     host: str = "elasticsearch"
     username: str = "elastic"
     password: str = ""
     nboost_host: str = ""
+
 
 
 class RogerConfig(DictLike):
