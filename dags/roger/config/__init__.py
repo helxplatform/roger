@@ -121,7 +121,7 @@ class IndexingConfig(DictLike):
     node_to_element_queries: dict = field(default_factory=lambda: {})
 
     def __post_init__(self):
-        node_to_el_enabled = True if self.node_to_element_queries.get("enabled").lower() == "true" else False
+        node_to_el_enabled = True if str(self.node_to_element_queries.get("enabled")).lower() == "true" else False
         final_node_to_element_queries = {}
         if node_to_el_enabled:
             for key in filter(lambda k: k != "enabled", self.node_to_element_queries.keys()):
