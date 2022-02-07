@@ -26,7 +26,7 @@ rm_dirs:
 #install: Install application along with required packages to local environment
 install:
 	${PYTHON} -m pip install --upgrade pip
-	${PYTHON} -m pip install -r requirements.txt
+	${PYTHON} -m pip install --use-deprecated=legacy-resolver -r requirements.txt
 
 #test.lint: Run flake8 on the source code
 test.lint:
