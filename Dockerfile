@@ -6,6 +6,6 @@ USER airflow
 COPY requirements.txt requirements.txt
 # dependency resolution taking hours eventually failing,
 # @TODO fix click lib dependency
-RUN pip install --use-deprecated=legacy-resolver -r requirements.txt
+RUN pip install -r requirements.txt
 RUN pip uninstall -y elasticsearch-dsl
 RUN rm -f requirements.txt
