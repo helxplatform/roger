@@ -212,6 +212,11 @@ class Util:
         return sorted(glob.glob(file_pattern))
 
     @staticmethod
+    def dug_extracted_elements_objects():
+        file_pattern = Util.dug_expanded_concepts_path(os.path.join('*', 'extracted_graph_elements.pickle'))
+        return sorted(glob.glob(file_pattern))
+
+    @staticmethod
     def dug_crawl_path(name):
         return str(ROGER_DATA_DIR / 'dug' / 'crawl' / name)
 
@@ -593,13 +598,14 @@ class KGXModel:
         """
         metadata = Util.read_relative_object ("../metadata.yaml")
         data_set_list = self.config.kgx.data_sets
+        kgx_files_remote = []
         for item in metadata['kgx']['versions']:
             if item['version'] == dataset_version and item['name'] in data_set_list:
                 log.info(f"Getting KGX dataset {item['name']} , version {item['version']}")
                 if item['format'] == 'json':
-                    kgx_files_remote = self.get_kgx_json_format(item['files'], item['version'])
+                    kgx_files_remote += self.get_kgx_json_format(item['files'], item['version'])
                 elif item['format'] == 'jsonl':
-                    kgx_files_remote = self.get_kgx_jsonl_format(item['files'], item['version'])
+                    kgx_files_remote += self.get_kgx_jsonl_format(item['files'], item['version'])
                 else:
                     raise ValueError(f"Unrecognized format in metadata.yaml: {item['format']}, valid formats are `json` "
                                      f"and `jsonl`.")
@@ -851,6 +857,7 @@ class KGXModel:
         # add predicate labels to edges;
         for edge_id in edges:
             edges[edge_id]['predicate_label'] = self.biolink.get_label(edges[edge_id]['predicate'])
+            edges[edge_id]['id'] = edges[edge_id].get('id', edge_id.replace('edge-', ''))
         merge_time = time.time() - merge_time
         current_metric['merge_time'] = merge_time
         write_to_redis_time = time.time()
