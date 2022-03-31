@@ -458,15 +458,11 @@ class Dug:
                 casting_config = query['casting_config']
                 tranql_source = query['tranql_source']
                 dug_element_type = query['output_dug_type']
-                curie_prefix = query['curie_prefix']
-                attribute_map = query['attribute_map']
                 extracted_dug_elements += crawler.expand_to_dug_element(
                     concept=concept,
                     casting_config=casting_config,
                     dug_element_type=dug_element_type,
-                    tranql_source=tranql_source,
-                    curie_filter=curie_prefix,
-                    attribute_mapping=attribute_map
+                    tranql_source=tranql_source
                 )
             concept.clean()
             percent_complete = int((counter / total) * 100)
