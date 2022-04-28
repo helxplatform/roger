@@ -576,7 +576,8 @@ class DugUtil():
             annotation_path = Util.dug_annotation_path("")
             Util.clear_dir(annotation_path)
             # Clear http session cache
-            dug.cached_session.cache.clear()
+            if config.annotation.clear_http_cache:
+                dug.cached_session.cache.clear()
 
     @staticmethod
     def annotate_db_gap_files(config=None, to_string=False, files=None):
