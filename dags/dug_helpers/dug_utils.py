@@ -843,7 +843,7 @@ def get_sparc_files(config: RogerConfig, to_string=False) -> List[str]:
     return get_versioned_files(config, "sparc", "sparc", data_store=config.dug_inputs.data_source, unzip=True)
 
 
-def get_anvil_files(config: RogerConfig, to_String=False) -> List[str]:
+def get_anvil_files(config: RogerConfig, to_string=False) -> List[str]:
     return get_versioned_files(config, "anvil", "anvil", data_store=config.dug_inputs.data_source, unzip=True)
 
 

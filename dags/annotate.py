@@ -35,7 +35,6 @@ with DAG(
 
     #intro >> run_printlog
     envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed")
-    print(envspec)
     data_sets = envspec.split(",")
 
     clear_annotation_items = create_python_task(dag, "clear_annotation_files", DugUtil.clear_annotation_cached)
@@ -54,7 +53,6 @@ with DAG(
             prepare_files = create_python_task(dag, "get_topmed_data", get_topmed_files)
             annotate_files = create_python_task(dag, "annotate_topmed_files", DugUtil.annotate_topmed_files)
         elif data_set == "anvil":
-            print('adding anvil stuff to dag')
             prepare_files = create_python_task(dag, "get_anvil_data", get_anvil_files)
             annotate_files = create_python_task(dag, "annotate_anvil_files", DugUtil.annotate_anvil_files)
         intro >> prepare_files
