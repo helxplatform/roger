@@ -1309,9 +1309,24 @@ class BulkLoad:
         log.debug(f"Calling bulk_insert with extended args: {args}")
         try:
             bulk_insert (args, standalone_mode=False)
+            self.add_indexes()
         except Exception as e:
             log.error(f"Unexpected {e.__class__.__name__}: {e}")
             raise
+
+    def add_indexes(self):
+        redis_connection = self.get_redisgraph()
+        all_labels = redis_connection.query("Match (c) return distinct labels(c)").result_set
+        all_labels = reduce(lambda x, y: x + y, all_labels, [])
+        id_index_queries = [
+            f'CREATE INDEX FOR (n:`{label}`) on (n.id)' for label in all_labels
+        ]
+        name_index_queries = "CALL db.labels() YIELD label CALL db.idx.fulltext.createNodeIndex(label, 'name', 'synonyms')"
+
+        for query in id_index_queries:
+            redis_connection.query(query=query)
+        redis_connection.query(query=name_index_queries)
+        log.info(f"Indexes created for {len(all_labels)} labels.")
 
     def get_redisgraph(self):
         return RedisGraph(
