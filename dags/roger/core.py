@@ -1319,7 +1319,7 @@ class BulkLoad:
         all_labels = redis_connection.query("Match (c) return distinct labels(c)").result_set
         all_labels = reduce(lambda x, y: x + y, all_labels, [])
         id_index_queries = [
-            f'CREATE INDEX FOR (n:`{label}`) on (n.id)' for label in all_labels
+            f'CREATE INDEX on  :`{label}`(id)' for label in all_labels
         ]
         name_index_queries = "CALL db.labels() YIELD label CALL db.idx.fulltext.createNodeIndex(label, 'name', 'synonyms')"
 
