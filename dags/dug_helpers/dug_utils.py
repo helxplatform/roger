@@ -649,7 +649,7 @@ class DugUtil():
     def annotate_sprint_files(config=None, to_string=False, files=None):
         with Dug(config, to_string=to_string) as dug:
             if files is None:
-                files = Util.dug_anvil_objects()
+                files = Util.dug_sprint_objects()
             parser_name = "SPRINT"
             dug.annotate_files(parser_name=parser_name,
                                parsable_files=files)
