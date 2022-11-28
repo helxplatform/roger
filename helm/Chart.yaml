@@ -20,12 +20,12 @@ version: 0.1.0
 # This is the version number of the application being deployed. This version number should be
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
-appVersion: 1.0.0
+appVersion: 1.1.0
 
 # Dependencies that roger requires
 dependencies:
   - name: airflow
-    version: "v7.15.0"
+    version: "v8.6.1"
     repository: "https://airflow-helm.github.io/charts"
   - name: redis
     version: "12.7.4"
