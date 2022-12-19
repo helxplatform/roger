@@ -31,13 +31,6 @@ spec:
     volumeMounts:
     - name: jenkins-docker-cfg
       mountPath: /kaniko/.docker
-  - name: crane
-    workingDir: /tmp/jenkins
-    image: c
-    imagePullPolicy: Always
-    command:
-    - /busybox/cat
-    tty: true
   volumes:
   - name: jenkins-docker-cfg
     projected:
