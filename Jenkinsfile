@@ -33,7 +33,7 @@ spec:
       mountPath: /kaniko/.docker
   - name: crane
     workingDir: /tmp/jenkins
-    image: gcr.io/go-containerregistry/crane:debug
+    image: c
     imagePullPolicy: Always
     command:
     - /busybox/cat
@@ -81,27 +81,27 @@ spec:
                     }
                 }
             }
-            post {
-                always {
-                    archiveArtifacts artifacts: 'image.tar', onlyIfSuccessful: true
-                }
-            }
+            // post {
+            //     always {
+            //         archiveArtifacts artifacts: 'image.tar', onlyIfSuccessful: true
+            //     }
+            // }
         }
-        stage('Publish') {
-            steps {
-                script {
-                    container(name: 'crane', shell: '/busybox/sh') {
-                        def imageTagsPushAlways = ["$IMAGE_NAME:$TAG1", "$IMAGE_NAME:$TAG2"]
-                        def imageTagsPushForDevelopBranch = ["$IMAGE_NAME:$TAG3"]
-                        def imageTagsPushForMasterBranch = ["$IMAGE_NAME:$TAG3", "$IMAGE_NAME:$TAG4"]
-                        image.publish(
-                            imageTagsPushAlways,
-                            imageTagsPushForDevelopBranch,
-                            imageTagsPushForMasterBranch
-                        )
-                    }
-                }
-            }
-        }
+        // stage('Publish') {
+        //     steps {
+        //         script {
+        //             container(name: 'crane', shell: '/busybox/sh') {
+        //                 def imageTagsPushAlways = ["$IMAGE_NAME:$TAG1", "$IMAGE_NAME:$TAG2"]
+        //                 def imageTagsPushForDevelopBranch = ["$IMAGE_NAME:$TAG3"]
+        //                 def imageTagsPushForMasterBranch = ["$IMAGE_NAME:$TAG3", "$IMAGE_NAME:$TAG4"]
+        //                 image.publish(
+        //                     imageTagsPushAlways,
+        //                     imageTagsPushForDevelopBranch,
+        //                     imageTagsPushForMasterBranch
+        //                 )
+        //             }
+        //         }
+        //     }
+        // }
     }
 }
