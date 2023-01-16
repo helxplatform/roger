@@ -1,9 +1,12 @@
 dependencies:
 - name: airflow
   repository: https://airflow-helm.github.io/charts
-  version: 7.15.0
+  version: 8.6.1
 - name: redis
   repository: https://charts.bitnami.com/bitnami
-  version: 12.7.4
-digest: sha256:46d75a6fdcd58a5a57baf09a75918ec3264bfca30b7c065fb4e4f517980168df
-generated: "2021-02-08T12:17:50.2207903-05:00"
+  version: 17.1.2
+- name: elasticsearch
+  repository: https://helm.elastic.co
+  version: 7.16.3
+digest: sha256:8c3706ca6b195236f3017cd98ad2632193c92f4b319692f47d64a5f0425ea41a
+generated: "2023-01-16T13:38:22.15342-05:00"
