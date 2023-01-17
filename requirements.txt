@@ -15,4 +15,4 @@ git+https://github.com/helxplatform/dug@v2.9.6
 elasticsearch==7.11.0
 biolinkml>=1.5.10
 orjson
-kgx==1.5.1
+kgx==1.7.2
