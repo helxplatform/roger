@@ -1,4 +1,4 @@
-FROM apache/airflow:2.1.2-python3.9
+FROM apache/airflow:2.5.0-python3.10
 USER root
 RUN apt-get update && \
     apt-get install -y git gcc python3-dev nano vim
@@ -7,5 +7,6 @@ USER airflow
 # dependency resolution taking hours eventually failing,
 # @TODO fix click lib dependency
 RUN pip install -r requirements.txt && \
-    pip uninstall -y elasticsearch-dsl
+    pip uninstall -y elasticsearch-dsl && \
+    pip install -y -U marshmallow-sqlalchemy
 RUN rm -f requirements.txt
