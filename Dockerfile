@@ -7,6 +7,5 @@ USER airflow
 # dependency resolution taking hours eventually failing,
 # @TODO fix click lib dependency
 RUN pip install -r requirements.txt && \
-    pip uninstall -y elasticsearch-dsl && \
-    pip install -y -U marshmallow-sqlalchemy
+    pip uninstall -y elasticsearch-dsl
 RUN rm -f requirements.txt
