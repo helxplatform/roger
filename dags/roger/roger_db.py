@@ -1,7 +1,11 @@
 import copy
 
 import redis
-from redisgraph import Node, Edge, Graph
+# from redisgraph import Node, Edge, Graph
+# https://redis-py.readthedocs.io/en/v4.5.1/redismodules.html#redisgraph-commands
+from redis.commands.graph.node import Node
+from redis.commands.graph.edge import Edge
+
 from roger.roger_util import get_logger
 
 logger = get_logger ()
@@ -12,7 +16,7 @@ class RedisGraph:
     def __init__(self, host='localhost', port=6379, graph='default', password=''):
         """ Construct a connection to Redis Graph. """
         self.r = redis.Redis(host=host, port=port, password=password)
-        self.redis_graph = Graph(graph, self.r)
+        self.redis_graph = redis.Graph(graph, self.r)
 
     def add_node (self, identifier=None, label=None, properties=None):
         """ Add a node with the given label and properties. """

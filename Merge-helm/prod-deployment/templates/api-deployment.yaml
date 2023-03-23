@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "search.api.web.fullname" . }}
+  labels:
+    app: {{ .Values.api.appName}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.api.appName}}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.api.appName}}
+    spec:
+      imagePullSecrets:
+        {{- toYaml .Values.api.deployment.imagePullSecrets | nindent 8 }}
+      containers:
+      - image: {{ .Values.api.image.repository }}:{{ .Values.api.image.tag | default .Chart.AppVersion }}
+        imagePullPolicy: {{ .Values.api.image.pullPolicy }}
+        name: {{ include "search.api.web.fullname" . }}-container
+        env: {{ include "search.api.web.deploymentEnv" . | nindent 10 }}
+        ports:
+          - containerPort: {{ .Values.api.deployment.apiPort }}
+        command: [
+            "gunicorn",
+            "--workers={{ .Values.api.deployment.apiWorkers | default 4 }}",
+            "--name=helx-search",
+            "--bind=0.0.0.0:{{ .Values.api.deployment.apiPort }}",
+            "--timeout={{ .Values.api.deployment.apiTimeout }}",
+            "--log-level={{ .Values.api.deployment.logLevel | default "INFO"}}",
+            "--enable-stdio-inheritance",
+            "--reload",
+            "dug.api:app"
+        ]
+        resources:
+          {{- toYaml .Values.api.deployment.resources | nindent 10 }}

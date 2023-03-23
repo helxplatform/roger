@@ -1,0 +1,105 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  labels:
+      namespace: default
+      subdomain: default-subdomain.catapultmerge.com
+      subscription: default-subscription
+      containerRegistry: rticatapult.azurecr.io
+spec:
+  revisionHistoryLimit: 0
+  replicas: 1 
+  # replicas: 3 PROD VAL
+  # minimumMasterNodes: 2 PROD VAL
+  selector:
+    matchLabels:
+      namespace: default
+      subdomain: default-subdomain.catapultmerge.com
+      subscription: default-subscription
+      containerRegistry: rticatapult.azurecr.io
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        namespace: default
+        subdomain: default-subdomain.catapultmerge.com
+        subscription: default-subscription
+        containerRegistry: rticatapult.azurecr.io
+    spec:
+      initContainers:
+      - name: busybox
+        image: "rticatapult.azurecr.io/merge/busybox:latest"
+        command: ['sh', '-c', "chown -R 1000:1000 /usr/share/elasticsearch/data"]
+        volumeMounts:
+        - name: elsvolume
+          subPath: esdata
+          mountPath: /usr/share/elasticsearch/data
+      containers:
+      - name: elasticsearch
+        image: rticatapult.azurecr.io/coder-assist/coder-assist-elasticsearch:20221130.3
+        env:
+            - name: ES_JAVA_OPTS
+              value: -Xms512m -Xmx512m
+            - name: cluster.name
+              value: docker-cluster
+            - name: http.host
+              value: 0.0.0.0
+            - name: network.host
+              value: 0.0.0.0
+            - name: transport.host
+              value: 127.0.0.1
+            - name: xpack.security.enabled
+              value: "false"
+            - name: ingest.geoip.downloader.enabled
+              value: "false"
+            - name: ELASTIC_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch
+                  key: password
+            - name: ELASTIC_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: elasticsearch
+                  key: username
+            - name: LOG4J_FORMAT_MSG_NO_LOOKUPS
+              value: "true"
+        ports:
+          - containerPort: 9200
+          - containerPort: 9300
+        # lifecycle:
+        #   postStart:
+        #     exec:
+        #       command: ["/bin/sh", "-c", "chown -R 1000:1000 /usr/share/elasticsearch/data && chmod -R 777 /docker/volumes/elasticsearch/data"]
+        resources:
+          requests:
+            cpu: 128m
+            memory: 800Mi
+          limits:
+            cpu: 500m
+            memory: 2Gi
+        volumeMounts:
+          - mountPath: /usr/share/elasticsearch/data
+            subPath: esdata
+            name: elsvolume
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - all
+      tolerations:
+        - key: type
+          operator: Equal
+          value: resrv
+          effect: NoSchedule
+      restartPolicy: Always
+      volumes:
+        - name: elsvolume
+          persistentVolumeClaim:
+            claimName: elasticsearch-master-elasticsearch-master-0
+      imagePullSecrets:
+        - name: regcred

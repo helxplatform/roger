@@ -17,10 +17,12 @@ help:
 mk_dirs:
 	mkdir -p {logs,plugins}
 	mkdir -p local_storage/elastic
+	mkdir -p local_storage/redis
 
 rm_dirs:
 	rm -rf logs/*
 	rm -rf local_storage/elastic/*
+	rm -rf local_storage/redis/*
 	rm -rf ./dags/roger/data/*
 
 #install: Install application along with required packages to local environment

@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dug-api-deployment
+  labels:
+    app: dug-api
+spec:
+  selector:
+    matchLabels:
+      app: dug-api
+  template:
+    metadata:
+      labels:
+        app: dug-api
+    spec:
+      containers:
+        - name: main
+          # image: rticatapult.azurecr.io/jupyterhub/jupyter-singleusermlimage:20221219.3
+          image: rticatapult.azurecr.io/dug-api:v1
+          command:
+            - gunicorn
+          args:
+            - '--workers=4'
+            - '--name=dug'
+            - '--bind=0.0.0.0:5551'
+            - '--timeout=10'
+            - '--log-level=DEBUG'
+            - '--enable-stdio-inheritance'
+            - '--reload'
+            - 'dug.api:app'
+          ports:
+            - containerPort: 5551
+          resources:
+            limits:
+              cpu: '2'
+              memory: 16Gi
+            requests:
+              cpu: 500m
+              memory: 2Gi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - all
+          volumeMounts:
+            - name: resrv
+              mountPath: /home/merge-shared-folder
+              subPath: merge-shared-folder
+      tolerations:
+        - key: "type"
+          operator: "Equal"
+          value: "resrv"
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.azure.com/mode
+                operator: NotIn
+                values:
+                - system
+      restartPolicy: Always
+      volumes:
+        - name: resrv
+          persistentVolumeClaim:
+            claimName: merge-shared-folder
+      imagePullSecrets:
+        - name: regcred

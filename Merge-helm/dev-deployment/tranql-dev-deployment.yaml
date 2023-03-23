@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tranql-deployment
+  labels:
+    app: tranql
+spec:
+  selector:
+    matchLabels:
+      app: tranql
+  template:
+    metadata:
+      labels:
+        app: tranql
+    spec:
+      containers:
+        - name: main
+          image: rticatapult.azurecr.io/tranql/v2
+          command:
+            - gunicorn
+          args:
+            - '--workers=4'
+            - '--name=tranql'
+            - '--bind=0.0.0.0:8001'
+            - '--timeout=300'
+            # - '--access-logfile=/var/nfs/tranql-frontend_access_log'
+            # - '--error-logfile=/var/nfs/tranql-frontend_error_log'
+            - '--log-level=debug'
+            - 'tranql.api:app'
+          ports:
+            - containerPort: 8001
+          env:
+          - name: APP_PORT
+            value: "8001"
+          - name: ACCESS_LOG
+            value: "/var/nfs/tranql-frontend_access_log"
+          - name: ERROR_LOG
+            value: "/var/nfs/tranql-frontend_error_log"
+          - name: REDIS_QUERY_TIMEOUT
+            value: "10000"
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: search-redis-secret
+                key: password
+          volumeMounts:
+            - name: logs
+              mountPath: /var/nfs
+            - name: config-yaml
+              subPath: conf.yml
+              mountPath: /home/tranql/tranql/src/tranql/conf.yml
+            - name: config-yaml
+              subPath: schema.yml
+              mountPath: /home/tranql/tranql/src/tranql/conf/schema.yaml
+            - name: resrv
+              mountPath: /home/merge-shared-folder
+              subPath: merge-shared-folder
+          resources:
+            limits:
+              cpu: '2'
+              memory: 16Gi
+            requests:
+              cpu: 500m
+              memory: 2Gi
+          # securityContext:
+          #   runAsNonRoot: true
+          #   runAsUser: 1000
+          #   allowPrivilegeEscalation: false
+          #   capabilities:
+          #     drop:
+          #       - all
+      tolerations:
+        - key: "type"
+          operator: "Equal"
+          value: "resrv"
+          effect: "NoSchedule"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.azure.com/mode
+                operator: NotIn
+                values:
+                - system
+      restartPolicy: Always
+      volumes:
+        - name: resrv
+          persistentVolumeClaim:
+            claimName: merge-shared-folder
+        - name: config-yaml
+          configMap:
+            name: tranql-configmap
+            defaultMode: 0777
+        - name: logs
+          emptyDir: {}
+      imagePullSecrets:
+        - name: regcred

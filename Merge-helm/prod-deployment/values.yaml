@@ -1,0 +1,194 @@
+api:
+  image:
+    repository: RTIInternational/dug
+    tag: ""
+    pullPolicy: IfNotPresent
+  appName: webserver
+  debug: false
+  deployment:
+    apiPort: 5551
+    apiWorkers: 4
+    apiTimeout: 10
+    extraEnv: []
+    logLevel: INFO
+    imagePullSecrets: []
+    resources:
+      limits:
+        cpu: 2
+        memory: 2G
+      requests:
+        cpu: 2
+        memory: 2G
+  service:
+    name: search-api
+    type: ClusterIP
+    annotations: {}
+    apiPort: "5551"
+config:
+  annotation:
+    normalizer_url: http://nn-web-prod-node-normalization-web-service-root.translator.svc.cluster.local:8080/get_normalized_nodes?conflate=false&curie=
+    annotator_url: https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content=
+    synonymizer_url: https://onto.renci.org/synonyms/
+  input_sets: "bdc-dbGaP,topmed"
+  data_source: "stars"
+  kgx_data_sets: "baseline-graph,cde-graph"
+  node_to_queries_enabled: "false"
+  s3:
+    host: ""
+    bucket: ""
+    access_key: ""
+    secret_key: ""
+elasticsearch:
+  # default, maybe we ought to increase this as size increases
+  # esJavaOpts: "-Xmx1g -Xms1g"
+  enabled: true
+  esJavaOpts: "-Xmx1g -Xms1g -Dlog4j2.disable.jmx=true -Dlog4j2.formatMsgNoLookups=true"
+  extraEnvs:
+    - name: ELASTIC_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: search-elastic-secret
+          key: password
+    - name: ELASTIC_USERNAME
+      valueFrom:
+        secretKeyRef:
+          name: search-elastic-secret
+          key: username
+    - name: LOG4J_FORMAT_MSG_NO_LOOKUPS
+      value: "true"
+  imageTag: "7.16.3"
+  replicas: 1
+  resources:
+    limits:
+      cpu: 1
+      memory: 2G
+    requests:
+      cpu: 1
+      memory: 2G
+  sysctlInitContainer:
+    enabled: false
+nboost:
+  enabled: false
+persistence:
+  storageClass: ""
+  pvcSize: 32Gi
+redis:
+  auth:
+    existingSecret: search-redis-secret
+    existingSecretPasswordKey: password
+  clusterDomain: cluster.local
+  enabled: true
+  image:
+    repository: redis/redis-stack
+    tag: '6.2.4-v2'
+  persistence:
+    existingClaim: "redis-data"
+  usePassword: true
+  master:
+    persistence:
+      size: 24G
+    resources:
+      limits:
+        cpu: 2
+        memory: 32Gi
+      requests:
+        cpu: 1
+        memory: 12Gi
+    command: ""
+    readinessProbe:
+      enabled: true
+      # to make it available ASAP
+      periodSeconds: 1
+      # spans 25 mins (150 * 10 secs)
+      failureThreshold: 1
+    livenessProbe:
+      # Liveliness probes can be off, since
+      # With big cache data to load or sync , redis is alive but
+      # responds with LOADING message. to avoid cyclic restarts
+      # keeping this off
+      enabled: false
+    extraFlags:
+      - "--loadmodule"
+      - "/opt/redis-stack/lib/redisgraph.so"
+      - "THREAD_COUNT"
+      - "8"
+      - "OMP_THREAD_COUNT"
+      - "16"
+      - "--appendonly"
+      - "no"
+  replica:
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 2
+      targetCPU: 100
+    persistence:
+      size: 24G
+    resources:
+      limits:
+        cpu: 2
+        memory: 32Gi
+      requests:
+        cpu: 1
+        memory: 12Gi
+    extraFlags:
+      - "--loadmodule"
+      - "/opt/redis-stack/lib/redisgraph.so"
+      - "THREAD_COUNT"
+      - "8"
+      - "OMP_THREAD_COUNT"
+      - "16"
+    readinessProbe:
+      enabled: true
+      # to make it available ASAP
+      periodSeconds: 1
+      # Having a lower count will make sure that routing to a replica that
+      # is not ready yet to not be routed to.
+      failureThreshold: 1
+      # make sure its really ready
+      successThreshold: 5
+    livenessProbe:
+      enabled: false
+secrets:
+  elastic:
+    name: search-elastic-secret
+    user: elastic
+    userKey: username
+    passwordKey: password
+  redis:
+    name: search-redis-secret
+    passwordKey: password
+tranql:
+  enabled: true
+  clusterDomain: cluster.local
+  image:
+    repository: tranql-tranql
+    tag: 'latest'
+  existingRedis:
+    host: ""
+    port: 6379
+    secret: search-redis-secret
+    secretPasswordKey: password
+  webPrefix: "/tranql"  # TODO this and the one below should be combined
+  extraEnv:
+    - name: WEB_PATH_PREFIX
+      value: "/tranql"
+  gunicorn:
+    # -- single worker for now to avoid recomputing of schema per worker
+    workerCount: 1
+    workerTimeout: 1600
+  resources:
+    limits:
+      cpu: 2
+      memory: 2G
+    requests:
+      cpu: 500m
+      memory: 2G
+  redis:
+    enabled: false
+
+redis-insight:
+  # -- Enable/Disable Redis UI
+  enabled: false
+  # -- Url should be same as public ingress url
+  rootUrl: ""

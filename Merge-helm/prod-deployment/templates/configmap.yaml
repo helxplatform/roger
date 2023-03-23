@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-elastic-config
+  labels:
+    release: {{ .Release.Name | quote }}
+    chart: "{{ .Chart.Name }}"
+    app: "{{ template "search.fullname" . }}"
+data:
+  host: "{{ template "search.elasticsearch.masterService" . }}"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-redis-config
+  labels:
+    release: {{ .Release.Name | quote }}
+    chart: "{{ .Chart.Name }}"
+    app: "{{ template "search.fullname" . }}"
+data:
+  host: "{{ template "search.redis.fullname" . }}-master"
+  port: "6379"
+  graph: "test"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-data-config
+  labels:
+    release: {{ .Release.Name | quote }}
+    chart: "{{ .Chart.Name }}"
+    app: "{{ template "search.fullname" . }}"
+data:
+  data_directory: "/opt/airflow/share/data"
+  data_source: {{ .Values.config.data_source }}
+  input_sets: {{ .Values.config.input_sets }}
+  kgx_data_sets: {{ .Values.config.kgx_data_sets }}
+  normalizer_url: {{ .Values.config.annotation.normalizer_url | quote }}
+  synonymizer_url: {{ .Values.config.annotation.synonymizer_url | quote }}
+  annotator_url: {{ .Values.config.annotation.annotator_url | quote }}
+  s3_access_key: {{ .Values.config.s3.access_key }}
+  s3_bucket: {{ .Values.config.s3.bucket }}
+  s3_host: {{ .Values.config.s3.host }}
+  s3_secret_key: {{ .Values.config.s3.secret_key }}
+  {{- if .Values.tranql.enabled }}
+  tranql_endpoint: "http://{{ template "search.tranql.fullname" . }}:{{ .Values.tranql.port }}{{ .Values.tranql.webPrefix }}/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+  {{- else }}
+  tranql_endpoint: "{{.Values.tranql.externalTranql }}"
+  {{- end }}
+  node_to_queries_enabled: "{{ .Values.config.node_to_queries_enabled }}"

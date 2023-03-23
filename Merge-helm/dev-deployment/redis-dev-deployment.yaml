@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: helm-dev-rs-2
+  labels:
+    name: redis
+    app: redisgraph
+    subscription: default-subscription
+spec:
+  revisionHistoryLimit: 0
+  replicas: 1
+  selector:
+    matchLabels:
+      name: redis
+      app: redisgraph
+      subscription: default-subscription
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        name: redis
+        app: redisgraph
+        subscription: default-subscription
+    spec:
+      containers:
+      - name: redis
+        image: "rticatapult.azurecr.io/redis:latest"
+        command:
+            - redis-server
+        args:
+          - '--loadmodule'
+          - '/opt/redis-stack/lib/redisgraph.so'
+        # image: "redis:latest"
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: REDIS_ARGS
+          value: --requirepass 12345
+        ports:
+        - containerPort: 6379
+        # data volume where redis writes data
+        volumeMounts:
+        - name: redata
+          mountPath: /data
+          readOnly: false
+        resources:
+          requests:
+            cpu: 128m
+            memory: 800Mi
+          limits:
+            cpu: 500m
+            memory: 2Gi
+      tolerations:
+        - key: type
+          operator: Equal
+          value: resrv
+          effect: NoSchedule
+      restartPolicy: Always
+      volumes:
+        - name: redata
+          persistentVolumeClaim:
+            claimName: data-superset-postgresql-0
+        - name: resrv
+          persistentVolumeClaim:
+            claimName: merge-shared-folder
+      imagePullSecrets:
+      - name: regcred

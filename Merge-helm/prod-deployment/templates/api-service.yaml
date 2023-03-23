@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "search.api.web.fullname" . }}
+  {{- if .Values.api.service.annotations }}
+  annotations:
+    {{- toYaml .Values.api.service.annotations | nindent 4}}
+  {{- end }}
+  labels:
+    app: {{ .Values.api.appName }}
+    {{- include "search.api.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: api-port
+      protocol: TCP
+      port: {{ .Values.api.service.apiPort }}
+      targetPort: {{ .Values.api.deployment.apiPort }}
+  selector:
+    app: {{ .Values.api.appName }}
+  type: {{ .Values.api.service.type }}

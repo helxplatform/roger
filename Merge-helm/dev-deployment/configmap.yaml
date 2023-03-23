@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-elastic-config
+  labels:
+    release: "0"
+    chart: dug
+    app: dug
+data:
+  host: "elasticsearch-master"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-redis-config
+  labels:
+    release: v0
+    chart: dug
+    app: dug
+data:
+  host: redis
+  port: "6379"
+  graph: "test"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: search-data-config
+  labels:
+    release: v0
+    chart: dug
+    app: dug
+data:
+  data_directory: "/opt/airflow/share/data"
+  data_source: s3
+  input_sets: bdc,nida,sparc,topmed,sprint,bacpac
+  kgx_data_sets: baseline-graph,cde-graph
+  normalizer_url: normalizer_url
+  synonymizer_url: synonymizer_url
+  annotator_url: annotator_url
+  s3_access_key: XXX_ACCESS_KEY_XXX
+  s3_bucket: helx-data-sources
+  s3_host: https://na-s3.renci.org
+  s3_secret_key: XXX_SECRET_KEY_XXX
+  tranql_endpoint: "http://tranql:8001/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+  node_to_queries_enabled: "true"
