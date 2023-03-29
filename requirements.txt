@@ -7,7 +7,7 @@ elasticsearch==8.5.2
 flatten-dict
 #psycopg2-binary==2.8.6
 # redisgraph==2.4.1 # redisgraph conflicts with Redis 4
-redisgraph-bulk-loader==0.10.2
+redisgraph-bulk-loader==0.9.5
 #requests<2.24.0
 pytest
 PyYAML
