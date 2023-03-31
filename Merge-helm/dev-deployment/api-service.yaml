@@ -1,9 +1,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: dug-api
+  name: dug-api-service
   labels:
-    app: webserver
+    app: dug-api
 
 spec:
   ports:
@@ -12,5 +12,5 @@ spec:
       port: 5551
       targetPort: 5551
   selector:
-    app: webserver
+    app: dug-api
   type: ClusterIP

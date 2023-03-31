@@ -69,7 +69,7 @@ indexing:
     "small_molecule_to_disease": ["small_molecule", "disease"]
     "chemical_mixture_to_disease": ["chemical_mixture", "disease"]
     "phen_to_anat": ["phenotypic_feature", "anatomical_entity"]
-  tranql_endpoint: "http://tranql:8001/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+  tranql_endpoint: "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
   node_to_element_queries:
     enabled: false
     cde:

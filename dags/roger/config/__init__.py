@@ -117,7 +117,7 @@ class IndexingConfig(DictLike):
         "anat_to_disease": ["anatomical_entity", "disease"],
         "anat_to_pheno": ["anatomical_entity", "phenotypic_feature"],
     })
-    tranql_endpoint: str = "http://tranql:8001/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+    tranql_endpoint: str = "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
     # by default skips node to element queries
     node_to_element_queries: dict = field(default_factory=lambda: {})
 

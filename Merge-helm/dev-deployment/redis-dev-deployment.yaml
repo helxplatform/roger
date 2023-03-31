@@ -5,24 +5,19 @@ metadata:
   namespace: helm-dev-rs-2
   labels:
     name: redis
-    app: redisgraph
-    subscription: default-subscription
+    app: redis
 spec:
   revisionHistoryLimit: 0
   replicas: 1
   selector:
     matchLabels:
-      name: redis
-      app: redisgraph
-      subscription: default-subscription
+      app: redis
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        name: redis
-        app: redisgraph
-        subscription: default-subscription
+        app: redis
     spec:
       containers:
       - name: redis
@@ -30,15 +25,23 @@ spec:
         command:
             - redis-server
         args:
+          - '--requirepass' 
+          - '12345'
+          - '--masterauth' 
+          - '12345'
           - '--loadmodule'
           - '/opt/redis-stack/lib/redisgraph.so'
-        # image: "redis:latest"
         imagePullPolicy: IfNotPresent
-        env:
-        - name: REDIS_ARGS
-          value: --requirepass 12345
         ports:
         - containerPort: 6379
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 20
+          timeoutSeconds: 30
+          periodSeconds: 3
         # data volume where redis writes data
         volumeMounts:
         - name: redata
@@ -50,7 +53,7 @@ spec:
             memory: 800Mi
           limits:
             cpu: 500m
-            memory: 2Gi
+            memory: 4Gi
       tolerations:
         - key: type
           operator: Equal

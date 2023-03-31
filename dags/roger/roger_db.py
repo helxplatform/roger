@@ -16,7 +16,7 @@ class RedisGraph:
     def __init__(self, host='localhost', port=6379, graph='default', password=''):
         """ Construct a connection to Redis Graph. """
         self.r = redis.Redis(host=host, port=port, password=password)
-        self.redis_graph = redis.Graph(graph, self.r)
+        self.redis_graph = self.r.graph(graph)
 
     def add_node (self, identifier=None, label=None, properties=None):
         """ Add a node with the given label and properties. """
@@ -61,7 +61,7 @@ class RedisGraph:
     def query (self, query):
         """ Query and return result set. """
         result = self.redis_graph.query(query)
-        result.pretty_print()
+        print(result)
         return result
     
     def delete (self):

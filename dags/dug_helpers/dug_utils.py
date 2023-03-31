@@ -490,10 +490,10 @@ class Dug:
                                     f" Concept id : {concept.id}, Search term: {search_term}")
 
     def clear_index(self, index_id):
-        exists = self.search_obj.es.indices.exists(index_id)
+        exists = self.search_obj.es.indices.exists(index=index_id)
         if exists:
             log.info(f"Deleting index {index_id}")
-            response = self.search_obj.es.indices.delete(index_id)
+            response = self.search_obj.es.indices.delete(index=index_id)
             log.info(f"Cleared Elastic : {response}")
         log.info("Re-initializing the indicies")
         self.search_obj.init_indices()

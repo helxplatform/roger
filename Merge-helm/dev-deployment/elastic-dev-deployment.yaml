@@ -3,10 +3,7 @@ kind: Deployment
 metadata:
   name: elasticsearch
   labels:
-      namespace: default
-      subdomain: default-subdomain.catapultmerge.com
-      subscription: default-subscription
-      containerRegistry: rticatapult.azurecr.io
+    app: elasticsearch
 spec:
   revisionHistoryLimit: 0
   replicas: 1 
@@ -14,19 +11,13 @@ spec:
   # minimumMasterNodes: 2 PROD VAL
   selector:
     matchLabels:
-      namespace: default
-      subdomain: default-subdomain.catapultmerge.com
-      subscription: default-subscription
-      containerRegistry: rticatapult.azurecr.io
+      app: elasticsearch
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        namespace: default
-        subdomain: default-subdomain.catapultmerge.com
-        subscription: default-subscription
-        containerRegistry: rticatapult.azurecr.io
+        app: elasticsearch
     spec:
       initContainers:
       - name: busybox
