@@ -16,7 +16,7 @@ spec:
       containers:
         - name: main
           # image: rticatapult.azurecr.io/jupyterhub/jupyter-singleusermlimage:20221219.3
-          image: rticatapult.azurecr.io/dug-api:v9
+          image: rticatapult.azurecr.io/skinny-dug-api
           command:
             - gunicorn
           args:
@@ -25,9 +25,9 @@ spec:
             - '--bind=0.0.0.0:5551'
             - '--timeout=10'
             - '--log-level=DEBUG'
-            - '--enable-stdio-inheritance'
-            - '--reload'
-            - 'dug.api:app'
+            - '-k'
+            - 'uvicorn.workers.UvicornWorker'
+            - 'dug.server:APP'
           ports:
             - containerPort: 5551
           env:
