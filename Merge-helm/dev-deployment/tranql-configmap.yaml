@@ -19,7 +19,7 @@ data:
         url: "redis:"
         redis: true
         redis_connection_params:
-          host: redis
+          host: merge-redis-master
           port: 6379
           # SET USERNAME and PASSWORD
           # via REDIS_USERNAME , REDIS_PASSWORD Env vars (i.e capitialize service name)

@@ -21,16 +21,23 @@ spec:
     spec:
       containers:
       - name: redis
-        image: "rticatapult.azurecr.io/redis:latest"
+        image: "rticatapult.azurecr.io/redisgraph:latest"
         command:
             - redis-server
+        # args:
+        #   - '--requirepass' 
+        #   - '12345'
+        #   - '--masterauth' 
+        #   - '12345'
+        #   - '--loadmodule'
+        #   - '/opt/redis-stack/lib/redisgraph.so'
         args:
           - '--requirepass' 
           - '12345'
           - '--masterauth' 
           - '12345'
           - '--loadmodule'
-          - '/opt/redis-stack/lib/redisgraph.so'
+          - '/usr/lib/redis/modules/redisgraph.so'
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 6379

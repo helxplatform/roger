@@ -1,0 +1,1 @@
+GRAPH.query 'test' "MATCH (c{id:'HP:0032316'}) return c"

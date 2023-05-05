@@ -15,16 +15,16 @@ spec:
     spec:
       containers:
         - name: main
-          image: rticatapult.azurecr.io/tranql:v3
+          image: rticatapult.azurecr.io/tranql:v6
           command:
             - gunicorn
           args:
             - '--workers=4'
             - '--name=tranql'
             - '--bind=0.0.0.0:8001'
-            - '--timeout=300'
-            # - '--access-logfile=/var/nfs/tranql-frontend_access_log'
-            # - '--error-logfile=/var/nfs/tranql-frontend_error_log'
+            - '--timeout=1600'
+            - "--access-logfile=$(ACCESS_LOG)"
+            - "--error-logfile=$(ERROR_LOG)"
             - '--log-level=debug'
             - 'tranql.api:app'
           ports:
