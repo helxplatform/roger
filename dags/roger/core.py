@@ -1315,9 +1315,16 @@ class BulkLoad:
         args = []
         if len(nodes) > 0:
             bulk_path_root = Util.bulk_path('nodes') + os.path.sep
-            nodes_with_type = [ f"{ x.replace(bulk_path_root, '').split('.')[0].split('~')[1]} {x}"
-                                for x in nodes ]
-            # Node label now no longer has 'biolink:'
+            nodes_with_type = []
+            for x in nodes:
+                """ 
+                    These lines prep nodes bulk load by:
+                    1) removing 'biolink:'
+                    2) combine labels to create a multilabel redis node i.e. "OrganismalEntity:SubjectOfInvestigation" 
+                """
+                file_name_type_part = x.replace(bulk_path_root, '').split('.')[0].split('~')[1]
+                all_labels = file_name_type_part + ":" + ":".join([v.lstrip("biolink:") for v in self.biolink.toolkit.get_ancestors("biolink:" + file_name_type_part, reflexive=False, formatted=True )] )
+                nodes_with_type.append(f"{ all_labels} {x}")
             args.extend(("-N " + " -N ".join(nodes_with_type)).split())
         if len(edges) > 0:
             bulk_path_root = Util.bulk_path('edges') + os.path.sep
@@ -1335,36 +1342,10 @@ class BulkLoad:
         log.debug(f"Calling bulk_insert with extended args: {args}")
         try:
             bulk_insert (args, standalone_mode=False)
-            self.update_labels()
             self.add_indexes()
         except Exception as e:
             log.error(f"Unexpected {e.__class__.__name__}: {e}")
             raise
-
-    def update_labels(self):
-        """
-            Prepend 'biolink: back onto Node labels.
-            This allows for multilabel redis nodes i.e. ["biolink:OrganismalEntity", "biolink:SubjectOfInvestigation"]
-        """
-        log.debug(f"Updating Labels to be multi labels")
-        redis_connection = self.get_redisgraph()
-        all_labels = redis_connection.query(
-            "Match (c) return distinct labels(c)").result_set
-        all_labels = reduce(lambda x, y: x + y, all_labels, [])
-        all_labels = reduce(lambda x, y: x + y, all_labels, [])
-        print("reduced all_labels")
-        print(all_labels)
-        all_labels_with_ancestors = {x: self.biolink.toolkit.get_ancestors(
-            x, reflexive=False, formatted=True) for x in all_labels}
-        print(all_labels_with_ancestors)
-        update_labels_queries = [
-            f"MATCH (c:`{label}`) REMOVE c:`{label}` SET c:" + ":".join([f"`{other_labels}`" for other_labels in all_labels_with_ancestors[label]]) for label in all_labels_with_ancestors
-        ]
-        log.info(update_labels_queries)
-
-        for query in update_labels_queries:
-            redis_connection.query(query=query)
-        log.info(f"Update Multi Labels for {len(all_labels)} labels.")
 
     def add_indexes(self):
         redis_connection = self.get_redisgraph()
