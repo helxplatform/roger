@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: main
-          image: rticatapult.azurecr.io/tranql:v6
+          image: rticatapult.azurecr.io/tranql:v11
           command:
             - gunicorn
           args:

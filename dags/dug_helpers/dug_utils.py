@@ -356,10 +356,17 @@ class Dug:
             size=2000
         )
         ids_dict = []
-        for element_type in response:
-            all_elements_ids = [e['id'] for e in
-                                reduce(lambda x, y: x + y['elements'], response[element_type], [])]
-            ids_dict += all_elements_ids
+        if 'total_items' in response:
+            if response['total_items'] == 0:
+                log.error(f"No search elements returned for variable search: {self.variables_index}.")
+                log.error(f"Concept id : {curie}, Search term: {search_term}")
+                # raise Exception(f"Validation error - Did not find {curie} for"
+                #                 f"Search term: {search_term}")
+        else:
+            for element_type in response:
+                all_elements_ids = [e['id'] for e in
+                                    reduce(lambda x, y: x + y['elements'], response[element_type], [])]
+                ids_dict += all_elements_ids
         return ids_dict
 
     def crawl_concepts(self, concepts, data_set_name):
@@ -482,12 +489,18 @@ class Dug:
 
                 searched_element_ids = self._search_elements(curie, search_term)
 
-                present = bool(len([x for x in sample_elements[curie] if x in searched_element_ids]))
-                if not present:
-                    log.error(f"Did not find expected variable {element.id} in search result.")
+                if curie not in sample_elements:
+                    log.error(f"Did not find Curie id {curie} in Elements.")
                     log.error(f"Concept id : {concept.id}, Search term: {search_term}")
                     raise Exception(f"Validation error - Did not find {element.id} for"
                                     f" Concept id : {concept.id}, Search term: {search_term}")
+                else:
+                    present = bool(len([x for x in sample_elements[curie] if x in searched_element_ids]))
+                    if not present:
+                        log.error(f"Did not find expected variable {element.id} in search result.")
+                        log.error(f"Concept id : {concept.id}, Search term: {search_term}")
+                        raise Exception(f"Validation error - Did not find {element.id} for"
+                                        f" Concept id : {concept.id}, Search term: {search_term}")
 
     def clear_index(self, index_id):
         exists = self.search_obj.es.indices.exists(index=index_id)
