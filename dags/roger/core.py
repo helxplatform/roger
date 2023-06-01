@@ -34,19 +34,6 @@ from itertools import chain
 log = get_logger ()
 config = get_config ()
 
-def jsonl_iter(file_name):
-    # iterating over jsonl files
-    with open(file_name) as stream:
-        for line in stream:
-            # yield on line at time
-            yield json.loads(line)
-
-
-def json_iter(json_file,entity_key):
-    with open(json_file) as stream:
-        data = json.loads(stream.read())
-        return data[entity_key]
-
 class SchemaType(Enum):
     """ High level semantic metatdata concepts.
     Categories are classes in an ontological model like Biolink.
@@ -450,6 +437,21 @@ class Util:
         f.close()
 
     @staticmethod
+    def jsonl_iter(file_name):
+        # iterating over jsonl files
+        with open(file_name) as stream:
+            for line in stream:
+                # yield on line at time
+                yield json.loads(line)
+
+    @staticmethod
+    def json_iter(json_file,entity_key):
+        with open(json_file) as stream:
+            data = json.loads(stream.read())
+            return data[entity_key]
+
+
+    @staticmethod
     def downloadfile(thread_num, inputq, doneq):
         url = ""
         t0 = 0
@@ -493,7 +495,6 @@ class KGXModel:
         self.config = config
 
         # We need a temp director for the DiskGraphMerger
-        self.temp_directory = os.path.dirname(os.path.abspath(__file__)) + "/" + self.config.kgx.merge_db_temp_dir
         self.temp_directory = Util.merge_path(self.config.kgx.merge_db_temp_dir)
         log.debug(f"Setting temp_directory to : {self.temp_directory}")
         isExist = os.path.exists(self.temp_directory)
@@ -822,10 +823,10 @@ class KGXModel:
         jsonl_edge_files = {file for file in jsonl_format_files if "edge" in file}
 
         # Create all the needed iterators and sets thereof
-        json_node_iterators = [jsonl_iter(file_name, 'nodes') for file_name in json_node_files] 
-        jsonl_node_iterators = [jsonl_iter(file_name) for file_name in jsonl_node_files] 
-        json_edge_iterators = [jsonl_iter(file_name, 'edges') for file_name in json_edge_files] 
-        jsonl_edge_iterators = [jsonl_iter(file_name) for file_name in jsonl_edge_files] 
+        json_node_iterators = [Util.json_iter(file_name, 'nodes') for file_name in json_node_files] 
+        jsonl_node_iterators = [Util.jsonl_iter(file_name) for file_name in jsonl_node_files] 
+        json_edge_iterators = [Util.json_iter(file_name, 'edges') for file_name in json_edge_files] 
+        jsonl_edge_iterators = [Util.jsonl_iter(file_name) for file_name in jsonl_edge_files] 
         all_node_iterators = json_node_iterators + jsonl_node_iterators
         all_edge_iterators = json_edge_iterators + jsonl_edge_iterators
 

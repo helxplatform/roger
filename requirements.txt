@@ -17,5 +17,4 @@ orjson
 #linkml==1.4.2
 #linkml-dataops==0.1.0
 #linkml-runtime~=1.4.1
-kgx==1.7.2
 kg-utils==0.0.1
