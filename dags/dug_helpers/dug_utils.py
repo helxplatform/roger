@@ -777,13 +777,13 @@ def get_versioned_files(config: RogerConfig, data_format, output_file_path, data
     output_dir: Path = Util.dug_input_files_path(output_file_path)
     # clear dir
     Util.clear_dir(output_dir)
-    current_version = config.dug_inputs.dataset_version
     data_sets = config.dug_inputs.data_sets
     pulled_files = []
     s3_utils = S3Utils(config.s3_config)
     for data_set in data_sets:
+        data_set_name, current_version = data_set.split(':')
         for item in meta_data["dug_inputs"]["versions"]:
-            if item["version"] == current_version and item["name"] == data_set and item["format"] == data_format:
+            if item["version"] == current_version and item["name"] == data_set_name and item["format"] == data_format:
                 if data_store == "s3":
                     for filename in item["files"]["s3"]:
                         log.info(f"Fetching {filename}")
