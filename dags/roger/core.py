@@ -847,19 +847,20 @@ class KGXModel:
         nodes_file_path = Util.merge_path("nodes.jsonl")
 
         # stream out nodes to nodes.jsonl file
-        with open(nodes_file_path, 'w', buffering=(1024*512)) as stream:
+        with open(nodes_file_path, 'w') as stream:
             for nodes in merged_nodes:
-                stream.write(json.dumps(nodes).decode('utf-8') + '\n')
+                stream.write(nodes)
 
         log.info(f"writing nodes took : {time.time() - start_nodes_jsonl}")
         write_merge_metric['nodes_writing_time'] = time.time() - start_nodes_jsonl
         start_edge_jsonl = time.time()
 
+        # stream out edges to edges.jsonl file
         edges_file_path = Util.merge_path("edges.jsonl")
-        with open(edges_file_path, 'w', buffering=(1024*512)) as stream:
+        with open(edges_file_path, 'w') as stream:
             for edges in merged_edges:
-                stream.write(json.dumps(edges).decode('utf-8') + '\n')
-
+                stream.write(edges)
+     
         write_merge_metric['edges_writing_time'] = time.time() - start_edge_jsonl
         log.info(f"writing edges took: {time.time() - start_edge_jsonl}")
         write_merge_metric['total_time'] = time.time() - t
