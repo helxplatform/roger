@@ -353,7 +353,7 @@ class Dug:
             index=self.variables_index,
             concept=curie,
             query=search_term,
-            size=10000
+            size=20_000
         )
         ids_dict = []
         for element_type in response:
