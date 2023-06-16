@@ -18,4 +18,4 @@ orjson
 #linkml-dataops==0.1.0
 #linkml-runtime~=1.4.1
 kg-utils==0.0.5
-bmt=1.0.15
+bmt==1.0.15
