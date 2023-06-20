@@ -7,11 +7,11 @@ elasticsearch==8.5.2
 flatten-dict
 #psycopg2-binary==2.8.6
 # redisgraph==2.4.1 # redisgraph conflicts with Redis 4
-redisgraph-bulk-loader==0.9.5
+redisgraph-bulk-loader==0.12.3
 #requests<2.24.0
 pytest
 PyYAML
-git+https://github.com/RTIInternational/dug@v0.0.1
+git+https://github.com/RTIInternational/dug@v0.0.3
 # elasticsearch==7.11.0
 orjson
 #biolinkml==1.7.6

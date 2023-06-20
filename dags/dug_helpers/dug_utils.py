@@ -108,7 +108,25 @@ class Dug:
             # @TODO propose for Dug to make this a crawler class init parameter(??)
             crawler.crawlspace = elements_file_path
             log.debug(f"Crawler annotator: {crawler.annotator}")
-            crawler.annotate_elements()
+            try:
+                crawler.annotate_elements()
+            except:
+                # breakpoint()
+                log.error(f"ERROR: crawler.annotate_elements failed")
+                # if fatal_condition():
+                #     log.error(f"FATAL ERROR: crawler.annotate_elements fatal {e}")
+                #     raise
+                # else:
+                # if len(elements) == len(crawler.elements) and len(crawler.concepts) > 0:
+                #     log.debug(f"DEBUG: Crawler has data: elements count {len(crawler.elements)}")
+                #     log.debug(f"DEBUG: Crawler has data: concepts count {len(crawler.concepts)}")
+                #     # We should continue
+                #     pass
+                # else: 
+                #     log.debug(f"DEBUG: Crawler is missing data: elements count {len(crawler.elements)}")
+                #     log.debug(f"DEBUG: Crawler is missing data: concepts count {len(crawler.concepts)}")
+                #     # Need to handle missing data! We should delete the directory then continue
+                #     pass
 
             # Extract out the concepts gotten out of annotation
             # Extract out the elements
@@ -397,6 +415,7 @@ class Dug:
         total = len(concepts)
         for concept_id, concept in concepts.items():
             counter += 1
+            # breakpoint()
             crawler.expand_concept(concept)
             concept.set_search_terms()
             concept.set_optional_terms()
@@ -492,6 +511,8 @@ class Dug:
                 if curie not in sample_elements:
                     log.error(f"Did not find Curie id {curie} in Elements.")
                     log.error(f"Concept id : {concept.id}, Search term: {search_term}")
+                    log.error(f"Validation error - Did not find {element.id} for"
+                                    f" Concept id : {concept.id}, Search term: {search_term}")
                     raise Exception(f"Validation error - Did not find {element.id} for"
                                     f" Concept id : {concept.id}, Search term: {search_term}")
                 else:
