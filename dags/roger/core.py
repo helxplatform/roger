@@ -30,6 +30,7 @@ from roger.roger_db import RedisGraph
 from string import Template
 from urllib.request import urlretrieve
 from itertools import chain
+from xxhash import xxh64_hexdigest
 
 log = get_logger ()
 config = get_config ()
@@ -859,7 +860,9 @@ class KGXModel:
         edges_file_path = Util.merge_path("edges.jsonl")
         with open(edges_file_path, 'w') as stream:
             for edges in merged_edges:
-                stream.write(edges)
+                edges = json.loads(edges)
+                edges['id'] = xxh64_hexdigest(edges['subject'] + edges['predicate'] + edges['object'] + edges.get("biolink:primary_knowledge_source", ""))
+                stream.write(json.dumps(edges).decode('utf-8') + '\n')
      
         write_merge_metric['edges_writing_time'] = time.time() - start_edge_jsonl
         log.info(f"writing edges took: {time.time() - start_edge_jsonl}")
