@@ -361,7 +361,6 @@ class Dug:
     def _search_elements(self, curie, search_term, size=10_000, offset = 0):
 
         response = self.event_loop.run_until_complete(self.search_obj.search_vars_unscored(
-            index=self.variables_index,
             concept=curie,
             query=search_term,
             size=size,
