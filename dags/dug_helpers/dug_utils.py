@@ -334,7 +334,16 @@ class Dug:
                 curie = concept.id
                 search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', concept.name)
                 log.debug(f"Searching for Concept: {curie} and Search term: {search_term}")
-                all_elements_ids = self._search_elements(curie, search_term)
+                size = 10_000
+                offset = 0                
+                all_elements_ids = []
+                first_set = self._search_elements(curie, search_term, size=size, offset=offset)
+                all_elements_ids = first_set
+                while first_set:
+                    offset = offset + size
+                    first_set = self._search_elements(curie, search_term, size=size, offset=offset)
+                    all_elements_ids += first_set
+
                 present = element.id in all_elements_ids
                 if not present:
                     log.error(f"Did not find expected variable {element.id} in search result.")
@@ -348,12 +357,13 @@ class Dug:
                     f"{element.id} has no concepts annotated. Skipping validation for it."
                 )
 
-    def _search_elements(self, curie, search_term):
+    def _search_elements(self, curie, search_term, size=10_000, offset = 0):
         response = self.search_obj.search_variables(
             index=self.variables_index,
             concept=curie,
             query=search_term,
-            size=10000
+            size=size,
+            offset=offset
         )
         ids_dict = []
         for element_type in response:
