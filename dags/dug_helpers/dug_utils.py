@@ -365,8 +365,6 @@ class Dug:
             size=size,
             offset=offset
         ))
-        if response:
-            log.info("found element types:" + response.keys())
         ids_dict = []
         for element_type in response:
             all_elements_ids = [e['id'] for e in
