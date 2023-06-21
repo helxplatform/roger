@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: main
-          image: catapultmerge.azurecr.io/tranql:v11
+          image: rticatapult.azurecr.io/tranql:v14
           command:
             - gunicorn
           args:
