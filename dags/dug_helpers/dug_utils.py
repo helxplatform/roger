@@ -358,13 +358,15 @@ class Dug:
                 )
 
     def _search_elements(self, curie, search_term, size=10_000, offset = 0):
-        event_loop = asyncio.get_event_loop()
-        response = event_loop.run_until_complete(self.search_obj.search_vars_unscored(
+        log.info("searching elements")
+        response = asyncio.run(self.search_obj.search_vars_unscored(
             concept=curie,
             query=search_term,
             size=size,
             offset=offset
         ))
+        if response:
+            log.info("found element types:", response.keys())
         ids_dict = []
         for element_type in response:
             all_elements_ids = [e['id'] for e in
