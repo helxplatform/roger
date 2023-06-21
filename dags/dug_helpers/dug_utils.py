@@ -32,7 +32,6 @@ class Dug:
         self.config = config
         dug_conf = config.to_dug_conf()
         self.factory = DugFactory(dug_conf)
-        self.event_loop = asyncio.get_event_loop()
         self.cached_session = self.factory.build_http_session()
 
         if to_string:
@@ -359,8 +358,8 @@ class Dug:
                 )
 
     def _search_elements(self, curie, search_term, size=10_000, offset = 0):
-
-        response = self.event_loop.run_until_complete(self.search_obj.search_vars_unscored(
+        event_loop = asyncio.get_event_loop()
+        response = event_loop.run_until_complete(self.search_obj.search_vars_unscored(
             concept=curie,
             query=search_term,
             size=size,
