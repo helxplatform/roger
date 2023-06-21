@@ -16,7 +16,7 @@ from dug.core.annotate import DugAnnotator, ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement
-from dug.core.search import Search
+from dug.core.async_search import Search
 
 from roger.config import RogerConfig
 from roger.core import Util
@@ -26,6 +26,7 @@ from utils.s3_utils import S3Utils
 log = get_logger()
 
 
+
 class Dug:
 
     def __init__(self, config: RogerConfig, to_string=True):
@@ -33,7 +34,7 @@ class Dug:
         dug_conf = config.to_dug_conf()
         self.factory = DugFactory(dug_conf)
         self.cached_session = self.factory.build_http_session()
-
+        self.event_loop = asyncio.new_event_loop()
         if to_string:
             self.log_stream = StringIO()
             self.string_handler = logging.StreamHandler(self.log_stream)
@@ -60,9 +61,15 @@ class Dug:
         ])
 
     def __enter__(self):
+        self.event_loop = asyncio.new_event_loop()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        # close elastic search connection
+        self.event_loop.run_until_complete(self.search_obj.es.close())
+        # close async loop
+        if self.event_loop.is_running() and not self.event_loop.is_closed():
+            self.event_loop.close()
         if exc_type or exc_val or exc_tb:
             traceback.print_exc()
             log.error(f"{exc_val} {exc_val} {exc_tb}")
@@ -334,16 +341,7 @@ class Dug:
                 curie = concept.id
                 search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', concept.name)
                 log.debug(f"Searching for Concept: {curie} and Search term: {search_term}")
-                size = 10_000
-                offset = 0                
-                all_elements_ids = []
-                first_set = self._search_elements(curie, search_term, size=size, offset=offset)
-                all_elements_ids = first_set
-                while first_set:
-                    offset = offset + size
-                    first_set = self._search_elements(curie, search_term, size=size, offset=offset)
-                    all_elements_ids += first_set
-
+                all_elements_ids = self._search_elements(curie, search_term)
                 present = element.id in all_elements_ids
                 if not present:
                     log.error(f"Did not find expected variable {element.id} in search result.")
@@ -357,13 +355,10 @@ class Dug:
                     f"{element.id} has no concepts annotated. Skipping validation for it."
                 )
 
-    def _search_elements(self, curie, search_term, size=10_000, offset = 0):
-        log.info("searching elements")
-        response = asyncio.run(self.search_obj.search_vars_unscored(
+    def _search_elements(self, curie, search_term):
+        response = self.event_loop.run_until_complete(self.search_obj.search_vars_unscored(
             concept=curie,
-            query=search_term,
-            size=size,
-            offset=offset
+            query=search_term
         ))
         ids_dict = []
         for element_type in response:
