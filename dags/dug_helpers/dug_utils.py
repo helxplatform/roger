@@ -17,6 +17,7 @@ from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement
 from dug.core.async_search import Search
+from dug.core.index import Index
 
 from roger.config import RogerConfig
 from roger.core import Util
@@ -58,6 +59,12 @@ class Dug:
             self.variables_index,
             self.concepts_index,
             self.kg_index,
+        ])
+        self.index_obj: Index = self.factory.build_indexer_obj([
+                self.variables_index,
+                self.concepts_index,
+                self.kg_index,
+
         ])
 
     def __enter__(self):
@@ -319,7 +326,7 @@ class Dug:
             count += 1
             # Only index DugElements as concepts will be indexed differently in next step
             if not isinstance(element, DugConcept):
-                self.search_obj.index_element(element, index=self.variables_index)
+                self.index_obj.index_element(element, index=self.variables_index)
             percent_complete = (count / total) * 100
             if percent_complete % 10 == 0:
                 log.info(f"{percent_complete} %")
@@ -422,10 +429,10 @@ class Dug:
         count = 0
         for concept_id, concept in concepts.items():
             count += 1
-            self.search_obj.index_concept(concept, index=self.concepts_index)
+            self.index_obj.index_concept(concept, index=self.concepts_index)
             # Index knowledge graph answers for each concept
             for kg_answer_id, kg_answer in concept.kg_answers.items():
-                self.search_obj.index_kg_answer(
+                self.index_obj.index_kg_answer(
                     concept_id=concept_id,
                     kg_answer=kg_answer,
                     index=self.kg_index,
@@ -501,7 +508,7 @@ class Dug:
             response = self.search_obj.es.indices.delete(index_id)
             log.info(f"Cleared Elastic : {response}")
         log.info("Re-initializing the indicies")
-        self.search_obj.init_indices()
+        self.index_obj.init_indices()
 
     def clear_variables_index(self):
         self.clear_index(self.variables_index)
