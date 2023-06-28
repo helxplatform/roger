@@ -890,24 +890,16 @@ class BiolinkModel:
         :return: leave concepts.
         """
         ancestry_set = set()
-        all_mixins_in_tree = set()
         all_concepts = set(biolink_concepts)
-        # Keep track of things like "MacromolecularMachine" in current datasets
-        # @TODO remove this and make nodes as errors
         unknown_elements = set()
+
         for x in all_concepts:
             current_element = self.toolkit.get_element(x)
-            mixins = set()
-            if current_element:
-                if 'mixins' in current_element and len(current_element['mixins']):
-                    for m in current_element['mixins']:
-                        mixins.add(self.toolkit.get_element(m).class_uri)
-            else:
+            if not current_element:
                 unknown_elements.add(x)
-            ancestors = set(self.toolkit.get_ancestors(x, reflexive=False, formatted=True))
+            ancestors = set(self.toolkit.get_ancestors(x, mixin=True, reflexive=False, formatted=True))
             ancestry_set = ancestry_set.union(ancestors)
-            all_mixins_in_tree = all_mixins_in_tree.union(mixins)
-        leaf_set = all_concepts - ancestry_set - all_mixins_in_tree - unknown_elements
+        leaf_set = all_concepts - ancestry_set - unknown_elements
         return leaf_set
 
     def get_leaf_class (self, names):
