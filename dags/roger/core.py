@@ -881,7 +881,7 @@ class BiolinkModel:
     def __init__(self, bl_version='v3.1.2'):
         self.bl_url = f'https://raw.githubusercontent.com/biolink/biolink-model/{bl_version}/biolink-model.yaml'
         log.info(f"bl_url is  {self.bl_url}")
-        self.toolkit = Toolkit(self.bl_url)
+        self.toolkit = Toolkit()
 
     def find_biolink_leaves(self, biolink_concepts):
         """
