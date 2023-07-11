@@ -861,6 +861,7 @@ class KGXModel:
         with open(edges_file_path, 'w') as stream:
             for edges in merged_edges:
                 edges = json.loads(edges)
+                # Add an id field for the edges as some of the downstream processing expects it.
                 edges['id'] = xxh64_hexdigest(edges['subject'] + edges['predicate'] + edges['object'] + edges.get("biolink:primary_knowledge_source", ""))
                 stream.write(json.dumps(edges).decode('utf-8') + '\n')
      
