@@ -749,7 +749,7 @@ class KGXModel:
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
                 
-            log.info(f"getting node type for: {node['category']}")
+            log.info(f"getting node type for: {node}")
             node_type = self.biolink.get_leaf_class(node['category'])
             category_schemas[node_type] = category_schemas.get(node_type, {})
             for k in node.keys():
