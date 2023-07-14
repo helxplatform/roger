@@ -741,7 +741,7 @@ class KGXModel:
         counter = 0
         for node in Util.json_line_iter(merged_nodes_file):
             # Debuging code
-            if counter % 1000 == 0:
+            if counter % 10000 == 0:
                log.info(f"Processing node : {node} counter : {counter}")
             counter += 1
 
@@ -749,7 +749,7 @@ class KGXModel:
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
                 
-            log.info(f"getting node type for: {node}")
+            #log.info(f"getting node type for: {node}")
             node_type = self.biolink.get_leaf_class(node['category'])
             category_schemas[node_type] = category_schemas.get(node_type, {})
             for k in node.keys():
@@ -758,7 +758,7 @@ class KGXModel:
                     category_schemas[node_type][k] = current_type
                 else:
                     previous_type = category_schemas[node_type][k]
-                    log.info(f"calling TypeConversionUtil.compare_types for: {previous_type} and {current_type}")
+                    #log.info(f"calling TypeConversionUtil.compare_types for: {previous_type} and {current_type}")
                     category_schemas[node_type][k] = TypeConversionUtil.compare_types(previous_type, current_type)
         if len(category_error_nodes):
             log.warn(f"some nodes didn't have category assigned. KGX file has errors."
