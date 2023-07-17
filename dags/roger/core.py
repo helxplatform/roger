@@ -750,8 +750,15 @@ class KGXModel:
                 node['category'] = [BiolinkModel.root_type]
                 
             #log.info(f"getting node type for: {node}")
+            #--- debug 
+            import time 
+            start = time.time()            
+            # -- debug
             node_type = self.biolink.get_leaf_class(node['category'])
+            # -- debug
+            log.error(f"category lookup took{ time.time() - start} sec")
             category_schemas[node_type] = category_schemas.get(node_type, {})
+            start = time.time()
             for k in node.keys():
                 current_type = type(node[k]).__name__
                 if k not in category_schemas[node_type]:
@@ -760,13 +767,17 @@ class KGXModel:
                     previous_type = category_schemas[node_type][k]
                     #log.info(f"calling TypeConversionUtil.compare_types for: {previous_type} and {current_type}")
                     category_schemas[node_type][k] = TypeConversionUtil.compare_types(previous_type, current_type)
+            log.error(f"keys org took {time.time() - start }")
         if len(category_error_nodes):
             log.warn(f"some nodes didn't have category assigned. KGX file has errors."
                       f"Nodes {len(category_error_nodes)}."
                       f"Showing first 10: {list(category_error_nodes)[:10]}."
                       f"These will be treated as {BiolinkModel.root_type}.")
         """ Write node schemas. """
+        start = time.time() 
+        
         self.write_schema(category_schemas, SchemaType.CATEGORY)
+        log.info(f"Write took {time.time() - start }")
 
     def create_edges_schema(self):
         """
