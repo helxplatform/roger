@@ -748,10 +748,15 @@ class KGXModel:
             if not node['category']:
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
-            
-            node_type = self.biolink.get_leaf_class(node['category'])
+
+            # Get all leaf types of this node
+            node_types = list(self.biolink.find_biolink_leaves(node['category']))
+            # pick the fist one to work on
+            node_type = node_types[0]
+            # make sure it is defined in the final dict
             category_schemas[node_type] = category_schemas.get(node_type, {})
-            
+
+            # compute full list of attributes and the value types of the attributes for that type.
             for k in node.keys():
                 current_type = type(node[k]).__name__
                 if k not in category_schemas[node_type]:
@@ -759,6 +764,11 @@ class KGXModel:
                 else:
                     previous_type = category_schemas[node_type][k]                    
                     category_schemas[node_type][k] = TypeConversionUtil.compare_types(previous_type, current_type)
+
+            # copy over final result to every other leaf type
+            for tp in node_types:
+                category[tp] = category[node_type]
+            
             
         if len(category_error_nodes):
             log.warn(f"some nodes didn't have category assigned. KGX file has errors."
