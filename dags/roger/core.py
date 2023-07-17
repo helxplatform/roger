@@ -1089,7 +1089,11 @@ class BulkLoad:
         for key, objects in obj_map.items ():
             if len(objects) == 0:
                 continue
-            all_keys = schema[key]
+            try:
+                all_keys = schema[key]
+            except Exception as e:
+                log.error(f"{key} not in {schema.keys()} " )
+                raise Exception("error")
             """ Make all objects conform to the schema. """
             clustered_by_set_values, improper_redis_keys = self.group_items_by_attributes_set(objects,
                                                                                               processed_objects_id)
