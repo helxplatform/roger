@@ -767,7 +767,7 @@ class KGXModel:
 
             # copy over final result to every other leaf type
             for tp in node_types:
-                category[tp] = category[node_type]
+                category_schemas[tp] = category_schemas[node_type]
             
             
         if len(category_error_nodes):
