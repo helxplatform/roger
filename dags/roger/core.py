@@ -26,7 +26,7 @@ from roger.config import get_default_config as get_config
 from roger.logger import get_logger
 from roger.components.data_conversion_utils import TypeConversionUtil
 from redisgraph_bulk_loader.bulk_insert import bulk_insert
-from roger.roger_db import RedisGraph
+from roger.RedisGraph import RedisGraph
 from string import Template
 from urllib.request import urlretrieve
 from itertools import chain
