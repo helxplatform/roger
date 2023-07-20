@@ -8,7 +8,7 @@ from dug_helpers.dug_utils import DugUtil, get_topmed_files, get_dbgap_files,\
     get_nida_files, get_sparc_files, get_anvil_files,\
     get_cancer_data_commons_files, get_kids_first_files,\
     get_sprint_files, get_bacpac_files
-from roger.dag_util import default_args, create_python_task
+from roger.tasks import default_args, create_python_task
 
 DAG_ID = 'annotate_dug'
 

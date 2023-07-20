@@ -9,7 +9,7 @@ from airflow.operators.bash_operator import BashOperator
 from airflow.models import DAG
 from airflow.operators.dummy_operator import DummyOperator
 from roger.core import RogerUtil
-from roger.dag_util import get_executor_config, default_args, create_python_task
+from roger.tasks import get_executor_config, default_args, create_python_task
 
 
 """ Build the workflow's tasks and DAG. """
