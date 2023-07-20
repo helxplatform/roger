@@ -23,7 +23,7 @@ from itertools import zip_longest
 from functools import reduce
 from roger import ROGER_DATA_DIR
 from roger.config import get_default_config as get_config
-from roger.roger_util import get_logger
+from roger.logger import get_logger
 from roger.components.data_conversion_utils import TypeConversionUtil
 from redisgraph_bulk_loader.bulk_insert import bulk_insert
 from roger.roger_db import RedisGraph

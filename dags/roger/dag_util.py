@@ -4,7 +4,7 @@ from airflow.operators.python_operator import PythonOperator
 from airflow.utils.dates import days_ago
 
 from roger.config import config
-from roger.roger_util import get_logger
+from roger.logger import get_logger
 
 default_args = {
     'owner': 'RENCI',

@@ -2,7 +2,7 @@ import copy
 
 import redis
 from redisgraph import Node, Edge, Graph
-from roger.roger_util import get_logger
+from roger.logger import get_logger
 
 logger = get_logger ()
 
