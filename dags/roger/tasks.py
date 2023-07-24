@@ -1,6 +1,6 @@
 import os
 
-from airflow.operators.python_operator import PythonOperator
+from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 
 from roger.config import config
@@ -89,7 +89,7 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         task_id=name,
         python_callable=task_wrapper,
         op_kwargs=op_kwargs,
-        executor_config=get_executor_config (),
+        executor_config=get_executor_config(),
         dag=dag,
         provide_context=True
     )
