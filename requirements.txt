@@ -12,3 +12,4 @@ elasticsearch==7.11.0
 orjson
 kg-utils==0.0.5
 bmt==1.1.0
+git+https://github.com/helxplatform/avalon.git@develop
