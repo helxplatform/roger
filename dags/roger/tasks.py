@@ -111,7 +111,7 @@ def avalon_commit_callback(context):
         branch='main',
         pipeline_id=context['dag'].dag_id,
         task_docker_image="test",
-        task_args="task",
+        task_args=["task"],
         task_name=context['ti'].task_id,
         lake_fs_client=client
     )
