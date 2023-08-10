@@ -2,9 +2,15 @@ import os
 
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
+from airflow.models import DAG
+from typing import Union 
+from pathlib import Path
+
 
 from roger.config import config
 from roger.logger import get_logger
+from avalon.main import init_client, get_files
+
 
 default_args = {
     'owner': 'RENCI',
@@ -70,6 +76,9 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     }
     return k8s_executor_config
 
+
+def avalon_commit_callback(context):
+    print(context['ti'])
 
 def create_python_task (dag, name, a_callable, func_kwargs=None):
     """ Create a python task.
