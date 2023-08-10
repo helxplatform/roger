@@ -78,7 +78,7 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
 
 
 def avalon_commit_callback(context):
-    print(context['ti'])
+    print(f"Task has success, task_instance_key_str: {context['task_instance_key_str']}")
 
 def create_python_task (dag, name, a_callable, func_kwargs=None):
     """ Create a python task.
@@ -100,7 +100,9 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         op_kwargs=op_kwargs,
         executor_config=get_executor_config(),
         dag=dag,
-        provide_context=True
+        provide_context=True,
+        on_success_callback= [avalon_commit_callback]
+
     )
 
 
