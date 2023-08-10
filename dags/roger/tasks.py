@@ -101,8 +101,7 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         executor_config=get_executor_config(),
         dag=dag,
         provide_context=True,
-        on_success_callback= [avalon_commit_callback]
-
+        on_success_callback= avalon_commit_callback
     )
 
 
