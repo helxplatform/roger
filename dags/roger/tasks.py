@@ -3,13 +3,15 @@ import os
 from airflow.operators.python import PythonOperator
 from airflow.utils.dates import days_ago
 from airflow.models import DAG
-from typing import Union 
+from typing import Union
 from pathlib import Path
 
 
 from roger.config import config
 from roger.logger import get_logger
-from avalon.main import init_client, get_files
+from avalon.main import LakeFsWrapper, put_file 
+import lakefs_client
+
 
 
 default_args = {
@@ -50,7 +52,7 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
         "secret_name_ref": "ELASTIC_SEARCH_PASSWORD_SECRET",
         "secret_key_ref": "ELASTIC_SEARCH_PASSWORD_SECRET_KEY",
         "env_var_name": f"{env_var_prefix}ELASTIC__SEARCH_PASSWORD"
-        },{
+    }, {
         "secret_name_ref": "REDIS_PASSWORD_SECRET",
         "secret_key_ref": "REDIS_PASSWORD_SECRET_KEY",
         "env_var_name": f"{env_var_prefix}REDISGRAPH_PASSWORD"
@@ -64,8 +66,8 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
                 "name": secret["env_var_name"],
                 "valueFrom": {
                     "secretKeyRef": {
-                       "name": secret_name,
-                       "key": secret_key_name
+                        "name": secret_name,
+                        "key": secret_key_name
                     }
                 }})
 
@@ -76,11 +78,46 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     }
     return k8s_executor_config
 
+def init_lakefs_client(config_raw):
+    configuration = lakefs_client.Configuration()
+    configuration.username = config_raw["credentials"]["access_key_id"]
+    configuration.password = config_raw["credentials"]["secret_access_key"]
+    configuration.host = config_raw["server"]["endpoint_url"]
+    the_lake = LakeFsWrapper(configuration=configuration)
+    return the_lake
 
 def avalon_commit_callback(context):
-    print(f"Task has success, task_instance_key_str: {context['task_instance_key_str']}")
+    lakefs_creds = {
+        "credentials": {
+            "access_key_id": "AKIAJWNNN6NZ2GHPIB7Q",
+            "secret_access_key": "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"
+        },
+        "server": {
+            "endpoint_url": "https://lakefs.apps.renci.org/api/v1"
+        }
+    }
+    client = init_lakefs_client(config_raw=lakefs_creds)
+    # @TODO replace this file with something logical 
+    # here for test
+    local_path = "/opt/airflow/share/data/test_commit_file.txt"
+    with open(local_path, 'w') as stream:
+        stream.write(
+            f"""{context}"""
+        )
+    put_file(
+        local_path=local_path,
+        remote_path=context['ti'].task_id + '/test_commit_file.txt',
+        repo='roger-test',
+        branch='main',
+        pipeline_id=context['dag'].dag_id,
+        task_docker_image="test",
+        task_args="task",
+        task_name=context['ti'].task_id,
+        lake_fs_client=client
+    )
 
-def create_python_task (dag, name, a_callable, func_kwargs=None):
+
+def create_python_task(dag, name, a_callable, func_kwargs=None):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -88,9 +125,9 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
     :param a_callable: The code to run in this task.
     """
     op_kwargs = {
-            "python_callable": a_callable,
-            "to_string": True
-        }
+        "python_callable": a_callable,
+        "to_string": True
+    }
     if func_kwargs is None:
         func_kwargs = dict()
     op_kwargs.update(func_kwargs)
@@ -101,7 +138,5 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         executor_config=get_executor_config(),
         dag=dag,
         provide_context=True,
-        on_success_callback= avalon_commit_callback
+        on_success_callback=avalon_commit_callback
     )
-
-
