@@ -402,9 +402,13 @@ class Dug:
         total = len(concepts)
         for concept_id, concept in concepts.items():
             counter += 1
-            crawler.expand_concept(concept)
-            concept.set_search_terms()
-            concept.set_optional_terms()
+            try:
+                crawler.expand_concept(concept)
+                concept.set_search_terms()
+                concept.set_optional_terms()
+            except Exception as e:
+                log.error(concept)
+                raise e
             for query in self.node_to_element_queries:
                 log.info(query)
                 casting_config = query['casting_config']
