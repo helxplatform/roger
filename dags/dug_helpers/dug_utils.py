@@ -509,7 +509,7 @@ class Dug:
         exists = self.search_obj.es.indices.exists(index_id)
         if exists:
             log.info(f"Deleting index {index_id}")
-            response = asyncio.run(self.search_obj.es.indices.delete(index_id))
+            response = self.event_loop.run_until_complete(self.search_obj.es.indices.delete(index_id))
             log.info(f"Cleared Elastic : {response}")
         log.info("Re-initializing the indicies")
         self.index_obj.init_indices()
