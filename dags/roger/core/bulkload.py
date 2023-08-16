@@ -18,7 +18,7 @@ from roger.core.redis_graph import RedisGraph
 from roger.core.enums import SchemaType
 from roger.models.biolink import BiolinkModel
 from roger.components.data_conversion import cast
-from roger.core import path
+from roger.core import storage
 
 log = get_logger()
 
@@ -34,32 +34,32 @@ class BulkLoad:
                          else separator)
 
     def tables_up_to_date (self):
-        return path.is_up_to_date (
+        return storage.is_up_to_date (
             source=[
-                path.schema_path (f"{SchemaType.PREDICATE.value}-schema.json"),
-                path.schema_path (f"{SchemaType.PREDICATE.value}-schema.json")
-            ] + path.merged_objects (),
-            targets=glob.glob (path.bulk_path ("nodes/**.csv")) + \
-            glob.glob (path.bulk_path ("edges/**.csv")))
+                storage.schema_path (f"{SchemaType.PREDICATE.value}-schema.json"),
+                storage.schema_path (f"{SchemaType.PREDICATE.value}-schema.json")
+            ] + storage.merged_objects (),
+            targets=glob.glob (storage.bulk_path ("nodes/**.csv")) + \
+            glob.glob (storage.bulk_path ("edges/**.csv")))
 
     def create_nodes_csv_file(self):
         if self.tables_up_to_date ():
             log.info ("up to date.")
             return
         # clear out previous data
-        bulk_path = path.bulk_path("nodes")
+        bulk_path = storage.bulk_path("nodes")
         if os.path.exists(bulk_path):
             shutil.rmtree(bulk_path)
-        categories_schema = path.read_schema (SchemaType.CATEGORY)
+        categories_schema = storage.read_schema (SchemaType.CATEGORY)
         state = defaultdict(lambda: None)
         log.info(f"processing nodes")
         """ Write node data for bulk load. """
 
         categories = defaultdict(lambda: [])
         category_error_nodes = set()
-        merged_nodes_file = path.merge_path("nodes.jsonl")
+        merged_nodes_file = storage.merge_path("nodes.jsonl")
         counter = 1
-        for node in path.json_line_iter(merged_nodes_file):
+        for node in storage.json_line_iter(merged_nodes_file):
             if not node['category']:
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
@@ -74,7 +74,7 @@ class BulkLoad:
                     f"Showing first 10: {list(category_error_nodes)[:10]}.")
             # flush every 100K
             if counter % 100_000 == 0:
-                self.write_bulk(path.bulk_path("nodes"),
+                self.write_bulk(storage.bulk_path("nodes"),
                                 categories, categories_schema,
                                 state=state, is_relation=False)
                 # reset variables.
@@ -83,7 +83,7 @@ class BulkLoad:
             counter += 1
         # write back if any thing left.
         if len(categories):
-            self.write_bulk(path.bulk_path("nodes"),
+            self.write_bulk(storage.bulk_path("nodes"),
                             categories, categories_schema,
                             state=state, is_relation=False)
 
@@ -93,27 +93,27 @@ class BulkLoad:
             log.info ("up to date.")
             return
         # Clear out previous data
-        bulk_path = path.bulk_path("edges")
+        bulk_path = storage.bulk_path("edges")
         if os.path.exists(bulk_path):
             shutil.rmtree(bulk_path)
-        predicates_schema = path.read_schema(SchemaType.PREDICATE)
+        predicates_schema = storage.read_schema(SchemaType.PREDICATE)
         predicates = defaultdict(lambda: [])
-        edges_file = path.merge_path('edges.jsonl')
+        edges_file = storage.merge_path('edges.jsonl')
         counter = 1
         state = {}
-        for edge in path.json_line_iter(edges_file):
+        for edge in storage.json_line_iter(edges_file):
             predicates[edge['predicate']].append(edge)
             # write out every 100K , to avoid large predicate dict.
             if counter % 100_000 == 0:
                 self.write_bulk(
-                    path.bulk_path("edges"),predicates, predicates_schema,
+                    storage.bulk_path("edges"),predicates, predicates_schema,
                     state=state, is_relation=True)
                 predicates = defaultdict(lambda : [])
             counter += 1
         # if there are some items left (if loop ended before counter reached the
         # specified value)
         if len(predicates):
-            self.write_bulk(path.bulk_path("edges"), predicates,
+            self.write_bulk(storage.bulk_path("edges"), predicates,
                             predicates_schema,state=state, is_relation=True)
 
     @staticmethod
@@ -325,8 +325,8 @@ class BulkLoad:
             'graph': os.getenv('REDIS_GRAPH'),
         }
         redisgraph = self.config.redisgraph
-        nodes = sorted(glob.glob (path.bulk_path ("nodes/**.csv*")))
-        edges = sorted(glob.glob (path.bulk_path ("edges/**.csv*")))
+        nodes = sorted(glob.glob (storage.bulk_path ("nodes/**.csv*")))
+        edges = sorted(glob.glob (storage.bulk_path ("edges/**.csv*")))
         graph = redisgraph['graph']
         log.info(f"bulk loading \n  nodes: {nodes} \n  edges: {edges}")
 
@@ -340,13 +340,13 @@ class BulkLoad:
         log.info ("bulk loading graph: %s", str(graph))
         args = []
         if len(nodes) > 0:
-            bulk_path_root = path.bulk_path('nodes') + os.path.sep
+            bulk_path_root = storage.bulk_path('nodes') + os.path.sep
             nodes_with_type = [
                 f"{ x.replace(bulk_path_root, '').split('.')[0].replace('~', ':')} {x}"
                 for x in nodes]
             args.extend(("-N " + " -N ".join(nodes_with_type)).split())
         if len(edges) > 0:
-            bulk_path_root = path.bulk_path('edges') + os.path.sep
+            bulk_path_root = storage.bulk_path('edges') + os.path.sep
             edges_with_type = [
                 f"{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0].replace('~', ':')} {x}"
                 for x in edges]
@@ -401,10 +401,10 @@ class BulkLoad:
             name = query['name']
             args = query.get('args', [{}])
             for arg in args:
-                start = path.current_time_in_millis ()
+                start = storage.current_time_in_millis ()
                 instance = Template (text).safe_substitute (arg)
                 db.query (instance)
-                duration = path.current_time_in_millis () - start
+                duration = storage.current_time_in_millis () - start
                 log.info (f"Query {key}:{name} ran in {duration}ms: {instance}")
 
     def wait_for_tranql(self):

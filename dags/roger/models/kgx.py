@@ -15,7 +15,7 @@ from kg_utils.constants import *
 from roger.config import get_default_config
 from roger.logger import get_logger
 from roger.components.data_conversion import compare_types
-from roger.core import path
+from roger.core import storage
 from roger.models.biolink import BiolinkModel
 from roger.core.enums import SchemaType
 
@@ -32,7 +32,7 @@ class KGXModel:
         self.config = config
 
         # We need a temp director for the DiskGraphMerger
-        self.temp_directory = path.merge_path(
+        self.temp_directory = storage.merge_path(
             self.config.kgx.merge_db_temp_dir)
         log.debug(f"Setting temp_directory to : {self.temp_directory}")
         isExist = os.path.exists(self.temp_directory)
@@ -76,9 +76,9 @@ class KGXModel:
         for nfile, file_name in enumerate(files):
             # file_url or skip
             file_name = dataset_version + "/" + file_name
-            file_url = path.get_uri(file_name, "kgx_base_data_uri")
+            file_url = storage.get_uri(file_name, "kgx_base_data_uri")
             subgraph_basename = os.path.basename(file_name)
-            subgraph_path = path.kgx_path(subgraph_basename)
+            subgraph_path = storage.kgx_path(subgraph_basename)
             if os.path.exists(subgraph_path):
                 log.info(f"cached kgx: {subgraph_path}")
                 continue
@@ -95,7 +95,7 @@ class KGXModel:
         threads = []
         for thread_num in range(len(files)): # len(files)
             th = threading.Thread(
-                target=path.downloadfile,
+                target=storage.downloadfile,
                 args=(thread_num, file_tuple_q, thread_done_q))
             th.start()
             threads.append(th)
@@ -111,19 +111,19 @@ class KGXModel:
 
         all_kgx_files = []
         for nfile, file_name in enumerate(files):
-            start = path.current_time_in_millis()
+            start = storage.current_time_in_millis()
             file_name = dataset_version + "/" + file_name
-            file_url = path.get_uri(file_name, "kgx_base_data_uri")
+            file_url = storage.get_uri(file_name, "kgx_base_data_uri")
             subgraph_basename = os.path.basename(file_name)
-            subgraph_path = path.kgx_path(subgraph_basename)
+            subgraph_path = storage.kgx_path(subgraph_basename)
             all_kgx_files.append(subgraph_path)
             if os.path.exists(subgraph_path):
                 log.info(f"cached kgx: {subgraph_path}")
                 continue
             log.info ("#{}/{} read: {}".format(nfile+1, len(files), file_url))
-            subgraph = path.read_object(file_url)
-            path.write_object(subgraph, subgraph_path)
-            total_time = path.current_time_in_millis() - start
+            subgraph = storage.read_object(file_url)
+            storage.write_object(subgraph, subgraph_path)
+            total_time = storage.current_time_in_millis() - start
             edges = len(subgraph['edges'])
             nodes = len(subgraph['nodes'])
             log.info(
@@ -181,9 +181,9 @@ class KGXModel:
         for npairs, pairs in enumerate(paired_up):
             for npair, p in enumerate(pairs):
                 file_name = dataset_version + "/" + p
-                file_url = path.get_uri(file_name, "kgx_base_data_uri")
+                file_url = storage.get_uri(file_name, "kgx_base_data_uri")
                 subgraph_basename = os.path.basename(file_name)
-                subgraph_path = path.kgx_path(subgraph_basename)
+                subgraph_path = storage.kgx_path(subgraph_basename)
                 if os.path.exists(subgraph_path):
                     log.info(f"skip cached kgx: {subgraph_path}")
                     continue
@@ -200,7 +200,7 @@ class KGXModel:
         threads = []
         for thread_num in range(file_tuple_q.qsize()):
             th = threading.Thread(
-                target=path.downloadfile,
+                target=storage.downloadfile,
                 args=(thread_num, file_tuple_q, thread_done_q))
             th.start()
             threads.append(th)
@@ -218,33 +218,33 @@ class KGXModel:
         for pairs in paired_up:
             nodes = 0
             edges = 0
-            start = path.current_time_in_millis()
+            start = storage.current_time_in_millis()
             for p in pairs:
                 file_name = dataset_version + "/" + p
-                file_url = path.get_uri(file_name, "kgx_base_data_uri")
+                file_url = storage.get_uri(file_name, "kgx_base_data_uri")
                 subgraph_basename = os.path.basename(file_name)
-                subgraph_path = path.kgx_path(subgraph_basename)
+                subgraph_path = storage.kgx_path(subgraph_basename)
                 all_kgx_files.append(subgraph_path)
                 if os.path.exists(subgraph_path):
                     log.info(f"cached kgx: {subgraph_path}")
                     continue
-                data = path.read_object(file_url)
-                path.write_object(data, subgraph_path)
+                data = storage.read_object(file_url)
+                storage.write_object(data, subgraph_path)
                 if "edges" in p:
                     edges = len(data.split('\n'))
                 else:
                     nodes = len(data.split('\n'))
-            total_time = path.current_time_in_millis() - start
+            total_time = storage.current_time_in_millis() - start
             log.info(
                 "wrote {:>45}: edges:{:>7} nodes: {:>7} time:{:>8}".format(
-                    path.trunc(subgraph_path, 45), edges, nodes, total_time))
+                    storage.trunc(subgraph_path, 45), edges, nodes, total_time))
         return all_kgx_files
 
     def get (self, dataset_version = "v1.0"):
         """ Read metadata for KGX files and downloads them locally.
         :param dataset_version: Data version to operate on.
         """
-        metadata = path.read_relative_object ("../metadata.yaml")
+        metadata = storage.read_relative_object ("../metadata.yaml")
         data_set_list = self.config.kgx.data_sets
         kgx_files_remote = []
         for item in metadata['kgx']['versions']:
@@ -266,8 +266,8 @@ class KGXModel:
         # Fetchs kgx generated from Dug Annotation workflow.
         new_files = self.fetch_dug_kgx() + kgx_files_remote
         all_files_in_dir = (
-            path.kgx_objects("json") +
-            path.kgx_objects("jsonl"))
+            storage.kgx_objects("json") +
+            storage.kgx_objects("jsonl"))
         files_to_remove = [x for x in all_files_in_dir
                            if x not in new_files]
         if len(files_to_remove):
@@ -275,7 +275,7 @@ class KGXModel:
                 "Found some old files to remove from kgx dir : %s",
                 files_to_remove)
             for file in files_to_remove:
-                path.remove(file)
+                storage.remove(file)
                 log.info("removed %s", file)
         log.info("Done.")
 
@@ -286,17 +286,17 @@ class KGXModel:
         Copies files from dug output dir to roger kgx dir.
         :return:
         """
-        dug_kgx_files = path.dug_kgx_objects()
+        dug_kgx_files = storage.dug_kgx_objects()
         all_kgx_files = []
         log.info("Copying dug KGX files to %s. Found %d kgx files to copy.",
-                 path.kgx_path(''), len(dug_kgx_files))
+                 storage.kgx_path(''), len(dug_kgx_files))
         for file in dug_kgx_files:
             file_name = ntpath.basename(file)
-            dest = path.kgx_path(file_name)
+            dest = storage.kgx_path(file_name)
             all_kgx_files.append(dest)
-            path.write_object({}, dest)
+            storage.write_object({}, dest)
             log.info(f"Copying from {file} to {dest}.")
-            path.copy_file_to_dir(file, dest)
+            storage.copy_file_to_dir(file, dest)
         log.info("Done copying dug KGX files.")
         return all_kgx_files
 
@@ -308,10 +308,10 @@ class KGXModel:
 
         category_schemas = defaultdict(lambda: None)
         category_error_nodes = set()
-        merged_nodes_file = path.merge_path("nodes.jsonl")
+        merged_nodes_file = storage.merge_path("nodes.jsonl")
         log.info(f"Processing : {merged_nodes_file}")
         counter = 0
-        for node in path.json_line_iter(merged_nodes_file):
+        for node in storage.json_line_iter(merged_nodes_file):
             # Debuging code
             if counter % 10000 == 0:
                 log.info(f"Processing node : {node} counter : {counter}")
@@ -361,9 +361,9 @@ class KGXModel:
         :return:
         """
         predicate_schemas = defaultdict(lambda: None)
-        merged_edges_file = path.merge_path("edges.jsonl")
+        merged_edges_file = storage.merge_path("edges.jsonl")
         """ Infer predicate schemas. """
-        for edge in path.json_line_iter(merged_edges_file):
+        for edge in storage.json_line_iter(merged_edges_file):
             predicate = edge['predicate']
             predicate_schemas[predicate] = predicate_schemas.get(predicate,
                                                                  {})
@@ -391,12 +391,12 @@ class KGXModel:
         self.create_edges_schema()
 
     def schema_up_to_date (self):
-        return path.is_up_to_date (
-            source=path.kgx_objects(),
+        return storage.is_up_to_date (
+            source=storage.kgx_objects(),
             targets=[
-                path.schema_path (
+                storage.schema_path (
                     f"{SchemaType.PREDICATE.value}-schema.json"),
-                path.schema_path (
+                storage.schema_path (
                     f"{SchemaType.PREDICATE.value}-schema.json")
             ])
 
@@ -406,18 +406,18 @@ class KGXModel:
         :param schema: Schema to get keys from.
         :param schema_type: Type of schema to write.
         """
-        file_name = path.schema_path (f"{schema_type.value}-schema.json")
+        file_name = storage.schema_path (f"{schema_type.value}-schema.json")
         log.info("writing schema: %s", file_name)
         dictionary = { k : v for k, v in schema.items () }
-        path.write_object (dictionary, file_name)
+        storage.write_object (dictionary, file_name)
 
     def merge(self):
         """ This version uses the disk merging from the kg_utils module """
         data_set_version = self.config.get('kgx', {}).get('dataset_version')
         metrics = {}
         start = time.time()
-        json_format_files = path.kgx_objects("json")
-        jsonl_format_files = path.kgx_objects("jsonl")
+        json_format_files = storage.kgx_objects("json")
+        jsonl_format_files = storage.kgx_objects("jsonl")
 
         # Create lists of the nodes and edges files in both json and jsonl
         # formats
@@ -431,13 +431,13 @@ class KGXModel:
                             if "edge" in file}
 
         # Create all the needed iterators and sets thereof
-        json_node_iterators = [path.json_iter(file_name, 'nodes') for
+        json_node_iterators = [storage.json_iter(file_name, 'nodes') for
                                file_name in json_node_files]
-        jsonl_node_iterators = [path.jsonl_iter(file_name) for
+        jsonl_node_iterators = [storage.jsonl_iter(file_name) for
                                 file_name in jsonl_node_files]
-        json_edge_iterators = [path.json_iter(file_name, 'edges') for
+        json_edge_iterators = [storage.json_iter(file_name, 'edges') for
                                file_name in json_edge_files]
-        jsonl_edge_iterators = [path.jsonl_iter(file_name) for
+        jsonl_edge_iterators = [storage.jsonl_iter(file_name) for
                                 file_name in jsonl_edge_files]
         all_node_iterators = json_node_iterators + jsonl_node_iterators
         all_edge_iterators = json_edge_iterators + jsonl_edge_iterators
@@ -456,7 +456,7 @@ class KGXModel:
         write_merge_metric = {}
         t = time.time()
         start_nodes_jsonl = time.time()
-        nodes_file_path = path.merge_path("nodes.jsonl")
+        nodes_file_path = storage.merge_path("nodes.jsonl")
 
         # stream out nodes to nodes.jsonl file
         with open(nodes_file_path, 'w') as stream:
@@ -469,7 +469,7 @@ class KGXModel:
         start_edge_jsonl = time.time()
 
         # stream out edges to edges.jsonl file
-        edges_file_path = path.merge_path("edges.jsonl")
+        edges_file_path = storage.merge_path("edges.jsonl")
         with open(edges_file_path, 'w') as stream:
             for edges in merged_edges:
                 edges = json.loads(edges)
@@ -488,5 +488,5 @@ class KGXModel:
         metrics['total_time'] = time.time() - start
         log.info(f"total took: {time.time() - start}")
         if self.enable_metrics:
-            metricsfile_path = path.metrics_path('merge_metrics.yaml')
-            path.write_object(metrics, metricsfile_path)
+            metricsfile_path = storage.metrics_path('merge_metrics.yaml')
+            storage.write_object(metrics, metricsfile_path)
