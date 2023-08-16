@@ -217,7 +217,7 @@ class Dug:
                 "id": element.id,
                 "name": element.name,
                 "category": ["biolink:StudyVariable"],
-                "description": element.description.replace("'", '`') # bulk loader parsing issue
+                "description": element.description.replace("'", '`').replace('\n', ' ') # bulk loader parsing issue
             }
             if element.id not in written_nodes:
                 nodes.append(variable_node)
