@@ -177,12 +177,7 @@ dug_inputs:
       version: v1.0
       files:
         s3:
-          - heal-datasets/ingest-8-23/heal_studies.tar.gz
-      format: heal-studies
-    - name: heal-mds-imports
-      version: v1.0
-      files:
-        s3:
+          - heal-datasets/ingest-8-23/heal_studies.tar.gz      
           - heal-datasets/ingest-8-23/heal_mds_import.tar.gz
       format: heal-studies
     - name: heal-research-programs

@@ -84,8 +84,8 @@ with DAG(
             prepare_files = create_python_task(dag, "get_heal_study_files", get_heal_study_files)
             annotate_files = create_python_task(dag, "annotate_heal_study_files",
                                                 DugUtil.annotate_heal_study_files)
-        elif data_set.startswith("heal-mds-imports"):
-            prepare_files = create_python_task(dag, "get_heal_mds_imports", get_heal_study_files)            
+        # elif data_set.startswith("heal-mds-imports"):
+        #     prepare_files = create_python_task(dag, "get_heal_mds_imports", get_heal_study_files)            
 
         elif data_set.startswith("heal-research-programs"):
             prepare_files = create_python_task(dag, "get_heal_research_program_files", get_heal_research_program_files)
