@@ -319,6 +319,21 @@ def dug_crdc_objects():
         file_path)
     return sorted([str(f) for f in files])
 
+def dug_heal_study_objects():
+    file_path = dug_heal_study_path()
+    files = get_files_recursive(lambda file_name : True, file_path)
+    return sorted([str(f) for f in files])
+
+def dug_heal_research_program_objects():
+    file_path = dug_heal_research_program_path()
+    files = get_files_recursive(lambda file_name : True, file_path)
+    return sorted([str(f) for f in files])
+
+def dug_heal_mds_objects():
+    file_path = dug_heal_mds_path()
+    files = get_files_recursive(lambda file_name : True, file_path)
+    return sorted([str(f) for f in files])
+
 def dug_kfdrc_objects():
     file_path = dug_kfdrc_path()
     files = get_files_recursive(

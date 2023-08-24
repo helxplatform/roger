@@ -636,7 +636,7 @@ class DugUtil():
     def annotate_heal_mds_files(config=None, to_string=False, files=None):
         with Dug(config, to_string=to_string) as dug:
             if files is None:
-                files = storage.dug_heal_mds_path()
+                files = storage.dug_heal_mds_objects()
 
             parser_name = "heal-studies"
             log.info(files)
@@ -650,7 +650,7 @@ class DugUtil():
     def annotate_heal_study_files(config=None, to_string=False, files=None):
         with Dug(config, to_string=to_string) as dug:
             if files is None:
-                files = storage.dug_heal_study_path()
+                files = storage.dug_heal_study_objects()
 
             parser_name = "heal-studies"
             log.info(files)
@@ -664,7 +664,7 @@ class DugUtil():
     def annotate_heal_research_program_files(config=None, to_string=False, files=None):
         with Dug(config, to_string=to_string) as dug:
             if files is None:
-                files = storage.dug_heal_mds_path()
+                files = storage.dug_heal_research_program_objects()
 
             parser_name = "heal-research"
             log.info(files)
