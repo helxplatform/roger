@@ -904,12 +904,12 @@ def get_topmed_files(config: RogerConfig, to_string=False) -> List[str]:
     return get_versioned_files(config, "topmed", "topmed", data_store=config.dug_inputs.data_source, unzip=False)
 
 def get_heal_mds_files(config: RogerConfig, to_string=False) -> List[str]:
-    return get_versioned_files(config, "heal-mds-imports", "heal-studies", data_store=config.dug_inputs.data_source, unzip=True)
+    return get_versioned_files(config, "heal-studies", "heal-mds-imports", data_store=config.dug_inputs.data_source, unzip=True)
 
 def get_heal_study_files(config: RogerConfig, to_string=False) -> List[str]:
-    return get_versioned_files(config, "heal-study-imports", "heal-studies", data_store=config.dug_inputs.data_source, unzip=True)
+    return get_versioned_files(config, "heal-studies", "heal-study-imports", data_store=config.dug_inputs.data_source, unzip=True)
 
 def get_heal_research_program_files(config: RogerConfig, to_string=False) -> List[str]:
-    return get_versioned_files(config, "heal-research-programs", "heal-research", data_store=config.dug_inputs.data_source, unzip=True)
+    return get_versioned_files(config, "heal-studies", "heal-research-programs", data_store=config.dug_inputs.data_source, unzip=True)
 
 
