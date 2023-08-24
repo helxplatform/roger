@@ -3,10 +3,21 @@ import os
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 
-from dug_helpers.dug_utils import DugUtil, get_topmed_files, get_dbgap_files,\
-    get_nida_files, get_sparc_files, get_anvil_files,\
-    get_cancer_data_commons_files, get_kids_first_files,\
-    get_sprint_files, get_bacpac_files
+from dug_helpers.dug_utils import (
+    DugUtil, 
+    get_topmed_files,
+    get_dbgap_files,
+    get_nida_files,
+    get_sparc_files,
+    get_anvil_files,
+    get_cancer_data_commons_files,
+    get_kids_first_files,
+    get_sprint_files,
+    get_bacpac_files,
+    get_heal_mds_files,
+    get_heal_study_files,
+    get_heal_research_program_files
+    )
 from roger.tasks import default_args, create_python_task
 
 DAG_ID = 'annotate_dug'
@@ -68,6 +79,22 @@ with DAG(
             prepare_files = create_python_task(dag, "get_bacpac_files", get_bacpac_files)
             annotate_files = create_python_task(dag, "annotate_bacpac_files",
                                                 DugUtil.annotate_bacpac_files)
+        elif data_set.startswith("heal-mds-imports"):
+            prepare_files = create_python_task(dag, "get_heal_mds_files", get_heal_mds_files)
+            annotate_files = create_python_task(dag, "annotate_heal_mds_files",
+                                                DugUtil.annotate_heal_mds_files)
+        
+        elif data_set.startswith("heal-studies"):
+            prepare_files = create_python_task(dag, "get_heal_study_files", get_heal_study_files)
+            annotate_files = create_python_task(dag, "annotate_heal_study_files",
+                                                DugUtil.annotate_heal_study_files)
+        
+        elif data_set.startswith("heal-research-programs"):
+            prepare_files = create_python_task(dag, "get_heal_research_program_files", get_heal_research_program_files)
+            annotate_files = create_python_task(dag, "annotate_heal_research_program_files",
+                                                DugUtil.annotate_heal_research_program_files)
+
+
         intro >> prepare_files
         prepare_files >> clear_annotation_items
         clear_annotation_items >> annotate_files

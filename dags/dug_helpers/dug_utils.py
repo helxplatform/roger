@@ -633,6 +633,47 @@ class DugUtil():
         return output_log
 
     @staticmethod
+    def annotate_heal_mds_files(config=None, to_string=False, files=None):
+        with Dug(config, to_string=to_string) as dug:
+            if files is None:
+                files = storage.dug_heal_mds_path()
+
+            parser_name = "heal-studies"
+            log.info(files)
+            dug.annotate_files(parser_name=parser_name,
+                               parsable_files=files)
+            output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
+    
+    
+    @staticmethod
+    def annotate_heal_study_files(config=None, to_string=False, files=None):
+        with Dug(config, to_string=to_string) as dug:
+            if files is None:
+                files = storage.dug_heal_study_path()
+
+            parser_name = "heal-studies"
+            log.info(files)
+            dug.annotate_files(parser_name=parser_name,
+                               parsable_files=files)
+            output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    
+    @staticmethod
+    def annotate_heal_research_program_files(config=None, to_string=False, files=None):
+        with Dug(config, to_string=to_string) as dug:
+            if files is None:
+                files = storage.dug_heal_mds_path()
+
+            parser_name = "heal-research"
+            log.info(files)
+            dug.annotate_files(parser_name=parser_name,
+                               parsable_files=files)
+            output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    @staticmethod
     def make_kg_tagged(config=None, to_string=False):
         with Dug(config, to_string=to_string) as dug:
             output_base_path = storage.dug_kgx_path("")
@@ -860,5 +901,14 @@ def get_bacpac_files(config: RogerConfig, to_string=False) -> List[str]:
 
 def get_topmed_files(config: RogerConfig, to_string=False) -> List[str]:
     return get_versioned_files(config, "topmed", "topmed", data_store=config.dug_inputs.data_source, unzip=False)
+
+def get_heal_mds_files(config: RogerConfig, to_string=False) -> List[str]:
+    return get_versioned_files(config, "heal-mds-imports", "heal-mds-imports", data_store=config.dug_inputs.data_source, unzip=True)
+
+def get_heal_study_files(config: RogerConfig, to_string=False) -> List[str]:
+    return get_versioned_files(config, "heal-study-imports", "heal-study-imports", data_store=config.dug_inputs.data_source, unzip=True)
+
+def get_heal_research_program_files(config: RogerConfig, to_string=False) -> List[str]:
+    return get_versioned_files(config, "heal-research-programs", "heal-research-programs", data_store=config.dug_inputs.data_source, unzip=True)
 
 
