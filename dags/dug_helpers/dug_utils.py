@@ -831,6 +831,7 @@ def get_versioned_files(config: RogerConfig, data_format, output_file_path, data
     # clear dir
     storage.clear_dir(output_dir)
     data_sets = config.dug_inputs.data_sets
+    log.info(f"dataset: {data_sets}")
     pulled_files = []
     s3_utils = S3Utils(config.s3_config)
     for data_set in data_sets:
