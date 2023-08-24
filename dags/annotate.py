@@ -14,7 +14,6 @@ from dug_helpers.dug_utils import (
     get_kids_first_files,
     get_sprint_files,
     get_bacpac_files,
-    get_heal_mds_files,
     get_heal_study_files,
     get_heal_research_program_files
     )
