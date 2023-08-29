@@ -242,11 +242,20 @@ class Dug:
                 else:
                     continue
                 if identifier not in written_nodes:
+                    
                     nodes.append({
                         "id": identifier,
                         "category": category if isinstance(category, list) else [category],
                         "name": metadata.name
                     })
+                    if identifier == "UniProtKB:P08505":
+                        log.info(
+                            {
+                        "id": identifier,
+                        "category": category if isinstance(category, list) else [category],
+                        "name": metadata.name
+                    }       
+                        )
                     written_nodes.add(identifier)
                 # related to edge
                 edges.append(self.make_edge(
