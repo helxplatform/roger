@@ -10,5 +10,5 @@ PyYAML
 git+https://github.com/helxplatform/dug@mds-import
 elasticsearch==7.11.0
 orjson
-https://github.com/helxplatform/kg_utils.git@merging-str
+git+https://github.com/helxplatform/kg_utils@merging-str
 bmt==1.1.0
