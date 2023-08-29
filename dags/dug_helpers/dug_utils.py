@@ -244,7 +244,7 @@ class Dug:
                 if identifier not in written_nodes:
                     nodes.append({
                         "id": identifier,
-                        "category": category,
+                        "category": category if isinstance(category, list) else [category],
                         "name": metadata.name
                     })
                     written_nodes.add(identifier)
