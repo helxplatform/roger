@@ -247,15 +247,7 @@ class Dug:
                         "id": identifier,
                         "category": category if isinstance(category, list) else [category],
                         "name": metadata.name
-                    })
-                    if isinstance(category, str):
-                        log.info(
-                            {
-                        "id": identifier,
-                        "category": category if isinstance(category, list) else [category],
-                        "name": metadata.name
-                    }       
-                        )
+                    })                    
                     written_nodes.add(identifier)
                 # related to edge
                 edges.append(self.make_edge(
@@ -302,7 +294,7 @@ class Dug:
             })
             """ Link ontology identifiers we've found for this tag via nlp. """
             for identifier, metadata in tag.identifiers.items():
-                node_types = list(metadata.types) if isinstance(metadata.types, str) else metadata.types
+                node_types = [metadata.types] if isinstance(metadata.types, str) else metadata.types
                 synonyms = metadata.synonyms if metadata.synonyms else []
                 nodes.append({
                     "id": identifier,
