@@ -248,7 +248,7 @@ class Dug:
                         "category": category if isinstance(category, list) else [category],
                         "name": metadata.name
                     })
-                    if identifier == "UniProtKB:P08505":
+                    if isinstance(category, str):
                         log.info(
                             {
                         "id": identifier,
