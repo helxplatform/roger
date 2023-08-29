@@ -21,6 +21,7 @@ from dug.core.index import Index
 
 from roger.config import RogerConfig
 from roger.core import storage
+from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
 from utils.s3_utils import S3Utils
 
@@ -32,6 +33,7 @@ class Dug:
 
     def __init__(self, config: RogerConfig, to_string=True):
         self.config = config
+        self.bl_toolkit = BiolinkModel()
         dug_conf = config.to_dug_conf()
         self.factory = DugFactory(dug_conf)
         self.cached_session = self.factory.build_http_session()
@@ -242,10 +244,12 @@ class Dug:
                 else:
                     continue
                 if identifier not in written_nodes:
-                    
+                    if isinstance(category, str):
+                        element = self.bl_toolkit.toolkit.get_element(category)
+                        category = [element.class_uri or element.slot_uri]
                     nodes.append({
                         "id": identifier,
-                        "category": category if isinstance(category, list) else [category],
+                        "category": category,
                         "name": metadata.name
                     })                    
                     written_nodes.add(identifier)
@@ -294,12 +298,16 @@ class Dug:
             })
             """ Link ontology identifiers we've found for this tag via nlp. """
             for identifier, metadata in tag.identifiers.items():
-                node_types = [metadata.types] if isinstance(metadata.types, str) else metadata.types
+                if isinstance(metadata.types, str):
+                    element = self.bl_toolkit.toolkit.get_element(metadata.types)
+                    category = [element.class_uri or element.slot_uri]
+                else:
+                    category = metadata.types 
                 synonyms = metadata.synonyms if metadata.synonyms else []
                 nodes.append({
                     "id": identifier,
                     "name": metadata.label,
-                    "category": node_types,
+                    "category": category,
                     "synonyms": synonyms
                 })
                 nodes_written.add(identifier)
