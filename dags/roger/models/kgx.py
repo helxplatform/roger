@@ -325,8 +325,15 @@ class KGXModel:
             # Get all leaf types of this node
             node_types = list(
                 self.biolink.find_biolink_leaves(node['category']))
-            # pick the fist one to work on
-            node_type = node_types[0]
+            # pick the fist one to work on            
+            try:
+                node_type = node_types[0]
+            except:
+                log.info(node)
+                log.info(node_types)
+                raise Exception("error happeend")
+
+
             # make sure it is defined in the final dict
             category_schemas[node_type] = category_schemas.get(node_type, {})
 
