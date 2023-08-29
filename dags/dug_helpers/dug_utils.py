@@ -245,8 +245,8 @@ class Dug:
                     continue
                 if identifier not in written_nodes:
                     if isinstance(category, str):
-                        element = self.bl_toolkit.toolkit.get_element(category)
-                        category = [element.class_uri or element.slot_uri]
+                        bl_element = self.bl_toolkit.toolkit.get_element(category)
+                        category = [bl_element.class_uri or bl_element.slot_uri]
                     nodes.append({
                         "id": identifier,
                         "category": category,
@@ -299,8 +299,8 @@ class Dug:
             """ Link ontology identifiers we've found for this tag via nlp. """
             for identifier, metadata in tag.identifiers.items():
                 if isinstance(metadata.types, str):
-                    element = self.bl_toolkit.toolkit.get_element(metadata.types)
-                    category = [element.class_uri or element.slot_uri]
+                    bl_element = self.bl_toolkit.toolkit.get_element(metadata.types)
+                    category = [bl_element.class_uri or bl_element.slot_uri]
                 else:
                     category = metadata.types 
                 synonyms = metadata.synonyms if metadata.synonyms else []
