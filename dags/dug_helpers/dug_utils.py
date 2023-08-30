@@ -35,6 +35,7 @@ class Dug:
         self.config = config
         self.bl_toolkit = BiolinkModel()
         dug_conf = config.to_dug_conf()
+        self.element_mapping = config.indexing.element_mapping
         self.factory = DugFactory(dug_conf)
         self.cached_session = self.factory.build_http_session()
         self.event_loop = asyncio.new_event_loop()
@@ -335,6 +336,9 @@ class Dug:
             count += 1
             # Only index DugElements as concepts will be indexed differently in next step
             if not isinstance(element, DugConcept):
+                # override data-type with mapping values 
+                if element.data_type.lower() in self.element_mapping:
+                    element.data_type = self.element_mapping[element.data_type.lower()]
                 self.index_obj.index_element(element, index=self.variables_index)
             percent_complete = (count / total) * 100
             if percent_complete % 10 == 0:
