@@ -337,8 +337,8 @@ class Dug:
             # Only index DugElements as concepts will be indexed differently in next step
             if not isinstance(element, DugConcept):
                 # override data-type with mapping values 
-                if element.data_type.lower() in self.element_mapping:
-                    element.data_type = self.element_mapping[element.data_type.lower()]
+                if element.type.lower() in self.element_mapping:
+                    element.type = self.element_mapping[element.type.lower()]
                 self.index_obj.index_element(element, index=self.variables_index)
             percent_complete = (count / total) * 100
             if percent_complete % 10 == 0:
