@@ -326,12 +326,7 @@ class KGXModel:
             node_types = list(
                 self.biolink.find_biolink_leaves(node['category']))
             # pick the fist one to work on            
-            try:
-                node_type = node_types[0]
-            except:
-                log.info(node)
-                log.info(node_types)
-                raise Exception("error happeend")
+            node_type = node_types[0]
 
 
             # make sure it is defined in the final dict
