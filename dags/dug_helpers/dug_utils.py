@@ -85,7 +85,7 @@ class Dug:
             log.error(f"{exc_val} {exc_val} {exc_tb}")
             log.exception("Got an exception")
 
-    def annotate_files(self, parser_name, parsable_files):
+    def annotate_files(self, parser_name, parsable_files, output_dir=None):
         """
         Annotates a Data element file using a Dug parser.
         :param parser_name: Name of Dug parser to use.
@@ -94,7 +94,10 @@ class Dug:
         """
         dug_plugin_manager = get_plugin_manager()
         parser: Parser = get_parser(dug_plugin_manager.hook, parser_name)
-        output_base_path = storage.dug_annotation_path('')
+        if not output_dir:
+            output_base_path = storage.dug_annotation_path('')
+        else:
+            output_base_path = output_dir
         log.info("Parsing files")
         for parse_file in parsable_files:
             log.debug("Creating Dug Crawler object")
@@ -549,24 +552,42 @@ class DugUtil():
                 dug.cached_session.cache.clear()
 
     @staticmethod
-    def annotate_db_gap_files(config=None, to_string=False, files=None):
+    def annotate_db_gap_files(config=None, to_string=False, input_path="", output_path=""):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
+            if not input_path:
                 files = storage.dug_dd_xml_objects()
+            else:
+                # @TODO upload filtered files to repo
+                files = sorted([str(f) for f in 
+                                storage.get_files_recursive(
+                    lambda file_name: (
+                        not file_name.startswith('._') and file_name.endswith('.xml')),
+                        input_path)
+                        ])
             parser_name = "DbGaP"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_dir=output_path or None)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_anvil_files(config=None, to_string=False, files=None):
+    def annotate_anvil_files(config=None, to_string=False, input_path="", output_path=""):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
+            if not input_path:
                 files = storage.dug_anvil_objects()
+            else:
+                files = sorted([str(f) for f in storage.get_files_recursive(
+                        lambda file_name: (
+                            not file_name.startswith('GapExchange_')
+                            and file_name.endswith('.xml')),
+                        input_path)
+                        ])
+
             parser_name = "Anvil"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_dir=output_path or None)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
@@ -886,8 +907,8 @@ def get_sparc_files(config: RogerConfig, to_string=False) -> List[str]:
     return get_versioned_files(config, "sparc", "sparc", data_store=config.dug_inputs.data_source, unzip=True)
 
 
-def get_anvil_files(config: RogerConfig, to_string=False) -> List[str]:
-    return get_versioned_files(config, "anvil", "anvil", data_store=config.dug_inputs.data_source, unzip=True)
+def get_anvil_files(config: RogerConfig, to_string=False, output_path=None) -> List[str]:
+    return get_versioned_files(config, "anvil", output_path or "anvil", data_store=config.dug_inputs.data_source, unzip=True)
 
 
 def get_kids_first_files(config: RogerConfig, to_string=False) -> List[str]:
