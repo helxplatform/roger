@@ -7,9 +7,9 @@ from typing import Union
 from pathlib import Path
 
 
-from roger.config import config
+from roger.config import config, RogerConfig
 from roger.logger import get_logger
-from avalon.main import LakeFsWrapper, put_file 
+from avalon.mainoperations import put_files, LakeFsWrapper
 import lakefs_client
 
 
@@ -78,43 +78,33 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     }
     return k8s_executor_config
 
-def init_lakefs_client(config_raw):
+def init_lakefs_client(config: RogerConfig):
     configuration = lakefs_client.Configuration()
-    configuration.username = config_raw["credentials"]["access_key_id"]
-    configuration.password = config_raw["credentials"]["secret_access_key"]
-    configuration.host = config_raw["server"]["endpoint_url"]
+    configuration.username = config.lakefs_config.access_key_id
+    configuration.password = config.lakefs_config.secret_access_key
+    configuration.host = config.lakefs_config.host
     the_lake = LakeFsWrapper(configuration=configuration)
     return the_lake
 
-def avalon_commit_callback(context):
-    lakefs_creds = {
-        "credentials": {
-            "access_key_id": "AKIAJWNNN6NZ2GHPIB7Q",
-            "secret_access_key": "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"
-        },
-        "server": {
-            "endpoint_url": "https://lakefs.apps.renci.org/api/v1"
-        }
-    }
-    client = init_lakefs_client(config_raw=lakefs_creds)
-    # @TODO replace this file with something logical 
-    # here for test
-    local_path = "/opt/airflow/share/data/test_commit_file.txt"
-    with open(local_path, 'w') as stream:
-        stream.write(
-            f"""{context}"""
-        )
-    put_file(
-        local_path=local_path,
-        remote_path=context['ti'].task_id + '/test_commit_file.txt',
-        repo='roger-test',
-        branch='main',
-        pipeline_id=context['dag'].dag_id,
-        task_docker_image="test",
-        task_args=["task"],
-        task_name=context['ti'].task_id,
-        lake_fs_client=client
-    )
+def avalon_commit_callback(context):    
+    client = init_lakefs_client(config=config)
+    branches = client.list_branches('test-repo')
+    print(branches)
+    # with open(local_path, 'w') as stream:
+    #     stream.write(
+    #         f"""{context}"""
+    #     )
+    # put_file(
+    #     local_path=local_path,
+    #     remote_path=context['ti'].task_id + '/test_commit_file.txt',
+    #     repo='roger-test',
+    #     branch='main',
+    #     pipeline_id=context['dag'].dag_id,
+    #     task_docker_image="test",
+    #     task_args=["task"],
+    #     task_name=context['ti'].task_id,
+    #     lake_fs_client=client
+    # )
 
 
 def create_python_task(dag, name, a_callable, func_kwargs=None):
