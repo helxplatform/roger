@@ -149,6 +149,6 @@ s3:
 
 lakefs_config:
   enabled: false
-  acess_key_id: ""
+  access_key_id: ""
   secret_access_key: ""
   host: ""
