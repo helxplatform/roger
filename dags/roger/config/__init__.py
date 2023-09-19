@@ -137,6 +137,7 @@ class IndexingConfig(DictLike):
             for key in filter(lambda k: k != "enabled", self.node_to_element_queries.keys()):
                 final_node_to_element_queries[key] = self.node_to_element_queries[key]
         self.node_to_element_queries = final_node_to_element_queries
+        print(self.node_to_element_queries)
 
 @dataclass
 class ElasticsearchConfig(DictLike):
