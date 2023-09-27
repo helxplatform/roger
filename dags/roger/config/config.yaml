@@ -78,7 +78,7 @@ indexing:
     cde:
       node_type: biolink:Publication
       curie_prefix: "HEALCDE"
-      array_to_string: 
+      list_field_choose_first: 
         - "files"
       attribute_mapping:
         name: "name"
