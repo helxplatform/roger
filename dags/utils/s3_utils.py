@@ -30,7 +30,6 @@ class S3Utils:
         yield bucket
 
     def get(self, remote_file_name: str, local_file_name: str):
-        print(remote_file_name)
         with self.connect() as bucket:
             bucket.download_file(remote_file_name, local_file_name)
 
