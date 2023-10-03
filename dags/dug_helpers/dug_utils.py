@@ -32,8 +32,6 @@ log = get_logger()
 class Dug:
 
     def __init__(self, config: RogerConfig, to_string=True):
-        import time
-        time.sleep(600)
         self.config = config
         self.bl_toolkit = BiolinkModel()
         dug_conf = config.to_dug_conf()
