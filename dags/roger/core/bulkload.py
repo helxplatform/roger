@@ -351,6 +351,7 @@ class BulkLoad:
                 file_name_type_part = x.replace(bulk_path_root, '').split('.')[0].split('~')[1]
                 all_labels = file_name_type_part + ":" + ":".join([v.lstrip("biolink:") for v in self.biolink.toolkit.get_ancestors("biolink:" + file_name_type_part, reflexive=False, formatted=True )] )
                 nodes_with_type.append(f"{ all_labels} {x}")
+            args.extend(("-N " + " -N ".join(nodes_with_type)).split())
         if len(edges) > 0:
             bulk_path_root = storage.bulk_path('edges') + os.path.sep
             edges_with_type = [f"{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0].split('~')[1]} {x}"
