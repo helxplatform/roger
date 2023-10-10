@@ -4,7 +4,7 @@ from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 
 from dug_helpers.dug_utils import (
-    DugUtil, 
+    DugUtil,
     get_topmed_files,
     get_dbgap_files,
     get_nida_files,
@@ -79,7 +79,7 @@ with DAG(
             prepare_files = create_python_task(dag, "get_bacpac_files", get_bacpac_files)
             annotate_files = create_python_task(dag, "annotate_bacpac_files",
                                                 DugUtil.annotate_bacpac_files)        
-        
+
         elif data_set.startswith("heal-studies"):
             prepare_files = create_python_task(dag, "get_heal_study_files", get_heal_study_files)
             annotate_files = create_python_task(dag, "annotate_heal_study_files",
@@ -92,7 +92,6 @@ with DAG(
             annotate_files = create_python_task(dag, "annotate_heal_research_program_files",
                                                 DugUtil.annotate_heal_research_program_files)
 
-        
         intro >> prepare_files
         prepare_files >> clear_annotation_items
 

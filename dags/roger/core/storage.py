@@ -233,21 +233,12 @@ def dug_input_files_path(name) -> pathlib.Path:
         log.info(f"Input file path: {path} already exists")
     return path
 
-def dug_topmed_path(name):
-    """ Topmed source files"""
-    return dug_input_files_path('topmed') / name
-
-def dug_topmed_objects():
-    topmed_file_pattern = str(dug_topmed_path("topmed_*.csv"))
+def dug_topmed_objects(input_data_path=None):
+    "Return list of TOPMed source files"
+    if not input_data_path:
+        input_data_path = str(dug_input_files_path('topmed'))
+    topmed_file_pattern = os.path.join(input_data_path, "topmed_*.csv")
     return sorted(glob.glob(topmed_file_pattern))
-
-def dug_nida_path(name):
-    """ NIDA source files"""
-    return dug_input_files_path('nida') / name
-
-def dug_sparc_path(name):
-    """ NIDA source files"""
-    return dug_input_files_path('sparc') / name
 
 def dug_anvil_path():
     """Anvil source files"""
@@ -281,62 +272,78 @@ def dug_kfdrc_path():
     """Anvil source files"""
     return dug_input_files_path('kfdrc')
 
-def dug_nida_objects():
-    nida_file_pattern = str(dug_nida_path("NIDA-*.xml"))
+def dug_nida_objects(input_data_path=None):
+    "Return list of NIDA source files"
+    if not input_data_path:
+        input_data_path = str(dug_input_files_path('nida'))
+    nida_file_pattern = os.path.join(input_data_path, "NIDA-*.xml")
     return sorted(glob.glob(nida_file_pattern))
 
-def dug_sparc_objects():
-    file_pattern = str(dug_sparc_path("scicrunch/*.xml"))
+def dug_sparc_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = str(dug_input_files_path('sparc'))
+    file_pattern = os.path.join(input_data_path, "scicrunch/*.xml")
     return sorted(glob.glob(file_pattern))
 
-def dug_anvil_objects():
-    file_path = dug_anvil_path()
+def dug_anvil_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_anvil_path()
     files = get_files_recursive(
         lambda file_name: (
             not file_name.startswith('GapExchange_')
             and file_name.endswith('.xml')),
-        file_path)
+        input_data_path)
     return sorted([str(f) for f in files])
 
-def dug_sprint_objects():
-    file_path = dug_sprint_path()
+def dug_sprint_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_sprint_path()
     files = get_files_recursive(
-        lambda file_name: file_name.endswith('.xml'), file_path)
+        lambda file_name: file_name.endswith('.xml'), input_data_path)
     return sorted([str(f) for f in files])
 
-def dug_bacpac_objects():
-    file_path = dug_bacpac_path()
+def dug_bacpac_objects(input_data_path=None):
+    "Return list of BACPAC source files"
+    if not input_data_path:
+        input_data_path = dug_bacpac_path()
     files = get_files_recursive(
-        lambda file_name: file_name.endswith('.xml'), file_path)
+        lambda file_name: file_name.endswith('.xml'), input_data_path)
     return sorted([str(f) for f in files])
 
-def dug_crdc_objects():
-    file_path = dug_crdc_path()
-    files = get_files_recursive(
-        lambda file_name: (
-            not file_name.startswith('GapExchange_')
-            and file_name.endswith('.xml')),
-        file_path)
-    return sorted([str(f) for f in files])
-
-def dug_heal_study_objects():
-    file_path = dug_heal_study_path()
-    files = get_files_recursive(lambda file_name : file_name.endswith('.xml'), file_path)
-    return sorted([str(f) for f in files])
-
-def dug_heal_research_program_objects():
-    file_path = dug_heal_research_program_path()
-    files = get_files_recursive(lambda file_name : file_name.endswith('.xml'), file_path)
-    return sorted([str(f) for f in files])
-
-
-def dug_kfdrc_objects():
-    file_path = dug_kfdrc_path()
+def dug_crdc_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_crdc_path()
     files = get_files_recursive(
         lambda file_name: (
             not file_name.startswith('GapExchange_')
             and file_name.endswith('.xml')),
-        file_path)
+        input_data_path)
+    return sorted([str(f) for f in files])
+
+def dug_heal_study_objects(input_data_path=None):
+    "Return list of HEAL study source files"
+    if not input_data_path:
+        input_data_path = dug_heal_study_path()
+    files = get_files_recursive(lambda file_name : file_name.endswith('.xml'),
+                                input_data_path)
+    return sorted([str(f) for f in files])
+
+def dug_heal_research_program_objects(input_data_path=None):
+    "Return list of HEAL research program source files"
+    if not input_data_path:
+        input_data_path = dug_heal_research_program_path()
+    files = get_files_recursive(lambda file_name : file_name.endswith('.xml'),
+                                input_data_path)
+    return sorted([str(f) for f in files])
+
+def dug_kfdrc_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_kfdrc_path()
+    files = get_files_recursive(
+        lambda file_name: (
+            not file_name.startswith('GapExchange_')
+            and file_name.endswith('.xml')),
+        input_data_path)
     return sorted([str(f) for f in files])
 
 
@@ -356,13 +363,14 @@ def get_files_recursive(file_name_filter, current_dir):
             file_paths += [child]
     return file_paths
 
-def dug_dd_xml_objects():
-    file_path = dug_dd_xml_path()
+def dug_dd_xml_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_dd_xml_path()
     files = get_files_recursive(
         lambda file_name: (
             not file_name.startswith('._')
             and file_name.endswith('.xml')),
-        file_path)
+        input_data_path)
     return sorted([str(f) for f in files])
 
 def copy_file_to_dir(file_location, dir_name):
