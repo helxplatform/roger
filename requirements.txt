@@ -10,3 +10,4 @@ git+https://github.com/helxplatform/dug@dug-merge
 orjson
 kg-utils==0.0.6
 bmt==1.1.0
+git+https://github.com/helxplatform/avalon.git@v0.0.2

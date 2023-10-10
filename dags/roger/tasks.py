@@ -6,6 +6,18 @@ from airflow.utils.dates import days_ago
 from roger.config import config
 from roger.logger import get_logger
 
+from airflow.models import DAG
+from typing import Union
+from pathlib import Path
+
+from roger.config import config
+
+from roger.config import config, RogerConfig
+from roger.logger import get_logger
+from avalon.mainoperations import put_files, LakeFsWrapper
+import lakefs_client
+
+
 default_args = {
     'owner': 'RENCI',
     'start_date': days_ago(1)
@@ -70,8 +82,35 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     }
     return k8s_executor_config
 
+def init_lakefs_client(config: RogerConfig):
+    configuration = lakefs_client.Configuration()
+    configuration.username = config.lakefs_config.access_key_id
+    configuration.password = config.lakefs_config.secret_access_key
+    configuration.host = config.lakefs_config.host
+    the_lake = LakeFsWrapper(configuration=configuration)
+    return the_lake
 
-def create_python_task (dag, name, a_callable, func_kwargs=None):
+def avalon_commit_callback(context):    
+    client = init_lakefs_client(config=config)
+    branches = client.list_branches('test-repo')
+    print(branches)
+    # with open(local_path, 'w') as stream:
+    #     stream.write(
+    #         f"""{context}"""
+    #     )
+    # put_file(
+    #     local_path=local_path,
+    #     remote_path=context['ti'].task_id + '/test_commit_file.txt',
+    #     repo='roger-test',
+    #     branch='main',
+    #     pipeline_id=context['dag'].dag_id,
+    #     task_docker_image="test",
+    #     task_args=["task"],
+    #     task_name=context['ti'].task_id,
+    #     lake_fs_client=client
+    # )
+
+def create_python_task(dag, name, a_callable, func_kwargs=None):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -79,9 +118,9 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
     :param a_callable: The code to run in this task.
     """
     op_kwargs = {
-            "python_callable": a_callable,
-            "to_string": True
-        }
+        "python_callable": a_callable,
+        "to_string": True
+    }
     if func_kwargs is None:
         func_kwargs = dict()
     op_kwargs.update(func_kwargs)
@@ -91,7 +130,6 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         op_kwargs=op_kwargs,
         executor_config=get_executor_config(),
         dag=dag,
-        provide_context=True
+        provide_context=True,
+        on_success_callback=avalon_commit_callback
     )
-
-
