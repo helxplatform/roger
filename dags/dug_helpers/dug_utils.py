@@ -574,7 +574,7 @@ class DugUtil():
             parser_name = "Anvil"
             dug.annotate_files(parser_name=parser_name,
                                parsable_files=files,
-                               output_data_path=None)
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
