@@ -33,7 +33,6 @@ def task_wrapper(python_callable, **kwargs):
     """
     # get dag config provided
     dag_run = kwargs.get('dag_run')
-    dag_conf = {}
     logger = get_logger()
     if dag_run:
         dag_conf = dag_run.conf
@@ -124,6 +123,13 @@ def create_python_task(dag, name, a_callable, func_kwargs=None):
     if func_kwargs is None:
         func_kwargs = dict()
     op_kwargs.update(func_kwargs)
+    config: RogerConfig = config
+    if config.lakefs_config.enabled:
+        op_kwargs.update({
+            "input_data_path": f"{config.data_root}/previous_task",
+            "output_data_path": f"{config.data_root}/{name}"
+        })
+   
     return PythonOperator(
         task_id=name,
         python_callable=task_wrapper,
