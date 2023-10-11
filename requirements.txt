@@ -1,6 +1,5 @@
 boto3==1.18.23
 botocore==1.21.23
-#black==21.10b0
 elasticsearch==8.5.2
 flatten-dict
 redisgraph-bulk-loader==0.12.3
@@ -11,3 +10,4 @@ orjson
 kg-utils==0.0.6
 bmt==1.1.0
 git+https://github.com/helxplatform/avalon.git@pydantic-upgrade
+psycopg2
