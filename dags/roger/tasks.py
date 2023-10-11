@@ -122,8 +122,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None):
     }
     if func_kwargs is None:
         func_kwargs = dict()
-    op_kwargs.update(func_kwargs)
-    config: RogerConfig = config
+    op_kwargs.update(func_kwargs)    
     if config.lakefs_config.enabled:
         op_kwargs.update({
             "input_data_path": f"{config.data_root}/previous_task",
