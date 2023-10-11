@@ -116,7 +116,7 @@ class IndexingConfig(DictLike):
         "anat_to_disease": ["anatomical_entity", "disease"],
         "anat_to_pheno": ["anatomical_entity", "phenotypic_feature"],
     })
-    tranql_endpoint: str = "http://tranql:8081/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+    tranql_endpoint: str = "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
     # by default skips node to element queries
     node_to_element_queries: dict = field(default_factory=lambda: {})
     element_mapping: str = ""
@@ -144,6 +144,8 @@ class ElasticsearchConfig(DictLike):
     username: str = "elastic"
     password: str = ""
     nboost_host: str = ""
+    scheme: str = "http"
+    ca_path: str = ""
 
 
 
@@ -174,6 +176,8 @@ class RogerConfig(DictLike):
             elastic_host=self.elasticsearch.host,
             elastic_password=self.elasticsearch.password,
             elastic_username=self.elasticsearch.username,
+            elastic_scheme=self.elasticsearch.scheme,
+            elastic_ca_path=self.elasticsearch.ca_path,
             redis_host=self.redisgraph.host,
             redis_password=self.redisgraph.password,
             redis_port=self.redisgraph.port,

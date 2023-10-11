@@ -13,7 +13,7 @@ data_root: "/Users/schreepc/Projects/helxplatform/roger/roger/test/data"
 dug_data_root: dug_helpers/dug_data/topmed_data
 base_data_uri: https://stars.renci.org/var/kgx_data/trapi-1.0/
 kgx:
-  biolink_model_version: 1.5.0
+  biolink_model_version: test
 
 #https://github.com/RedisGraph/redisgraph-bulk-loader/blob/master/redisgraph_bulk_loader/bulk_insert.py#L43
 bulk_loader:
@@ -54,7 +54,7 @@ indexing:
     "phen_to_anat": ["phenotypic_feature", "anatomical_entity"]
     "anat_to_disease": ["anatomical_entity", "disease"]
     "anat_to_pheno": ["anatomical_entity", "phenotypic_feature"]
-  tranql_endpoint: "http://tranql:8081/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+  tranql_endpoint: "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
 
 elasticsearch:
   host: elasticsearch
