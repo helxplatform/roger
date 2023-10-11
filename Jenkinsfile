@@ -70,7 +70,7 @@ spec:
             steps {
                 script {
                     container(name: 'kaniko', shell: '/busybox/sh') {
-                        if env.BRANCH_NAME == "main"{
+                        if (env.BRANCH_NAME == "main") {
                           // Tag with latest and version iff when pushed to master
                           kaniko.buildAndPush("./Dockerfile", ["$IMAGE_NAME:$TAG1", "$IMAGE_NAME:$TAG2", "$IMAGE_NAME:$TAG3", "$IMAGE_NAME:$TAG4"])
                         } else {
