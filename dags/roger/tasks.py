@@ -7,6 +7,7 @@ from roger.config import config
 from roger.logger import get_logger
 
 from airflow.models import DAG
+from airflow.models.dag import DagContext
 from typing import Union
 from pathlib import Path
 
@@ -89,25 +90,21 @@ def init_lakefs_client(config: RogerConfig):
     the_lake = LakeFsWrapper(configuration=configuration)
     return the_lake
 
-def avalon_commit_callback(context):    
+def avalon_commit_callback(context: DagContext):    
     client = init_lakefs_client(config=config)
     branches = client.list_branches('test-repo')
-    print(branches)
-    # with open(local_path, 'w') as stream:
-    #     stream.write(
-    #         f"""{context}"""
-    #     )
-    # put_file(
-    #     local_path=local_path,
-    #     remote_path=context['ti'].task_id + '/test_commit_file.txt',
-    #     repo='roger-test',
-    #     branch='main',
-    #     pipeline_id=context['dag'].dag_id,
-    #     task_docker_image="test",
-    #     task_args=["task"],
-    #     task_name=context['ti'].task_id,
-    #     lake_fs_client=client
-    # )
+    the_dag = context['dag']
+    the_task = cotenxt['task']
+    
+
+def preexecute(context: DagContext):
+    print("""
+        - Figures out the task name and id,
+        - find its data dependencies
+        - clean up and create in and out dir
+        - put dependency data in input dir
+        - if for some reason data was not found raise an execption
+          """)
 
 def create_python_task(dag, name, a_callable, func_kwargs=None):
     """ Create a python task.
@@ -128,13 +125,22 @@ def create_python_task(dag, name, a_callable, func_kwargs=None):
             "input_data_path": f"{config.data_root}/previous_task",
             "output_data_path": f"{config.data_root}/{name}"
         })
-   
-    return PythonOperator(
+        return PythonOperator(
         task_id=name,
         python_callable=task_wrapper,
         op_kwargs=op_kwargs,
         executor_config=get_executor_config(),
         dag=dag,
         provide_context=True,
-        on_success_callback=avalon_commit_callback
-    )
+        on_success_callback=avalon_commit_callback,
+        preexecute=pre_execute
+        )
+    else:
+        return PythonOperator(
+        task_id=name,
+        python_callable=task_wrapper,
+        op_kwargs=op_kwargs,
+        executor_config=get_executor_config(),
+        dag=dag,
+        provide_context=True        
+        )
