@@ -94,10 +94,12 @@ def avalon_commit_callback(context: DagContext):
     client = init_lakefs_client(config=config)
     branches = client.list_branches('test-repo')
     the_dag = context['dag']
-    the_task = cotenxt['task']
-    
+    the_task = context['task']
+    print(context)
+    print(the_dag.id)
+    print(the_task.id)
 
-def preexecute(context: DagContext):
+def setup_input_data(context: DagContext):
     print("""
         - Figures out the task name and id,
         - find its data dependencies
@@ -133,7 +135,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None):
         dag=dag,
         provide_context=True,
         on_success_callback=avalon_commit_callback,
-        preexecute=pre_execute
+        preexecute=setup_input_data
         )
     else:
         return PythonOperator(
