@@ -99,7 +99,7 @@ def avalon_commit_callback(context: DagContext):
     print(the_dag.id)
     print(the_task.id)
 
-def setup_input_data(**kwargs):
+def setup_input_data(context):
     print("""
         - Figures out the task name and id,
         - find its data dependencies
@@ -107,7 +107,7 @@ def setup_input_data(**kwargs):
         - put dependency data in input dir
         - if for some reason data was not found raise an execption
           """)
-    print(kwargs)
+    print(context)
 
 def create_python_task(dag, name, a_callable, func_kwargs=None):
     """ Create a python task.
