@@ -136,7 +136,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None):
         dag=dag,
         provide_context=True,
         on_success_callback=avalon_commit_callback,
-        pre_execute =setup_input_data
+        pre_execute=setup_input_data
         )
     else:
         return PythonOperator(
