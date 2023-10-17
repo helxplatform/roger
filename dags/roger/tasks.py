@@ -120,6 +120,7 @@ def setup_input_data(context, **kwargs):
         - put dependency data in input dir
         - if for some reason data was not found raise an execption
           """)
+    print(kwargs)
     input_dir = kwargs['input_data_path']
     os.makedirs(input_dir, exist_ok=True)
     # Clear up files
