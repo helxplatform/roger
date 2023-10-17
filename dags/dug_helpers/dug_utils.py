@@ -714,13 +714,9 @@ class DugUtil():
         
         log.info(f"Input data path is: {input_data_path}")
         with Dug(config, to_string=to_string) as dug:
-            if not input_data_path:
-                files = storage.dug_bacpac_objects(
-                    input_data_path=None)
-            else:
-                files = storage.get_files_recursive(
-                    lambda x: True, input_data_path
-                )
+            files = storage.dug_bacpac_objects(
+                input_data_path=input_data_path)
+               
             parser_name = "BACPAC"
             log.info(files)
             dug.annotate_files(parser_name=parser_name,
