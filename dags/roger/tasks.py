@@ -100,7 +100,7 @@ def create_pipeline_subdag(self, pipeline_class: type, config: RogerConfig,
     "Emit an Airflow dag pipeline for the specified pipeline_class"
 
     subdag = DAG(
-        dag_id=f"annotate_{self.pipeline_name}"
+        dag_id=f"annotate_{self.pipeline_name}",
         default_args=default_args,
         schedule_interval=None)
     with pipeline_class(config=config, **kwargs) as pipeline:
