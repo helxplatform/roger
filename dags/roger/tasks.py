@@ -120,22 +120,34 @@ def setup_input_data(context, exec_conf):
         - put dependency data in input dir
         - if for some reason data was not found raise an execption
           """)
+    ##
     print(config)
     print(exec_conf)
+    ##
+    # Serves as a location where files the task will work on are placed.
     input_dir = exec_conf['input_data_path']
-    os.makedirs(input_dir, exist_ok=True)
-    # Clear up files
+    
+    # Clear up files from previous run etc...
     files_to_clean = glob.glob(input_dir + '*')
     for f in files_to_clean:
         shutil.rmtree(f)
+    
+    # create input dir 
+    os.makedirs(input_dir, exist_ok=True)
+
+    
     # Download files from lakefs and store them in this new input_path
     client = init_lakefs_client(config=config)
-    # ok get _files and put file !! Need to allow passing repo and branch name on avalon
-    # this call should just dump all the inputs 
+    
+    # If input repo is provided use that as source of files
     if exec_conf.get('input_repo'):
         input_repo = exec_conf['input_repo']
         input_branch = exec_conf['input_branch']
         remote_path = '/' # root path to get all sub dirs
+    # else figure out what to pull from the repo based on task name etc...
+    else:
+        # @TODO pull in data using upstream task id 
+        pass
     get_files(
         local_path=input_dir,
         remote_path=remote_path,
