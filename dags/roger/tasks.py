@@ -11,7 +11,7 @@ from airflow.models.dag import DagContext
 from typing import Union
 from pathlib import Path
 import glob
-
+import shutil
 from roger.config import config
 
 from roger.config import config, RogerConfig
@@ -127,7 +127,7 @@ def setup_input_data(context, exec_conf):
     # Clear up files
     files_to_clean = glob.glob(input_dir + '*')
     for f in files_to_clean:
-        os.remove(f)
+        shutil.rmtree(f)
     # Download files from lakefs and store them in this new input_path
     client = init_lakefs_client(config=config)
     # ok get _files and put file !! Need to allow passing repo and branch name on avalon
