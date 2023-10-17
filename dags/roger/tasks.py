@@ -41,6 +41,7 @@ def task_wrapper(python_callable, **kwargs):
         dag_conf = dag_run.conf
         # remove this since to send every other argument to the python callable.
         del kwargs['dag_run']
+    logger.info("args+++++++++++" + kwargs)
     # overrides values
     config.dag_run = dag_run
     return python_callable(config=config, **kwargs)
@@ -172,6 +173,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     :param a_callable: The code to run in this task.
     """
     op_kwargs = {
+        "python_callable": a_callable,
         "to_string": True,
     }
     data_dir = os.getenv("ROGER_DATA_DIR")
@@ -197,7 +199,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
             pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
             # if this is not defined , we can use the context (dag context) to resolve the previous task 
             # output dir. 
-        print(f"OP ARGS: {op_kwargs}")
+            
         return PythonOperator(
         task_id=name,
         python_callable=task_wrapper,
