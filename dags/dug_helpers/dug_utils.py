@@ -711,6 +711,8 @@ class DugUtil():
     @staticmethod
     def annotate_bacpac_files(config=None, to_string=False, 
                               input_data_path=None, output_data_path=None):
+        
+        log.info(f"Input data path is: {input_data_path}")
         with Dug(config, to_string=to_string) as dug:
             if not input_data_path:
                 files = storage.dug_bacpac_objects(
