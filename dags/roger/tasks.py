@@ -143,7 +143,7 @@ def setup_input_data(context, exec_conf):
     if exec_conf.get('input_repo'):
         input_repo = exec_conf['input_repo']
         input_branch = exec_conf['input_branch']
-        remote_path = '/' # root path to get all sub dirs
+        remote_path = '*' # root path to get all sub dirs
     # else figure out what to pull from the repo based on task name etc...
     else:
         # @TODO pull in data using upstream task id 
