@@ -1,9 +1,10 @@
 import os
 
 from airflow.operators.python import PythonOperator
+from airflow.operators.empty import EmptyOperator
 from airflow.utils.dates import days_ago
 
-from roger.config import config
+from roger.config import config, RogerConfig
 from roger.logger import get_logger
 
 default_args = {
@@ -94,4 +95,47 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         provide_context=True
     )
 
+def create_pipeline_subdag(self, pipeline_class: type, config: RogerConfig,
+                           **kwargs):
+    "Emit an Airflow dag pipeline for the specified pipeline_class"
 
+    subdag = DAG(
+        dag_id=f"annotate_{self.pipeline_name}"
+        default_args=default_args,
+        schedule_interval=None)
+    with pipeline_class(config=config, **kwargs) as pipeline:
+        name = pipeline.pipeline_name
+        annotate_task = create_python_task(
+            subdag,
+            f"annotate_{name}_files",
+            pipeline.annotate)
+
+        index_variables_task = create_python_task(
+            subdag,
+            f"index_{name}_variables",
+            lambda: None) # TODO
+        index_variables_task.set_upstream(annotate_task)
+
+        make_kgx_task = create_python_task(
+            subdag,
+            f"make_kgx_{name}",
+            lambda: None) # TODO
+        make_kgx_task.set_upstream(annotate_task)
+
+        crawl_task = create_python_task(
+            subdag,
+            f"crawl_{name}",
+            lambda: None) #TODO
+        crawl_task.set_upstream(annotate_task)
+
+        index_concepts_task = create_python_task(
+            subdag,
+            f"index_{name}_concepts",
+            lambda: None) # TODO
+        index_concepts_task.set_upstream(crawl_task)
+
+        complete_task = EmptyOperator(task_id=f"complete_{name}")
+        complete_task.set_upstream(
+            make_kgx_task, index_concepts_task, index_variables_task)
+
+    return subdag
