@@ -21,6 +21,6 @@ with DAG(
     """Build workflow tasks."""
     make_kg_tagged = create_python_task(dag, "make_tagged_kgx", DugUtil.make_kg_tagged)
     annotate_files = create_python_task(dag, "annotate_bacpac_files",
-                                                DugUtil.annotate_bacpac_files)        
+                                                DugUtil.annotate_bacpac_files,input_repo='bacpac', input_branch='v1.0')        
 
     annotate_files >> make_kg_tagged
