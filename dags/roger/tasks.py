@@ -163,8 +163,9 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
         "python_callable": a_callable,
         "to_string": True,
     }
+    data_dir = os.getenv("ROGER_DATA_DIR")
     data_paths = {
-            "input_data_path": f"{config.data_root}/previous_task"
+            "input_data_path": f"{data_dir}/previous_task"
         }
     if func_kwargs is None:
         func_kwargs = dict()
@@ -173,7 +174,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
         op_kwargs.update(data_paths)
 
         pre_exec_conf = {
-            "input_data_path": f"{config.data_root}/previous_task",
+            "input_data_path": f"{data_dir}/previous_task",
             'input_repo': input_repo,
             'input_branch': input_branch
         }
