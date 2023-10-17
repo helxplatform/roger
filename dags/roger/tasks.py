@@ -112,7 +112,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # 2. make sure a commit happens.
     # 3. merge that branch to master branch. 
 
-def setup_input_data(context, **kwargs):
+def setup_input_data(context, exec_conf):
     print("""
         - Figures out the task name and id,
         - find its data dependencies
@@ -120,8 +120,9 @@ def setup_input_data(context, **kwargs):
         - put dependency data in input dir
         - if for some reason data was not found raise an execption
           """)
-    print(kwargs)
-    input_dir = kwargs['input_data_path']
+    print(config)
+    print(exec_conf)
+    input_dir = exec_conf['input_data_path']
     os.makedirs(input_dir, exist_ok=True)
     # Clear up files
     files_to_clean = glob.glob(input_dir + '*')
@@ -131,9 +132,9 @@ def setup_input_data(context, **kwargs):
     client = init_lakefs_client(config=config)
     # ok get _files and put file !! Need to allow passing repo and branch name on avalon
     # this call should just dump all the inputs 
-    if kwargs.get('input_repo'):
-        input_repo = kwargs['input_repo']
-        input_branch = kwargs['input_branch']
+    if exec_conf.get('input_repo'):
+        input_repo = exec_conf['input_repo']
+        input_branch = exec_conf['input_branch']
         remote_path = '/' # root path to get all sub dirs
     get_files(
         local_path=input_dir,
@@ -181,7 +182,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
         if input_repo and input_branch:
             # if the task is a root task , begining of the dag... 
             # and we want to pull data from a different repo. 
-            pre_exec = partial(setup_input_data, kwargs=pre_exec_conf)
+            pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
             # if this is not defined , we can use the context (dag context) to resolve the previous task 
             # output dir. 
             
