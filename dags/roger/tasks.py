@@ -96,9 +96,21 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     client = init_lakefs_client(config=config)
     # now files have been processed, 
     # this part should
-    1. put files into a temp branch.
-    2. make sure a commit happens.
-    3. merge that branch to master branch. 
+    run_id = context['ti'].run_id
+    task_id = context['ti'].task_id
+    dag_id = context['ti'].dag_id
+    executor_config = context['ti'].executor_config
+    print(f"""
+        run id: {run_id}    
+        task_id : {task_id}
+        dag_id: {dag_id}
+        executor_config: {executor_config}
+    """)
+    
+
+    # 1. put files into a temp branch.
+    # 2. make sure a commit happens.
+    # 3. merge that branch to master branch. 
 
 def setup_input_data(context, **kwargs):
     print("""
@@ -133,7 +145,7 @@ def setup_input_data(context, **kwargs):
         metafilename=None,
         lake_fs_client=client
     )
-    
+
     
 
     
