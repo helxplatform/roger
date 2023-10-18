@@ -181,15 +181,15 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
         "python_callable": a_callable,
         "to_string": True,
     }
-    data_dir = os.getenv("ROGER_DATA_DIR")
-    data_paths = {
-            "input_data_path": f"{data_dir}/previous_task"
-        }
+    data_dir = os.getenv("ROGER_DATA_DIR")    
     if func_kwargs is None:
         func_kwargs = dict()
     op_kwargs.update(func_kwargs)  
     if config.lakefs_config.enabled:
-        op_kwargs.update(data_paths)
+        # update function args with input data path
+        op_kwargs.update({
+            "input_data_path":  Path(f"{data_dir}/previous_task")
+        })
 
         pre_exec_conf = {
             "input_data_path": f"{data_dir}/previous_task",
