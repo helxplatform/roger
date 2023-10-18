@@ -41,7 +41,7 @@ def task_wrapper(python_callable, **kwargs):
         dag_conf = dag_run.conf
         # remove this since to send every other argument to the python callable.
         del kwargs['dag_run']
-    logger.info("args+++++++++++" + kwargs)
+    logger.info("args+++++++++++" + str(kwargs))
     # overrides values
     config.dag_run = dag_run
     return python_callable(config=config, **kwargs)
