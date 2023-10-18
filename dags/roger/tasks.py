@@ -42,8 +42,11 @@ def task_wrapper(python_callable, **kwargs):
         dag_conf = dag_run.conf
         # remove this since to send every other argument to the python callable.
         del kwargs['dag_run']
+    input_data_path = generate_dir_name_from_task_instance(kwargs['ti'], roger_config=config)
+    # cast it to a path object
+    input_data_path = Path(input_data_path) if input_data_path else input_data_path 
     func_args = {
-        'input_data_path': generate_dir_name_from_task_instance(kwargs['ti'], roger_config=config),
+        'input_data_path': input_data_path,
         'output_data_path': kwargs.get('output_data_path'),
         'to_string': kwargs.get('to_string')
     }
