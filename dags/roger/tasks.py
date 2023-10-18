@@ -46,8 +46,7 @@ def task_wrapper(python_callable, **kwargs):
         'output_data_path': kwargs.get('output_data_path'),
         'to_string': kwargs.get('to_string')
     }
-    logger.info(f"Task function args:
-                {func_args}")
+    logger.info(f"Task function args: {func_args}")
     # overrides values
     config.dag_run = dag_run
     return python_callable(config=config, **func_args)
