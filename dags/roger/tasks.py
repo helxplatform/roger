@@ -8,6 +8,7 @@ from roger.logger import get_logger
 
 from airflow.models import DAG
 from airflow.models.dag import DagContext
+from airflow.models.taskinstance import TaskInstance
 from typing import Union
 from pathlib import Path
 import glob
@@ -118,6 +119,14 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # 2. make sure a commit happens.
     # 3. merge that branch to master branch. 
 
+def generate_dir_name_from_task_instance(task_instance: TaskInstance):
+    root_data_dir =  os.getenv("ROGER_DATA_DIR").rstrip('/')
+    task_id = task_instance.task_id
+    dag_id = task_instance.dag_id
+    run_id = task_instance.run_id
+    try_number = task_instance._try_number
+    return f"{root_data_dir}/{dag_id}_{task_id}_{run_id}_{try_number}"
+
 def setup_input_data(context, exec_conf):
     print("""
         - Figures out the task name and id,
@@ -131,8 +140,9 @@ def setup_input_data(context, exec_conf):
     print(exec_conf)
     ##
     # Serves as a location where files the task will work on are placed.
-    input_dir = exec_conf['input_data_path']
-    
+    # computed as ROGER_DATA_DIR + /current task instance name_input_dir
+
+    input_dir = generate_dir_name_from_task_instance(context['ti'])
     # Clear up files from previous run etc...
     files_to_clean = glob.glob(input_dir + '*')
     for f in files_to_clean:
@@ -180,19 +190,12 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     op_kwargs = {
         "python_callable": a_callable,
         "to_string": True,
-    }
-    data_dir = os.getenv("ROGER_DATA_DIR")    
+    }        
     if func_kwargs is None:
         func_kwargs = dict()
     op_kwargs.update(func_kwargs)  
-    if config.lakefs_config.enabled:
-        # update function args with input data path
-        op_kwargs.update({
-            "input_data_path":  Path(f"{data_dir}/previous_task")
-        })
-
+    if config.lakefs_config.enabled:        
         pre_exec_conf = {
-            "input_data_path": f"{data_dir}/previous_task",
             'input_repo': input_repo,
             'input_branch': input_branch
         }
