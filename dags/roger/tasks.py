@@ -38,16 +38,18 @@ def task_wrapper(python_callable, **kwargs):
     # get dag config provided
     dag_run = kwargs.get('dag_run')
     logger = get_logger()
-    if dag_run:
-        dag_conf = dag_run.conf
-        # remove this since to send every other argument to the python callable.
-        del kwargs['dag_run']
-    input_data_path = generate_dir_name_from_task_instance(kwargs['ti'], roger_config=config)
+    # get input path
+    input_data_path = generate_dir_name_from_task_instance(kwargs['ti'], 
+                                                           roger_config=config,
+                                                           suffix='input')
+    # get output path from task id run id dag id combo
+    output_data_path = generate_dir_name_from_task_instance(kwargs['ti'], 
+                                                           roger_config=config,
+                                                           suffix='output')
     # cast it to a path object
-    input_data_path = Path(input_data_path) if input_data_path else input_data_path 
     func_args = {
         'input_data_path': input_data_path,
-        'output_data_path': kwargs.get('output_data_path'),
+        'output_data_path': output_data_path,
         'to_string': kwargs.get('to_string')
     }
     logger.info(f"Task function args: {func_args}")
@@ -106,23 +108,25 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     client = init_lakefs_client(config=config)
     # now files have been processed, 
     # this part should
-    run_id = context['ti'].run_id
-    task_id = context['ti'].task_id
-    dag_id = context['ti'].dag_id
-    executor_config = context['ti'].executor_config
-    print(f"""
-        run id: {run_id}    
-        task_id : {task_id}
-        dag_id: {dag_id}
-        executor_config: {executor_config}
-    """)
+    # get the out path of the task 
+    output_data_path = generate_dir_name_from_task_instance(kwargs['ti'], 
+                                                           roger_config=config,
+                                                           suffix='output')
+    # now we have the output path lets do some pushing but where ? 
+    # right now lets stick to using one repo , 
+
+    # issue Vladmir pointed out if uploads to a single lakefs branch have not been finilized with commit,
+    # this would cause dirty commits if parallel tasks target the same branch. 
+
+    # solution: Lakefs team suggested we commit to a different temp branch per task, and merge that branch. 
+    # this callback function will do that for now. 
     
 
     # 1. put files into a temp branch.
     # 2. make sure a commit happens.
     # 3. merge that branch to master branch. 
 
-def generate_dir_name_from_task_instance(task_instance: TaskInstance, roger_config: RogerConfig):
+def generate_dir_name_from_task_instance(task_instance: TaskInstance, roger_config: RogerConfig, suffix:str):
     # if lakefs is not enabled just return none so methods default to using local dir structure. 
     if not roger_config.lakefs_config.enabled:
         return None
@@ -131,7 +135,7 @@ def generate_dir_name_from_task_instance(task_instance: TaskInstance, roger_conf
     dag_id = task_instance.dag_id
     run_id = task_instance.run_id
     try_number = task_instance._try_number
-    return f"{root_data_dir}/{dag_id}_{task_id}_{run_id}_{try_number}"
+    return Path(f"{root_data_dir}/{dag_id}_{task_id}_{run_id}_{try_number}_{suffix}")
 
 def setup_input_data(context, exec_conf):
     print("""
@@ -144,7 +148,7 @@ def setup_input_data(context, exec_conf):
     # Serves as a location where files the task will work on are placed.
     # computed as ROGER_DATA_DIR + /current task instance name_input_dir
 
-    input_dir = generate_dir_name_from_task_instance(context['ti'], roger_config=config)
+    input_dir = str(generate_dir_name_from_task_instance(context['ti'], roger_config=config, suffix="input"))
     # Clear up files from previous run etc...
     files_to_clean = glob.glob(input_dir + '*')
     for f in files_to_clean:
