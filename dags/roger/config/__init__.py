@@ -9,8 +9,8 @@ import yaml
 from dug.config import Config as DugConfig
 from flatten_dict import flatten, unflatten
 
-from config._base import DictLike
-from config.s3_config import S3Config
+from ._base import DictLike
+from .s3_config import S3Config
 
 CONFIG_FILENAME = Path(__file__).parent.resolve() / "config.yaml"
 
