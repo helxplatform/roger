@@ -110,9 +110,9 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # now files have been processed, 
     # this part should
     # get the out path of the task 
-    local_path = generate_dir_name_from_task_instance(context['ti'], 
+    local_path = str(generate_dir_name_from_task_instance(context['ti'], 
                                                            roger_config=config,
-                                                           suffix='output')
+                                                           suffix='output'))
     task_id = context['ti'].task_id
     dag_id = context['ti'].dag_id
     run_id = context['ti'].run_id
