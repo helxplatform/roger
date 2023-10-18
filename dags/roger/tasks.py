@@ -21,6 +21,7 @@ from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 import lakefs_client
 from functools import partial
 
+logger = get_logger()
 
 default_args = {
     'owner': 'RENCI',
@@ -37,7 +38,7 @@ def task_wrapper(python_callable, **kwargs):
     """
     # get dag config provided
     dag_run = kwargs.get('dag_run')
-    logger = get_logger()
+    
     # get input path
     input_data_path = generate_dir_name_from_task_instance(kwargs['ti'], 
                                                            roger_config=config,
@@ -142,6 +143,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # 1. put files into a temp branch.
     # 2. make sure a commit happens.
     # 3. merge that branch to master branch. 
+    logger.info(f"Pushing local path {local_path} to {repo}@{temp_branch_name} in {remote_path} dir")
     put_files(
         local_path=local_path,
         remote_path=remote_path,
