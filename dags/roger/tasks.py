@@ -43,7 +43,7 @@ def task_wrapper(python_callable, **kwargs):
         # remove this since to send every other argument to the python callable.
         del kwargs['dag_run']
     func_args = {
-        'input_data_path': kwargs.get('input_data_path'),
+        'input_data_path': generate_dir_name_from_task_instance(kwargs['ti'], roger_config=config),
         'output_data_path': kwargs.get('output_data_path'),
         'to_string': kwargs.get('to_string')
     }
@@ -119,7 +119,10 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # 2. make sure a commit happens.
     # 3. merge that branch to master branch. 
 
-def generate_dir_name_from_task_instance(task_instance: TaskInstance):
+def generate_dir_name_from_task_instance(task_instance: TaskInstance, roger_config: RogerConfig):
+    # if lakefs is not enabled just return none so methods default to using local dir structure. 
+    if not roger_config.lakefs_config.enabled:
+        return None
     root_data_dir =  os.getenv("ROGER_DATA_DIR").rstrip('/')
     task_id = task_instance.task_id
     dag_id = task_instance.dag_id
@@ -135,14 +138,10 @@ def setup_input_data(context, exec_conf):
         - put dependency data in input dir
         - if for some reason data was not found raise an execption
           """)
-    ##
-    print(config)
-    print(exec_conf)
-    ##
     # Serves as a location where files the task will work on are placed.
     # computed as ROGER_DATA_DIR + /current task instance name_input_dir
 
-    input_dir = generate_dir_name_from_task_instance(context['ti'])
+    input_dir = generate_dir_name_from_task_instance(context['ti'], roger_config=config)
     # Clear up files from previous run etc...
     files_to_clean = glob.glob(input_dir + '*')
     for f in files_to_clean:
