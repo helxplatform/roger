@@ -109,9 +109,18 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # now files have been processed, 
     # this part should
     # get the out path of the task 
-    output_data_path = generate_dir_name_from_task_instance(kwargs['ti'], 
+    local_path = generate_dir_name_from_task_instance(context['ti'], 
                                                            roger_config=config,
                                                            suffix='output')
+    task_id = context['ti'].task_id
+    dag_id = context['ti'].dag_id
+    run_id = context['ti'].run_id
+    remote_path = f'{dag_id}/{task_id}'
+    temp_branch_name = f'{dag_id}_{task_id}_{run_id}'
+    branch = config.lakefs_config.branch
+    repo = config.lakefs_config.repo
+    # This part pushes to a temp branch on the repo
+
     # now we have the output path lets do some pushing but where ? 
     # right now lets stick to using one repo , 
 
@@ -125,6 +134,18 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # 1. put files into a temp branch.
     # 2. make sure a commit happens.
     # 3. merge that branch to master branch. 
+    put_files(
+        local_path=local_path,
+        remote_path=remote_path,
+        task_name=task_id,
+        task_args=str(kwargs),
+        pipeline_id=dag_id,
+        task_docker_image="docker-image",
+        s3storage=False,
+        lake_fs_client=client,
+        branch=temp_branch_name,
+        repo=repo
+    )
 
 def generate_dir_name_from_task_instance(task_instance: TaskInstance, roger_config: RogerConfig, suffix:str):
     # if lakefs is not enabled just return none so methods default to using local dir structure. 
