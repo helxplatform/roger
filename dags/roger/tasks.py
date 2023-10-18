@@ -123,7 +123,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     run_id_normalized = run_id.replace('-','_').replace(':','_').replace('+','_').replace('.','_')
     temp_branch_name = f'{dag_id}_{task_id}_{run_id_normalized}'
     # remote path to upload the files to.
-    remote_path = f'{dag_id}/{task_id}'
+    remote_path = f'{dag_id}/{task_id}/'
 
     # merge destination branch
     branch = config.lakefs_config.branch
