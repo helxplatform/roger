@@ -41,10 +41,16 @@ def task_wrapper(python_callable, **kwargs):
         dag_conf = dag_run.conf
         # remove this since to send every other argument to the python callable.
         del kwargs['dag_run']
-    logger.info("args+++++++++++" + str(kwargs))
+    func_args = {
+        'input_data_path': kwargs.get('input_data_path'),
+        'output_data_path': kwargs.get('output_data_path'),
+        'to_string': kwargs.get('to_string')
+    }
+    logger.info(f"Task function args:
+                {func_args}")
     # overrides values
     config.dag_run = dag_run
-    return python_callable(config=config, **kwargs)
+    return python_callable(config=config, **func_args)
 
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
