@@ -6,12 +6,11 @@ also those tasks are broken out into sub-DAGs organized by dataset. Each dataset
 has a subdag for all tasks.
 """
 
-import importlib
+import os
 
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 from roger.tasks import default_args, create_pipeline_subdag
-from roger.config import config
 
 installed_pipeline_list = [
     'anvil.AnvilPipeline',
@@ -30,7 +29,7 @@ with DAG(
     from roger import pipelines
     from roger.config import config
 
-    for pipeline_class in pipelines.get_pipeline_classes:
+    for pipeline_class in pipelines.get_pipeline_classes():
         # Only use pipeline classes that are in the enabled datasets list and
         # that have a properly defined pipeline_name attribute
         name = pipeline_class.getatter('pipeline_name', '*not defined*')
