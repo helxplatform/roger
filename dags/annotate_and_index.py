@@ -8,7 +8,8 @@ has a subdag for all tasks.
 
 import importlib
 
-from airflow.models import DAG, EmptyOperator
+from airflow.models import DAG
+from airflow.operators.empty import EmptyOperator
 from roger.tasks import default_args, create_pipeline_subdag
 from roger.config import config
 
