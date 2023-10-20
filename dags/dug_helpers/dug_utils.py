@@ -963,5 +963,3 @@ def get_heal_study_files(config: RogerConfig, to_string=False) -> List[str]:
 
 def get_heal_research_program_files(config: RogerConfig, to_string=False) -> List[str]:
     return get_versioned_files(config, "heal-research", "heal-research-programs", data_store=config.dug_inputs.data_source, unzip=True)
-
-

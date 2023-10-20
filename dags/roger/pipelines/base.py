@@ -706,7 +706,7 @@ class DugPipeline():
                             pulled_files.append(output_path)
         return [str(filename) for filename in pulled_files]
 
-    def get_objects(input_data_path=None):
+    def get_objects(self, input_data_path=None):
         """Retrieve initial source objects for parsing
 
         This is a default method that will be overridden by subclasses
@@ -720,7 +720,7 @@ class DugPipeline():
             input_data_path)
         return sorted([str(f) for f in files])
 
-    def annotate(to_string=False, files=None, input_data_path=None,
+    def annotate(self, to_string=False, files=None, input_data_path=None,
                  output_data_path=None):
         "Annotate files with the appropriate parsers and crawlers"
         if files is None:
@@ -729,6 +729,3 @@ class DugPipeline():
                             output_data_path=output_data_path)
         output_log = self.log_stream.get_value() if to_string else ''
         return output_log
-
-    def generate_pipeline_subdag(self):
-        "emit a dag pipeline for dataset that can be used as a subdag"

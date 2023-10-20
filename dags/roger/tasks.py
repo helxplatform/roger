@@ -95,12 +95,15 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         provide_context=True
     )
 
-def create_pipeline_subdag(self, pipeline_class: type, config: RogerConfig,
+def create_pipeline_subdag(pipeline_class: type, config: RogerConfig,
                            **kwargs):
-    "Emit an Airflow dag pipeline for the specified pipeline_class"
+    """Emit an Airflow dag pipeline for the specified pipeline_class
+
+    Extra kwargs are passed to the pipeline class init call.
+    """
 
     subdag = DAG(
-        dag_id=f"annotate_{self.pipeline_name}",
+        dag_id=f"annotate_{pipeline_class.pipeline_name}",
         default_args=default_args,
         schedule_interval=None)
     with pipeline_class(config=config, **kwargs) as pipeline:

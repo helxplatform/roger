@@ -1,6 +1,6 @@
 "Pipeline for anvil data"
 
-from roger.core.pipelines import DugPipeline
+from roger.pipelines import DugPipeline
 from roger.core import storage
 
 class AnvilPipeline(DugPipeline):
