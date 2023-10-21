@@ -16,7 +16,7 @@ installed_pipeline_list = [
     'anvil.AnvilPipeline',
 ]
 env_enabled_datasets = os.getenv(
-    "ROGER_DUG__INPUTS_DATA__SETS", "topmed").split(",")
+    "ROGER_DUG__INPUTS_DATA__SETS", "topmed,anvil").split(",")
 
 with DAG(
         dag_id='annotate_and_index',
