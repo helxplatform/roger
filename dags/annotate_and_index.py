@@ -32,7 +32,7 @@ with DAG(
     for pipeline_class in pipelines.get_pipeline_classes():
         # Only use pipeline classes that are in the enabled datasets list and
         # that have a properly defined pipeline_name attribute
-        name = pipeline_class.getatter('pipeline_name', '*not defined*')
+        name = getattr(pipeline_class, 'pipeline_name', '*not defined*')
         if not name in env_enabled_datasets:
             continue
 
