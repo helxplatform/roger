@@ -10,7 +10,7 @@ import os
 
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
-from roger.tasks import default_args, create_pipeline_subdag
+from roger.tasks import default_args, create_pipeline_taskgroup
 
 installed_pipeline_list = [
     'anvil.AnvilPipeline',
@@ -39,5 +39,4 @@ with DAG(
         # Do the thing to add the pipeline's subdag to the dag in the right way
         # . . .
 
-        subdag = create_pipeline_subdag(pipeline_class, config)
-        init >> subdag >> finish
+        init >> create_pipeline_taskgroup(pipeline_class, config) >> finish

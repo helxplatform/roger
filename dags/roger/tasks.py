@@ -2,10 +2,10 @@ import os
 
 from airflow.operators.python import PythonOperator
 from airflow.operators.empty import EmptyOperator
+from airflow.decorators import task_group
 from airflow.utils.dates import days_ago
 
 from roger.config import config, RogerConfig
-from roger.logger import get_logger
 
 default_args = {
     'owner': 'RENCI',
@@ -23,14 +23,13 @@ def task_wrapper(python_callable, **kwargs):
     # get dag config provided
     dag_run = kwargs.get('dag_run')
     dag_conf = {}
-    logger = get_logger()
     if dag_run:
         dag_conf = dag_run.conf
         # remove this since to send every other argument to the python callable.
         del kwargs['dag_run']
     # overrides values
     config.dag_run = dag_run
-    return python_callable(to_string=False, config=config)
+    return python_callable(to_string=False, config=dag_conf)
 
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
@@ -84,7 +83,7 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
             "to_string": True
         }
     if func_kwargs is None:
-        func_kwargs = dict()
+        func_kwargs = {}
     op_kwargs.update(func_kwargs)
     return PythonOperator(
         task_id=name,
@@ -95,50 +94,48 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         provide_context=True
     )
 
-def create_pipeline_subdag(pipeline_class: type, config: RogerConfig,
-                           **kwargs):
+def create_pipeline_taskgroup(pipeline_class: type, configparam: RogerConfig,
+                              **kwargs):
     """Emit an Airflow dag pipeline for the specified pipeline_class
 
     Extra kwargs are passed to the pipeline class init call.
     """
 
-    subdag = DAG(
-        dag_id=f"annotate_{pipeline_class.pipeline_name}",
-        default_args=default_args,
-        schedule_interval=None)
-    with pipeline_class(config=config, **kwargs) as pipeline:
-        name = pipeline.pipeline_name
-        annotate_task = create_python_task(
-            subdag,
-            f"annotate_{name}_files",
-            pipeline.annotate)
+    @task_group(group_id="dataset_pipeline_task_group")
+    def pipeline_task_group():
+        with pipeline_class(config=configparam, **kwargs) as pipeline:
+            name = pipeline.pipeline_name
+            annotate_task = create_python_task(
+                None,
+                f"annotate_{name}_files",
+                pipeline.annotate)
 
-        index_variables_task = create_python_task(
-            subdag,
-            f"index_{name}_variables",
-            lambda: None) # TODO
-        index_variables_task.set_upstream(annotate_task)
+            index_variables_task = create_python_task(
+                None,
+                f"index_{name}_variables",
+                lambda: None) # TODO
+            index_variables_task.set_upstream(annotate_task)
 
-        make_kgx_task = create_python_task(
-            subdag,
-            f"make_kgx_{name}",
-            lambda: None) # TODO
-        make_kgx_task.set_upstream(annotate_task)
+            make_kgx_task = create_python_task(
+                None,
+                f"make_kgx_{name}",
+                lambda: None) # TODO
+            make_kgx_task.set_upstream(annotate_task)
 
-        crawl_task = create_python_task(
-            subdag,
-            f"crawl_{name}",
-            lambda: None) #TODO
-        crawl_task.set_upstream(annotate_task)
+            crawl_task = create_python_task(
+                None,
+                f"crawl_{name}",
+                lambda: None) #TODO
+            crawl_task.set_upstream(annotate_task)
 
-        index_concepts_task = create_python_task(
-            subdag,
-            f"index_{name}_concepts",
-            lambda: None) # TODO
-        index_concepts_task.set_upstream(crawl_task)
+            index_concepts_task = create_python_task(
+                None,
+                f"index_{name}_concepts",
+                lambda: None) # TODO
+            index_concepts_task.set_upstream(crawl_task)
 
-        complete_task = EmptyOperator(task_id=f"complete_{name}")
-        complete_task.set_upstream(
-            make_kgx_task, index_concepts_task, index_variables_task)
+            complete_task = EmptyOperator(task_id=f"complete_{name}")
+            complete_task.set_upstream(
+                (make_kgx_task, index_concepts_task, index_variables_task))
 
-    return subdag
+    return pipeline_task_group
