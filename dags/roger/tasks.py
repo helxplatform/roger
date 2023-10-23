@@ -2,7 +2,7 @@ import os
 
 from airflow.operators.python import PythonOperator
 from airflow.operators.empty import EmptyOperator
-from airflow.decorators import task_group
+from airflow.utils.task_group import TaskGroup
 from airflow.utils.dates import days_ago
 
 from roger.config import config, RogerConfig
@@ -104,12 +104,11 @@ def create_pipeline_taskgroup(
     Extra kwargs are passed to the pipeline class init call.
     """
 
-    @task_group(group_id="dataset_pipeline_task_group")
-    def pipeline_task_group():
+    with TaskGroup(group_id="dataset_pipeline_task_group") as tg:
         with pipeline_class(config=configparam, **kwargs) as pipeline:
             name = pipeline.pipeline_name
             annotate_task = create_python_task(
-                None,
+                dag,
                 f"annotate_{name}_files",
                 pipeline.annotate)
 
@@ -141,4 +140,4 @@ def create_pipeline_taskgroup(
             complete_task.set_upstream(
                 (make_kgx_task, index_concepts_task, index_variables_task))
 
-    return pipeline_task_group
+    return tg
