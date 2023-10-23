@@ -148,7 +148,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
         local_path=local_path,
         remote_path=remote_path,
         task_name=task_id,
-        task_args=str(kwargs),
+        task_args=[""],
         pipeline_id=dag_id,
         task_docker_image="docker-image",
         s3storage=False,
