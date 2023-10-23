@@ -95,7 +95,7 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
     )
 
 def create_pipeline_taskgroup(
-        dag=dag,
+        dag,
         pipeline_class: type,
         configparam: RogerConfig,
         **kwargs):
