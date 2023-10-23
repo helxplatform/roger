@@ -9,8 +9,10 @@ import hashlib
 import traceback
 from functools import reduce
 from pathlib import Path
+import tarfile
+from typing import Union
 
-from airflow.models import DAG
+import requests
 
 from dug.core import get_parser, get_plugin_manager, DugConcept
 from dug.core.annotate import DugAnnotator, ConceptExpander
@@ -24,7 +26,8 @@ from roger.config import RogerConfig
 from roger.core import storage
 from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
-from roger.tasks import default_args, create_python_task
+
+from utils.s3_utils import S3Utils
 
 log = get_logger()
 
@@ -62,6 +65,40 @@ def make_edge(subj,
         "provided_by": "renci.bdc.semanticsearch.annotator"
     }
 
+class FileFetcher:
+
+    def __init__(
+            self,
+            remote_host: str,
+            remote_dir: Union[str, Path],
+            local_dir: Union[str, Path] = "."
+    ):
+        self.remote_host = remote_host
+        if isinstance(remote_dir, str):
+            self.remote_dir = remote_dir.rstrip("/")
+        else:
+            self.remote_dir = str(remote_dir.as_posix())
+        self.local_dir = Path(local_dir).resolve()
+
+    def __call__(self, remote_file_path: Union[str, Path]) -> Path:
+        remote_path = self.remote_dir + "/" + remote_file_path
+        local_path = self.local_dir / remote_file_path
+        url = f"{self.remote_host}{remote_path}"
+        log.debug(f"Fetching {url}")
+        try:
+            response = requests.get(url, allow_redirects=True)
+        except Exception as e:
+            log.error(f"Unexpected {e.__class__.__name__}: {e}")
+            raise RuntimeError(f"Unable to fetch {url}")
+        else:
+            log.debug(f"Response: {response.status_code}")
+            if response.status_code == 200:
+                with local_path.open('wb') as file_obj:
+                    file_obj.write(response.content)
+                return local_path
+            else:
+                log.debug(f"Unable to fetch {url}: {response.status_code}")
+                raise RuntimeError(f"Unable to fetch {url}")
 
 class DugPipeline():
     "Base class for dataset pipelines"
@@ -74,6 +111,7 @@ class DugPipeline():
         if not (self.pipeline_name):
             raise PipelineException(
                 "Subclass must at least define pipeline_name as class var")
+        dug_plugin_manager = get_plugin_manager()
         self.parser: Parser = get_parser(dug_plugin_manager.hook,
                                          self.get_parser_name())
 
@@ -389,12 +427,12 @@ class DugPipeline():
         return graph
 
     def index_elements(self, elements_file):
-        log.info(f"Indexing {elements_file}...")
+        log.info("Indexing %s...", str(elements_file))
         elements = storage.read_object(elements_file)
         count = 0
         total = len(elements)
         # Index Annotated Elements
-        log.info(f"found {len(elements)} from elements files.")
+        log.info(f"found %d from elements files.", len(elements))
         for element in elements:
             count += 1
             # Only index DugElements as concepts will be
@@ -407,8 +445,8 @@ class DugPipeline():
                     element, index=self.variables_index)
             percent_complete = (count / total) * 100
             if percent_complete % 10 == 0:
-                log.info(f"{percent_complete} %")
-        log.info(f"Done indexing {elements_file}.")
+                log.info("%d %%", percent_complete)
+        log.info("Done indexing %s.", elements_file)
 
     def validate_indexed_elements(self, elements_file):
         elements = [x for x in storage.read_object(elements_file)
@@ -546,7 +584,7 @@ class DugPipeline():
                 )
             percent_complete = int((count / total) * 100)
             if percent_complete % 10 == 0:
-                log.info(f"{percent_complete} %")
+                log.info("%s %%", percent_complete)
         log.info("Done Indexing concepts")
 
     def validate_indexed_concepts(self, elements, concepts):
@@ -632,10 +670,10 @@ class DugPipeline():
     def clear_index(self, index_id):
         exists = self.search_obj.es.indices.exists(index=index_id)
         if exists:
-            log.info(f"Deleting index {index_id}")
+            log.info("Deleting index %s", str(index_id))
             response = self.event_loop.run_until_complete(
                 self.search_obj.es.indices.delete(index=index_id))
-            log.info(f"Cleared Elastic : {response}")
+            log.info("Cleared Elastic : %s", str(response))
         log.info("Re-initializing the indicies")
         self.index_obj.init_indices()
 
@@ -666,7 +704,7 @@ class DugPipeline():
         # clear dir
         storage.clear_dir(output_dir)
         data_sets = self.config.dug_inputs.data_sets
-        log.info(f"dataset: {data_sets}")
+        log.info("dataset: %s", data_sets)
         pulled_files = []
         s3_utils = S3Utils(self.config.s3_config)
         for data_set in data_sets:
@@ -677,7 +715,7 @@ class DugPipeline():
                     item["format"] == self.get_data_format()):
                     if data_store == "s3":
                         for filename in item["files"]["s3"]:
-                            log.info(f"Fetching {filename}")
+                            log.info("Fetching %s", filename)
                             output_name = filename.split('/')[-1]
                             output_path = output_dir / output_name
                             s3_utils.get(
@@ -685,22 +723,22 @@ class DugPipeline():
                                 str(output_path),
                             )
                             if self.unzip_source:
-                                log.info(f"Unzipping {output_path}")
+                                log.info("Unzipping %s", str(output_path))
                                 tar = tarfile.open(str(output_path))
                                 tar.extractall(path=output_dir)
                             pulled_files.append(output_path)
                     else:
                         for filename in item["files"]["stars"]:
-                            log.info(f"Fetching {filename}")
+                            log.info("Fetching %s", filename)
                             # fetch from stars
-                            remote_host = config.annotation_base_data_uri
+                            remote_host = self.config.annotation_base_data_uri
                             fetch = FileFetcher(
                                 remote_host=remote_host,
                                 remote_dir=current_version,
                                 local_dir=output_dir)
                             output_path = fetch(filename)
                             if self.unzip_source:
-                                log.info(f"Unzipping {output_path}")
+                                log.info("Unzipping %s", str(output_path))
                                 tar = tarfile.open(str(output_path))
                                 tar.extractall(path=output_dir)
                             pulled_files.append(output_path)
@@ -715,7 +753,7 @@ class DugPipeline():
         if not input_data_path:
             input_data_path = storage.dug_input_files_path(
                 self.get_files_dir())
-        files = get_files_recursive(
+        files = storage.get_files_recursive(
             lambda file_name: file_name.endswith('.xml'),
             input_data_path)
         return sorted([str(f) for f in files])
