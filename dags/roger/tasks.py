@@ -94,8 +94,11 @@ def create_python_task (dag, name, a_callable, func_kwargs=None):
         provide_context=True
     )
 
-def create_pipeline_taskgroup(pipeline_class: type, configparam: RogerConfig,
-                              **kwargs):
+def create_pipeline_taskgroup(
+        dag=dag,
+        pipeline_class: type,
+        configparam: RogerConfig,
+        **kwargs):
     """Emit an Airflow dag pipeline for the specified pipeline_class
 
     Extra kwargs are passed to the pipeline class init call.
@@ -111,25 +114,25 @@ def create_pipeline_taskgroup(pipeline_class: type, configparam: RogerConfig,
                 pipeline.annotate)
 
             index_variables_task = create_python_task(
-                None,
+                dag,
                 f"index_{name}_variables",
                 lambda: None) # TODO
             index_variables_task.set_upstream(annotate_task)
 
             make_kgx_task = create_python_task(
-                None,
+                dag,
                 f"make_kgx_{name}",
                 lambda: None) # TODO
             make_kgx_task.set_upstream(annotate_task)
 
             crawl_task = create_python_task(
-                None,
+                dag,
                 f"crawl_{name}",
                 lambda: None) #TODO
             crawl_task.set_upstream(annotate_task)
 
             index_concepts_task = create_python_task(
-                None,
+                dag,
                 f"index_{name}_concepts",
                 lambda: None) # TODO
             index_concepts_task.set_upstream(crawl_task)

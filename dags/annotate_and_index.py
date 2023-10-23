@@ -41,4 +41,4 @@ with DAG(
         # Do the thing to add the pipeline's subdag to the dag in the right way
         # . . .
 
-        init >> create_pipeline_taskgroup(pipeline_class, config) >> finish
+        init >> create_pipeline_taskgroup(dag, pipeline_class, config) >> finish
