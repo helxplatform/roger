@@ -19,7 +19,6 @@ from roger.config import config, RogerConfig
 from roger.logger import get_logger
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 import lakefs_client
-from lakefs_client.client import LakeFSClient
 from functools import partial
 
 logger = get_logger()
@@ -98,7 +97,7 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     }
     return k8s_executor_config
 
-def init_lakefs_client(config: RogerConfig) -> LakeFSClient:
+def init_lakefs_client(config: RogerConfig) -> LakeFsWrapper:
     configuration = lakefs_client.Configuration()
     configuration.username = config.lakefs_config.access_key_id
     configuration.password = config.lakefs_config.secret_access_key
@@ -118,7 +117,7 @@ def pagination_helper(page_fetcher, **kwargs):
 
 
 def avalon_commit_callback(context: DagContext, **kwargs):    
-    client: LakeFSClient  = init_lakefs_client(config=config)
+    client: LakeFsWrapper  = init_lakefs_client(config=config)
     # now files have been processed, 
     # this part should
     # get the out path of the task 
@@ -170,18 +169,18 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     )
 
     # see what changes are going to be pushed from this branch to main branch 
-    for diff in pagination_helper(client.refs_api.diff_refs, repository=repo, left_ref=branch, right_ref=temp_branch_name):
+    for diff in pagination_helper(client._client.refs_api.diff_refs, repository=repo, left_ref=branch, right_ref=temp_branch_name):
         logger.info("Diff: " + str(diff))
     
     # merging temp branch to working branch 
 
-    client.refs_api.merge_into_branch(repository=repo, source_ref=temp_branch_name, destination_branch=branch)
+    client._client.refs_api.merge_into_branch(repository=repo, source_ref=temp_branch_name, destination_branch=branch)
 
     logger.info(f"merged branch {temp_branch_name} into {branch}")
 
     # delete temp branch 
 
-    client.branches_api.delete_branch(
+    client._client.branches_api.delete_branch(
         repository=repo,
         branch=temp_branch_name
     )
