@@ -19,6 +19,7 @@ from roger.config import config, RogerConfig
 from roger.logger import get_logger
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 import lakefs_client
+from lakefs_client.client import LakeFSClient
 from functools import partial
 
 logger = get_logger()
@@ -97,7 +98,7 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     }
     return k8s_executor_config
 
-def init_lakefs_client(config: RogerConfig):
+def init_lakefs_client(config: RogerConfig) -> LakeFSClient:
     configuration = lakefs_client.Configuration()
     configuration.username = config.lakefs_config.access_key_id
     configuration.password = config.lakefs_config.secret_access_key
@@ -105,8 +106,19 @@ def init_lakefs_client(config: RogerConfig):
     the_lake = LakeFsWrapper(configuration=configuration)
     return the_lake
 
+
+def pagination_helper(page_fetcher, **kwargs):
+    """Helper function to iterate over paginated results"""
+    while True:
+        resp = page_fetcher(**kwargs)
+        yield from resp.results
+        if not resp.pagination.has_more:
+            break
+        kwargs['after'] = resp.pagination.next_offset
+
+
 def avalon_commit_callback(context: DagContext, **kwargs):    
-    client = init_lakefs_client(config=config)
+    client: LakeFSClient  = init_lakefs_client(config=config)
     # now files have been processed, 
     # this part should
     # get the out path of the task 
@@ -156,6 +168,27 @@ def avalon_commit_callback(context: DagContext, **kwargs):
         branch=temp_branch_name,
         repo=repo
     )
+
+    # see what changes are going to be pushed from this branch to main branch 
+    for diff in pagination_helper(client.refs_api.diff_refs, repository=repo, left_ref=branch, right_ref=temp_branch_name):
+        logger.info("Diff: " + str(diff))
+    
+    # merging temp branch to working branch 
+
+    client.refs_api.merge_into_branch(repository=repo, source_ref=temp_branch_name, destination_branch=branch)
+
+    logger.info(f"merged branch {temp_branch_name} into {branch}")
+
+    # delete temp branch 
+
+    client.branches_api.delete_branch(
+        repository=repo,
+        branch=temp_branch_name
+    )
+
+    logger.info(f"deleted temp branch {temp_branch_name}")
+
+
 
 def generate_dir_name_from_task_instance(task_instance: TaskInstance, roger_config: RogerConfig, suffix:str):
     # if lakefs is not enabled just return none so methods default to using local dir structure. 
