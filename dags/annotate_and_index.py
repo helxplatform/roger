@@ -32,9 +32,11 @@ with DAG(
     for pipeline_class in pipelines.get_pipeline_classes():
         # Only use pipeline classes that are in the enabled datasets list and
         # that have a properly defined pipeline_name attribute
-        name = getattr(pipeline_class, 'pipeline_name', '*not defined*')
-        if not name in env_enabled_datasets:
-            continue
+
+        # Overriding environment variable just to see if this is working.
+        # name = getattr(pipeline_class, 'pipeline_name', '*not defined*')
+        # if not name in env_enabled_datasets:
+        #     continue
 
         # Do the thing to add the pipeline's subdag to the dag in the right way
         # . . .
