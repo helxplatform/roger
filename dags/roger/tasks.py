@@ -186,6 +186,11 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     )
 
     logger.info(f"deleted temp branch {temp_branch_name}")
+    logger.info(f"deleting local dir {local_path}")
+    files_to_clean = glob.glob(local_path + '*')
+    for f in files_to_clean:
+        shutil.rmtree(f)
+
 
 
 
@@ -213,9 +218,6 @@ def setup_input_data(context, exec_conf):
 
     input_dir = str(generate_dir_name_from_task_instance(context['ti'], roger_config=config, suffix="input"))
     # Clear up files from previous run etc...
-    files_to_clean = glob.glob(input_dir + '*')
-    for f in files_to_clean:
-        shutil.rmtree(f)
     
     # create input dir 
     os.makedirs(input_dir, exist_ok=True)

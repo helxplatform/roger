@@ -768,12 +768,19 @@ class DugUtil():
         return output_log
 
     @staticmethod
-    def make_kg_tagged(config=None, to_string=False):
+    def make_kg_tagged(config=None, to_string=False, input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            output_base_path = storage.dug_kgx_path("")
-            storage.clear_dir(output_base_path)
+            output_base_path = output_data_path
+            if not output_data_path:
+                output_base_path = storage.dug_kgx_path("")            
+            storage.clear_dir(output_base_path)            
             log.info("Starting building KGX files")
-            elements_files = storage.dug_elements_objects()
+            if not input_data_path:
+                elements_files = storage.dug_elements_objects()
+            else:
+                import glob
+                glob_pattern = str(input_data_path / "*" / os.path.join('*', 'elements.pickle'))
+                elements_files = glob.glob(glob_pattern)
             for file in elements_files:
                 elements = storage.read_object(file)
                 if "topmed_" in file:
