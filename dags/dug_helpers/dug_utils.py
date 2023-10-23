@@ -781,6 +781,7 @@ class DugUtil():
                 import glob
                 glob_pattern = str(input_data_path / "*" / os.path.join('*', 'elements.pickle'))
                 elements_files = glob.glob(glob_pattern)
+            log.info(f"making kgx files for the following pickles: {elements_files}")
             for file in elements_files:
                 elements = storage.read_object(file)
                 if "topmed_" in file:
