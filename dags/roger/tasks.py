@@ -1,3 +1,5 @@
+"Tasks and methods related to Airflow implementations of Roger"
+
 import os
 
 from airflow.operators.python import PythonOperator
@@ -103,7 +105,7 @@ def create_pipeline_taskgroup(
 
     Extra kwargs are passed to the pipeline class init call.
     """
-    name = pipeline.pipeline_name
+    name = pipeline_class.pipeline_name
 
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
         with pipeline_class(config=configparam, **kwargs) as pipeline:
