@@ -103,10 +103,10 @@ def create_pipeline_taskgroup(
 
     Extra kwargs are passed to the pipeline class init call.
     """
+    name = pipeline.pipeline_name
 
-    with TaskGroup(group_id="dataset_pipeline_task_group") as tg:
+    with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
         with pipeline_class(config=configparam, **kwargs) as pipeline:
-            name = pipeline.pipeline_name
             annotate_task = create_python_task(
                 dag,
                 f"annotate_{name}_files",
