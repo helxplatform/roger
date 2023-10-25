@@ -6,7 +6,7 @@ flatten-dict
 redisgraph-bulk-loader==0.12.3
 pytest
 PyYAML
-git+https://github.com/helxplatform/dug@dug-merge
+git+https://github.com/helxplatform/dug@2.12.0
 orjson
 kg-utils==0.0.6
 bmt==1.1.0
