@@ -197,3 +197,5 @@ services:
       - REDIS_PASSWORD=$REDIS_PASSWORD
     volumes:
       - ./tranql-schema.yaml:/tranql/tranql/conf/schema.yaml
+volumes:
+  postgres-db-volume:
