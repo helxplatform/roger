@@ -385,13 +385,13 @@ class Dug:
             if response['total_items'] == 0:
                 log.error(f"No search elements returned for variable search: {self.variables_index}.")
                 log.error(f"Concept id : {curie}, Search term: {search_term}")
-                # raise Exception(f"Validation error - Did not find {curie} for"
-                #                 f"Search term: {search_term}")
-        else:
-            for element_type in response:
-                all_elements_ids = [e['id'] for e in
-                                    reduce(lambda x, y: x + y['elements'], response[element_type], [])]
-                ids_dict += all_elements_ids
+                raise Exception(f"Validation error - Did not find {curie} for"
+                                f"Search term: {search_term}")
+            else:
+                for element_type in response:
+                    all_elements_ids = [e['id'] for e in
+                                        reduce(lambda x, y: x + y['elements'], response[element_type], [])]
+                    ids_dict += all_elements_ids
         return ids_dict
 
     def crawl_concepts(self, concepts, data_set_name):
