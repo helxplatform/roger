@@ -12,9 +12,6 @@ from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 from roger.tasks import default_args, create_pipeline_taskgroup
 
-installed_pipeline_list = [
-    'anvil.AnvilPipeline',
-]
 env_enabled_datasets = os.getenv(
     "ROGER_DUG__INPUTS_DATA__SETS", "topmed,anvil").split(",")
 
@@ -33,6 +30,7 @@ with DAG(
         # Only use pipeline classes that are in the enabled datasets list and
         # that have a properly defined pipeline_name attribute
 
+        # TODO
         # Overriding environment variable just to see if this is working.
         # name = getattr(pipeline_class, 'pipeline_name', '*not defined*')
         # if not name in env_enabled_datasets:

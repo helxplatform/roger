@@ -448,7 +448,7 @@ class DugPipeline():
                 log.info("%d %%", percent_complete)
         log.info("Done indexing %s.", elements_file)
 
-    def validate_indexed_elements(self, elements_file):
+    def validate_indexed_element_file(self, elements_file):
         elements = [x for x in storage.read_object(elements_file)
                     if not isinstance(x, DugConcept)]
         # Pick ~ 10 %
@@ -766,4 +766,84 @@ class DugPipeline():
         self.annotate_files(parsable_files=files,
                             output_data_path=output_data_path)
         output_log = self.log_stream.get_value() if to_string else ''
+        return output_log
+
+    def index_variables(self, to_string=False, input_data_path=None,
+                        output_data_path=None):
+        "Index variables from element object files for pipeline"
+        self.clear_variables_index()
+        element_object_files = storage.dug_elements_objects()
+        for file_ in element_object_files:
+            self.index_elements(file_)
+        output_log = self.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    def validate_indexed_variables(self, to_string=None, input_data_path=None,
+                                   output_data_path=None):
+        "Validate output from index variables task for pipeline"
+        element_object_files = storage.dug_elements_objects()
+        for eleents_object_file in elements_object_files:
+            log.info("Validating %s", str(elements_object_file))
+            self.validate_indexed_element_file(elements_object_file)
+        output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    def make_kg_tagged(self, to_string=False, input_data_path=None,
+                       output_data_path=None):
+        "Create tagged knowledge graphs from elements"
+        output_base_path = storage.dug_kgx_path("")
+        storage.clear_dir(output_base_path)
+        log.info("Starting building KGX files")
+
+        elements_files = storage.dug_elements_objects()
+        for file_ in elements_files:
+            elements = storage.read_object(file_)
+            if "topmed_" in file_:
+                kg = dug.make_tagged_kg(elements)
+            else:
+                kg = dug.convert_to_kgx_json(elements)
+            dug_base_file_name = file_.split(os.path.sep)[-2]
+            output_file_path = os.path.join(output_base_path,
+                                            dug_base_file_name + '_kgx.json')
+            storage.write_object(kg, output_file_path)
+            log.info("Wrote %d and %d edges, to %s", len(kg['nodes']),
+                     len(kg['edges']), output_file_path)
+        output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    def crawl_tranql(self, to_string=False, input_data_path=None,
+                     output_data_path=None):
+        log.debug("Configuration: %s", str(self.config.dict))
+
+        concept_files = storage.dug_concepts_objects()
+
+        crawl_dir = storage.dug_crawl_path('crawl_output')
+        log.info("Clearing crawl output dir %s", crawl_dir)
+        storage.clear_dir(crawl_dir)
+
+        expanded_concepts_dir = storage.dug_expanded_concepts_path("")
+        log.info("Clearing expanded concepts dir: %s", expanded_concepts_dir)
+        storage.clear_dir(expanded_concepts_dir)
+        log.info("Crawling Dug Concepts, found %d file(s).",
+                 len(concepts_files))
+        for file in concepts_files:
+            data_set = storage.read_object(file)
+            original_variables_dataset_name = os.path.split(
+                os.path.dirname(file))[-1]
+            dug.crawl_concepts(concepts=data_set,
+                               data_set_name=original_variables_dataset_name)
+        output_log = dug.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    def index_concepts(self, to_string=False):
+        "Index concepts from expanded concept files"
+        # These are concepts that have knowledge graphs  from tranql
+        # clear out concepts and kg indicies from previous runs
+        dug.clear_concepts_index()
+        dug.clear_kg_index()
+        expanded_concepts_files = storage.dug_expanded_concept_objects()
+        for file_ in expanded_concepts_files:
+            concepts = storage.read_object(file_)
+            dug.index_concepts(concepts=concepts)
+        output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log

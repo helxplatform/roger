@@ -117,29 +117,36 @@ def create_pipeline_taskgroup(
             index_variables_task = create_python_task(
                 dag,
                 f"index_{name}_variables",
-                lambda: None) # TODO
+                pipeline.index_variables)
             index_variables_task.set_upstream(annotate_task)
+
+            validate_index_variables_task = create_python_task(
+                dag,
+                f"validate_{name}_index_variables",
+                pipeline.validate_indexed_variables)
+            validate_index_variables_task.set_upstream(index_variables_task)
 
             make_kgx_task = create_python_task(
                 dag,
                 f"make_kgx_{name}",
-                lambda: None) # TODO
+                pipeline.make_kg_tagged) # TODO
             make_kgx_task.set_upstream(annotate_task)
 
             crawl_task = create_python_task(
                 dag,
                 f"crawl_{name}",
-                lambda: None) #TODO
+                pipeline.crawl_tranql) #TODO
             crawl_task.set_upstream(annotate_task)
 
             index_concepts_task = create_python_task(
                 dag,
                 f"index_{name}_concepts",
-                lambda: None) # TODO
+                pipeline.index_concepts) # TODO
             index_concepts_task.set_upstream(crawl_task)
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
             complete_task.set_upstream(
-                (make_kgx_task, index_concepts_task, index_variables_task))
+                (make_kgx_task, index_concepts_task,
+                 validate_index_variables_task))
 
     return tg
