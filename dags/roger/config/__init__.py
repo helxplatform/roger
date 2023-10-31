@@ -14,7 +14,6 @@ from .s3_config import S3Config
 
 CONFIG_FILENAME = Path(__file__).parent.resolve() / "config.yaml"
 
-
 @dataclass
 class RedisConfig(DictLike):
     username: str = ""
@@ -38,6 +37,7 @@ class KgxConfig(DictLike):
     biolink_model_version: str = "1.5.0"
     dataset_version: str = "v1.0"
     merge_db_id: int = 1
+    merge_db_temp_dir: str = "workspace"
     data_sets: List = field(default_factory=lambda: ['baseline-graph'])
 
     def __post_init__(self):
@@ -51,7 +51,6 @@ class KgxConfig(DictLike):
 @dataclass
 class DugInputsConfig(DictLike):
     data_source: str = 'stars'
-    dataset_version: str = "v1.0"
     data_sets: List = field(default_factory=lambda: ['topmed', 'bdc'])
 
     def __post_init__(self):
@@ -120,8 +119,18 @@ class IndexingConfig(DictLike):
     tranql_endpoint: str = "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
     # by default skips node to element queries
     node_to_element_queries: dict = field(default_factory=lambda: {})
-
+    element_mapping: str = ""
     def __post_init__(self):
+        # convert element mapping to dict
+        if self.element_mapping and len(self.element_mapping.split(',')):
+            final_element_mapping = {}
+            for mapping in self.element_mapping.split(','):
+                if not mapping:
+                    continue
+                original_name = mapping.split(':')[0].lower().strip()
+                final_name = mapping.split(':')[1].strip()
+                final_element_mapping[original_name] = final_name
+            self.element_mapping = final_element_mapping    
         node_to_el_enabled = True if str(self.node_to_element_queries.get("enabled")).lower() == "true" else False
         final_node_to_element_queries = {}
         if node_to_el_enabled:
@@ -135,6 +144,8 @@ class ElasticsearchConfig(DictLike):
     username: str = "elastic"
     password: str = ""
     nboost_host: str = ""
+    scheme: str = "http"
+    ca_path: str = ""
 
 
 
@@ -165,6 +176,8 @@ class RogerConfig(DictLike):
             elastic_host=self.elasticsearch.host,
             elastic_password=self.elasticsearch.password,
             elastic_username=self.elasticsearch.username,
+            elastic_scheme=self.elasticsearch.scheme,
+            elastic_ca_path=self.elasticsearch.ca_path,
             redis_host=self.redisgraph.host,
             redis_password=self.redisgraph.password,
             redis_port=self.redisgraph.port,

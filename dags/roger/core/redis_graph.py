@@ -6,7 +6,7 @@ import redis
 from redis.commands.graph.node import Node
 from redis.commands.graph.edge import Edge
 
-from roger.roger_util import get_logger
+from roger.logger import get_logger
 
 logger = get_logger ()
 

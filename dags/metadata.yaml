@@ -85,6 +85,18 @@ kgx:
     files:
       - cde/annotated_edges_v3.0.jsonl
       - cde/annotated_nodes_v3.0.jsonl
+  - version: v4.0
+    name: baseline-graph
+    format: jsonl
+    files:
+      - baseline-4.0/edges_v4.0.jsonl
+      - baseline-4.0/nodes_v4.0.jsonl
+  - version: v4.0
+    name: cde-graph
+    format: jsonl
+    files:
+      - cde/annotated_edges_v4.0.jsonl
+      - cde/annotated_nodes_v4.0.jsonl
 dug_inputs:
   versions:
     - name: bdc
@@ -94,6 +106,20 @@ dug_inputs:
           - "bdc/v1.0/bdc_dbgap_data_dicts.tar.gz"
         stars:
           - "bdc_dbgap_data_dicts.tar.gz"
+      format: dbGaP
+    - name: bdc
+      version: v2.0
+      files:
+        s3:
+          - "bdc/v2.0/bdc_dbgap_data_dicts.tar.gz"
+        stars:
+          - "bdc_dbgap_data_dicts.tar.gz"
+      format: dbGaP
+    - name: bdc
+      version: v3.0
+      files:
+        s3:
+          - "bdc/v3.0/bdc_dbgap_data_dicts.tar.gz"
       format: dbGaP
     - name: nida
       version: v1.0
@@ -112,7 +138,7 @@ dug_inputs:
           - "sparc-dbgap-xml-formatted.tar.gz"
       format: sparc
     - name: topmed
-      version: v1.0
+      version: v2.0
       files:
         s3:
           - "topmed/v2.0/topmed_tags_v2.0.json"
@@ -153,3 +179,16 @@ dug_inputs:
         s3:
           - "heal-datasets/bacpac/bacpac_baseline_do_measures.tar.gz"
       format: bacpac
+    - name: heal-studies
+      version: v1.0
+      files:
+        s3:
+          - heal-datasets/ingest-8-23/heal_studies.tar.gz      
+          - heal-datasets/ingest-8-23/heal_mds_import.tar.gz
+      format: heal-studies
+    - name: heal-research-programs
+      version: v1.0
+      files:
+        s3:
+          - heal-datasets/ingest-8-23/heal_research_programs.tar.gz
+      format: heal-research
