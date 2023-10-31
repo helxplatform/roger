@@ -2,6 +2,7 @@
 .secret-env
 Merge-helm/
 Merge-Dug-Architecture.md
+concepts_eval/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
