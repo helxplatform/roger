@@ -52,18 +52,20 @@ x-airflow-common:
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
 
-    ROGER_DUG__INPUTS_DATA__SETS: topmed,bdc-dbGaP
+    ROGER_DUG__INPUTS_DATA__SETS: "$ROGER_DUG__INPUTS_DATA__SETS"
     ROGER_ELASTICSEARCH_HOST: "$ELASTIC_API_HOST"
     ROGER_ELASTICSEARCH_PASSWORD: "$ELASTIC_PASSWORD"
     ROGER_ELASTICSEARCH_NBOOST__HOST: "$NBOOST_API_HOST"
     ROGER_REDISGRAPH_HOST: "$REDIS_HOST"
     ROGER_REDISGRAPH_PASSWORD: "$REDIS_PASSWORD"
     ROGER_KGX_DATASET__VERSION: "v3.0"
+    ROGER_DATA_DIR: "/opt/airflow/share/data"
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
-  user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}"
+    - ./data:/opt/airflow/share/data
+  user: root
   depends_on:
     redis:
       condition: service_healthy
@@ -79,6 +81,8 @@ services:
       POSTGRES_DB: airflow
     volumes:
       - postgres-db-volume:/var/lib/postgresql/data
+      - ${DATA_DIR}/elastic:/elastic
+      - ${DATA_DIR}/redis:/redis
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 5s
@@ -131,6 +135,7 @@ services:
 
   redis:
     # image: redislabs/redisgraph:2.10.9 #Alternative Image
+    user: root
     image: 'redis/redis-stack:6.2.4-v2'
     command: "redis-server --requirepass $REDIS_PASSWORD --loadmodule /opt/redis-stack/lib/redisgraph.so"
     environment:
@@ -162,11 +167,12 @@ services:
     entrypoint: [ "gunicorn",
                      "--workers=$API_WORKERS", "--name=dug",
                      "--bind=0.0.0.0:$API_PORT", "--timeout=$API_TIMEOUT",
-                     "--log-level=DEBUG", "-k", "uvicorn.workers.UvicornWorker", "--reload", "app.server:APP"]
+                     "--log-level=DEBUG", "-k", "uvicorn.workers.UvicornWorker", "--reload", "dug.server:APP"]
     ports:
       - $API_PORT:$API_PORT
 
   elasticsearch:
+    user: root
     image: docker.elastic.co/elasticsearch/elasticsearch:8.5.2
     environment:
       - ELASTIC_PASSWORD=$ELASTIC_PASSWORD
@@ -180,7 +186,7 @@ services:
       - '9300:9300'
 
   tranql:
-    image: helxplatform/tranql-app:develop-0.0.56
+    image: containers.renci.org/helxplatform/tranql:rti-merge
     ports:
       - '8001:8001'
     entrypoint: [
