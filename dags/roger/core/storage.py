@@ -194,9 +194,13 @@ def dug_annotation_path(name):
 def dug_expanded_concepts_path(name):
     return str(ROGER_DATA_DIR / 'dug' / 'expanded_concepts' / name)
 
-def dug_expanded_concept_objects():
-    file_pattern = dug_expanded_concepts_path(
-        os.path.join('*','expanded_concepts.pickle'))
+def dug_expanded_concept_objects(data_path):
+    "Return a list of files containing expaneded concept objects"
+    if data_path:
+        file_pattern = os.path.join(data_path, '*', 'expanded_concepts.pickle')
+    else:
+        file_pattern = dug_expanded_concepts_path(
+            os.path.join('*','expanded_concepts.pickle'))
     return sorted(glob.glob(file_pattern))
 
 def dug_extracted_elements_objects():
@@ -212,17 +216,25 @@ def dug_kgx_objects():
     dug_kgx_pattern = dug_kgx_path("**.json")
     return sorted(glob.glob(dug_kgx_pattern))
 
-def dug_concepts_objects():
+def dug_concepts_objects(data_path):
     """ A list of dug annotation Objects. """
-    concepts_file_path = dug_annotation_path(
-        os.path.join('*','concepts.pickle'))
+    if not data_path:
+        concepts_file_path = dug_annotation_path(
+            os.path.join('*','concepts.pickle'))
+    else:
+        concepts_file_pattern = os.path.join(
+            data_path, '*', 'concepts.pickle')
     return sorted(glob.glob(concepts_file_path))
 
-def dug_elements_objects():
+def dug_elements_objects(data_path=None):
     """ A list of dug annotation Objects. """
-    concepts_file_path = dug_annotation_path(
-        os.path.join('*', 'elements.pickle'))
-    return sorted(glob.glob(concepts_file_path))
+    if not data_path:
+        concepts_file_pattern = dug_annotation_path(
+            os.path.join('*', 'elements.pickle'))
+    else:
+        concepts_file_pattern = os.path.join(
+            data_path, '*', 'elements.pickle')
+    return sorted(glob.glob(concepts_file_pattern))
 
 def dug_input_files_path(name) -> pathlib.Path:
     path = ROGER_DATA_DIR / "dug" / "input_files" / name

@@ -66,6 +66,8 @@ def make_edge(subj,
     }
 
 class FileFetcher:
+    """A basic remote file fetcher class
+    """
 
     def __init__(
             self,
@@ -84,21 +86,21 @@ class FileFetcher:
         remote_path = self.remote_dir + "/" + remote_file_path
         local_path = self.local_dir / remote_file_path
         url = f"{self.remote_host}{remote_path}"
-        log.debug(f"Fetching {url}")
+        log.debug("Fetching %s", url)
         try:
-            response = requests.get(url, allow_redirects=True)
+            response = requests.get(url, allow_redirects=True, timeout=60)
         except Exception as e:
-            log.error(f"Unexpected {e.__class__.__name__}: {e}")
+            log.error("Unexpected %s: %s", e.__class__.__name__, str(e))
+            raise RuntimeError(f"Unable to fetch {url}") from e
+
+        log.debug("Response: %d", response.status_code)
+        if response.status_code != 200:
+            log.debug("Unable to fetch %s: %d", url, response.status_code)
             raise RuntimeError(f"Unable to fetch {url}")
-        else:
-            log.debug(f"Response: {response.status_code}")
-            if response.status_code == 200:
-                with local_path.open('wb') as file_obj:
-                    file_obj.write(response.content)
-                return local_path
-            else:
-                log.debug(f"Unable to fetch {url}: {response.status_code}")
-                raise RuntimeError(f"Unable to fetch {url}")
+
+        with local_path.open('wb') as file_obj:
+            file_obj.write(response.content)
+        return local_path
 
 class DugPipeline():
     "Base class for dataset pipelines"
@@ -108,7 +110,7 @@ class DugPipeline():
 
     def __init__(self, config: RogerConfig, to_string=True):
         "Set instance variables and check to make sure we're overriden"
-        if not (self.pipeline_name):
+        if not self.pipeline_name:
             raise PipelineException(
                 "Subclass must at least define pipeline_name as class var")
         dug_plugin_manager = get_plugin_manager()
@@ -126,6 +128,7 @@ class DugPipeline():
             self.log_stream = StringIO()
             self.string_handler = logging.StreamHandler(self.log_stream)
             log.addHandler(self.string_handler)
+        self.s3_utils = S3Utils(self.config.s3_config)
 
         self.annotator: DugAnnotator = self.factory.build_annotator()
 
@@ -200,7 +203,6 @@ class DugPipeline():
         :param parsable_files: Files to parse.
         :return: None.
         """
-        dug_plugin_manager = get_plugin_manager()
         if not output_data_path:
             output_data_path = storage.dug_annotation_path('')
         log.info("Parsing files")
@@ -427,12 +429,13 @@ class DugPipeline():
         return graph
 
     def index_elements(self, elements_file):
+        "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
         elements = storage.read_object(elements_file)
         count = 0
         total = len(elements)
         # Index Annotated Elements
-        log.info(f"found %d from elements files.", len(elements))
+        log.info("found %d from elements files.", len(elements))
         for element in elements:
             count += 1
             # Only index DugElements as concepts will be
@@ -441,6 +444,8 @@ class DugPipeline():
                 # override data-type with mapping values
                 if element.type.lower() in self.element_mapping:
                     element.type = self.element_mapping[element.type.lower()]
+
+                # Use the Dug Index object to submit the element to ES
                 self.index_obj.index_element(
                     element, index=self.variables_index)
             percent_complete = (count / total) * 100
@@ -449,6 +454,7 @@ class DugPipeline():
         log.info("Done indexing %s.", elements_file)
 
     def validate_indexed_element_file(self, elements_file):
+        "After submitting elements for indexing, verify that they're available"
         elements = [x for x in storage.read_object(elements_file)
                     if not isinstance(x, DugConcept)]
         # Pick ~ 10 %
@@ -456,8 +462,8 @@ class DugPipeline():
 
         # random.choices(elements, k=sample_size)
         test_elements = elements[:sample_size]
-        log.info(f"Picked {len(test_elements)} "
-                 f"from {elements_file} for validation.")
+        log.info("Picked %d from %s for validation.", len(test_elements),
+                 elements_file)
         for element in test_elements:
             # Pick a concept
             concepts = [element.concepts[curie] for curie in element.concepts
@@ -468,15 +474,15 @@ class DugPipeline():
                 concept = concepts[0]
                 curie = concept.id
                 search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', concept.name)
-                log.debug(f"Searching for Concept: {curie} "
-                          f"and Search term: {search_term}")
+                log.debug("Searching for Concept: %s and Search term: %s",
+                          str(curie), search_term)
                 all_elements_ids = self._search_elements(curie, search_term)
                 present = element.id in all_elements_ids
                 if not present:
-                    log.error(f"Did not find expected variable "
-                              f"{element.id} in search result.")
-                    log.error(f"Concept id : {concept.id}, "
-                              f"Search term: {search_term}")
+                    log.error("Did not find expected variable %s in search "
+                              "result.", str(element.id))
+                    log.error("Concept id : %s, Search term: %s",
+                              str(concept.id), search_term)
                     raise PipelineException(
                         f"Validation exception - did not find variable "
                         f"{element.id} from {str(elements_file)}"
@@ -484,11 +490,11 @@ class DugPipeline():
                         f"{concept.id} using Search Term : {search_term} ")
             else:
                 log.info(
-                    f"{element.id} has no concepts annotated. "
-                    f"Skipping validation for it."
-                )
+                    "%s has no concepts annotated. Skipping validation for it.",
+                    str(element.id))
 
     def _search_elements(self, curie, search_term):
+        "Asynchronously call a search on the curie and search term"
         response = self.event_loop.run_until_complete(
             self.search_obj.search_vars_unscored(
                 concept=curie,
@@ -496,9 +502,10 @@ class DugPipeline():
         ids_dict = []
         if 'total_items' in response:
             if response['total_items'] == 0:
-                log.error(f"No search elements returned for variable search:"
-                          f" {self.variables_index}.")
-                log.error(f"Concept id : {curie}, Search term: {search_term}")
+                log.error("No search elements returned for variable search: %s.",
+                          str(self.variables_index))
+                log.error("Concept id : %s, Search term: %s",
+                          str(curie), search_term)
                 # raise Exception(f"Validation error - Did not find {curie} for"
                 #                 f"Search term: {search_term}")
         else:
@@ -539,7 +546,7 @@ class DugPipeline():
         crawler.crawlspace = crawl_dir
         counter = 0
         total = len(concepts)
-        for concept_id, concept in concepts.items():
+        for concept in concepts.values():
             counter += 1
             try:
                 crawler.expand_concept(concept)
@@ -562,12 +569,13 @@ class DugPipeline():
             concept.clean()
             percent_complete = int((counter / total) * 100)
             if percent_complete % 10 == 0:
-                log.info(f"{percent_complete}%")
+                log.info("%d%%", percent_complete)
         storage.write_object(obj=concepts, path=output_file)
         storage.write_object(obj=extracted_dug_elements,
                              path=extracted_output_file)
 
     def index_concepts(self, concepts):
+        "Submit concepts to ElasticSearch for indexing"
         log.info("Indexing Concepts")
         total = len(concepts)
         count = 0
@@ -601,10 +609,9 @@ class DugPipeline():
         if len(concepts) == 0:
             log.info("No Concepts found.")
             return
-        log.info(
-            f"Found only {len(sample_concepts)} Concepts with "
-            f"Knowledge graph out of {len(concepts)}. "
-            f"{(len(sample_concepts) / len(concepts)) * 100} %")
+        log.info("Found only %d Concepts with Knowledge graph out of %d. %d%%",
+                 len(sample_concepts), len(concepts),
+                 (len(sample_concepts) / len(concepts)) * 100)
         # 2. pick elements that have concepts in the sample concepts set
         sample_elements = {}
         for element in elements:
@@ -636,8 +643,8 @@ class DugPipeline():
             # make unique
             search_terms_cap = 10
             search_terms = list(set(search_terms))[:search_terms_cap]
-            log.debug(f"Using {len(search_terms)} "
-                      f"Search terms for concept {curie}")
+            log.debug("Using %d Search terms for concept %s", len(search_terms),
+                      str(curie))
             for search_term in search_terms:
                 # avoids elastic failure due to some reserved characters
                 # 'search_phase_execution_exception',
@@ -647,27 +654,30 @@ class DugPipeline():
                 searched_element_ids = self._search_elements(curie, search_term)
 
                 if curie not in sample_elements:
-                    log.error(f"Did not find Curie id {curie} in Elements.")
-                    log.error(f"Concept id : {concept.id}, "
-                              f"Search term: {search_term}")
+                    log.error("Did not find Curie id %s in Elements.",
+                              str(curie))
+                    log.error("Concept id : %s, Search term: %s",
+                              str(concept.id), search_term)
                     raise PipelineException(
-                        f"Validation error - Did not find {element.id} for"
+                        f"Validation error - Did not find {curie} for "
+                        f"Concept id : {concept.id}, "
+                        f"Search term: {search_term}")
+
+                present = bool([x for x in sample_elements[curie]
+                                if x in searched_element_ids])
+                if not present:
+                    log.error("Did not find expected variable %s "
+                              "in search result.",
+                              str(curie))
+                    log.error("Concept id : %s, Search term: %s",
+                              str(concept.id), search_term)
+                    raise PipelineException(
+                        f"Validation error - Did not find {curie} for"
                         f" Concept id : {concept.id}, "
                         f"Search term: {search_term}")
-                else:
-                    present = bool([x for x in sample_elements[curie]
-                                    if x in searched_element_ids])
-                    if not present:
-                        log.error(f"Did not find expected variable "
-                                  f"{element.id} in search result.")
-                        log.error(f"Concept id : {concept.id}, "
-                                  f"Search term: {search_term}")
-                        raise PipelineException(
-                            f"Validation error - Did not find {element.id} for"
-                            f" Concept id : {concept.id}, "
-                            f"Search term: {search_term}")
 
     def clear_index(self, index_id):
+        "Delete the index specified by index_id from ES"
         exists = self.search_obj.es.indices.exists(index=index_id)
         if exists:
             log.info("Deleting index %s", str(index_id))
@@ -678,12 +688,15 @@ class DugPipeline():
         self.index_obj.init_indices()
 
     def clear_variables_index(self):
+        "Delete the variables index from ES"
         self.clear_index(self.variables_index)
 
     def clear_kg_index(self):
+        "Delete the KG index from ES"
         self.clear_index(self.kg_index)
 
     def clear_concepts_index(self):
+        "Delete the concepts index from ES"
         self.clear_index(self.concepts_index)
 
     ####
@@ -692,6 +705,37 @@ class DugPipeline():
     # to be dug_helpers.dug_utils.DugUtil. These are intented to be the "top
     # level" interface to Roger, which Airflow DAGs or other orchestrators can
     # call directly.
+
+    def _fetch_s3_file(self, filename, output_dir):
+        "Fetch a file from s3 to output_dir"
+        log.info("Fetching %s", filename)
+        output_name = filename.split('/')[-1]
+        output_path = output_dir / output_name
+        self.s3_utils.get(
+            str(filename),
+            str(output_path),
+        )
+        if self.unzip_source:
+            log.info("Unzipping %s", str(output_path))
+            with tarfile.open(str(output_path)) as tar:
+                tar.extractall(path=output_dir)
+        return output_path
+
+    def _fetch_remote_file(self, filename, output_dir, current_version):
+        "Fetch a file from a location using FileFetcher"
+        log.info("Fetching %s", filename)
+        # fetch from stars
+        remote_host = self.config.annotation_base_data_uri
+        fetch = FileFetcher(
+            remote_host=remote_host,
+            remote_dir=current_version,
+            local_dir=output_dir)
+        output_path = fetch(filename)
+        if self.unzip_source:
+            log.info("Unzipping %s", str(output_path))
+            with tarfile.open(str(output_path)) as tar:
+                tar.extractall(path=output_dir)
+        return output_path
 
     def get_versioned_files(self):
         """ Fetches a dug input data files to input file directory
@@ -706,7 +750,6 @@ class DugPipeline():
         data_sets = self.config.dug_inputs.data_sets
         log.info("dataset: %s", data_sets)
         pulled_files = []
-        s3_utils = S3Utils(self.config.s3_config)
         for data_set in data_sets:
             data_set_name, current_version = data_set.split(':')
             for item in meta_data["dug_inputs"]["versions"]:
@@ -715,33 +758,13 @@ class DugPipeline():
                     item["format"] == self.get_data_format()):
                     if data_store == "s3":
                         for filename in item["files"]["s3"]:
-                            log.info("Fetching %s", filename)
-                            output_name = filename.split('/')[-1]
-                            output_path = output_dir / output_name
-                            s3_utils.get(
-                                str(filename),
-                                str(output_path),
-                            )
-                            if self.unzip_source:
-                                log.info("Unzipping %s", str(output_path))
-                                tar = tarfile.open(str(output_path))
-                                tar.extractall(path=output_dir)
-                            pulled_files.append(output_path)
+                            pulled_files.append(
+                                self._fetch_s3_file(filename, output_dir))
                     else:
                         for filename in item["files"]["stars"]:
-                            log.info("Fetching %s", filename)
-                            # fetch from stars
-                            remote_host = self.config.annotation_base_data_uri
-                            fetch = FileFetcher(
-                                remote_host=remote_host,
-                                remote_dir=current_version,
-                                local_dir=output_dir)
-                            output_path = fetch(filename)
-                            if self.unzip_source:
-                                log.info("Unzipping %s", str(output_path))
-                                tar = tarfile.open(str(output_path))
-                                tar.extractall(path=output_dir)
-                            pulled_files.append(output_path)
+                            pulled_files.append(
+                                self.fetch_remote_file(filename, output_dir,
+                                                       current_version))
         return [str(filename) for filename in pulled_files]
 
     def get_objects(self, input_data_path=None):
@@ -768,82 +791,104 @@ class DugPipeline():
         output_log = self.log_stream.get_value() if to_string else ''
         return output_log
 
-    def index_variables(self, to_string=False, input_data_path=None,
-                        output_data_path=None):
-        "Index variables from element object files for pipeline"
+    def index_variables(self, to_string=False, element_object_files=None,
+                        input_data_path=None):
+        """Index variables from element object files for pipeline
+
+        if element_object_files is specified, only those files are
+        indexed. Otherwise, if the input_data_path is supplied, elements files
+        under that path are indexed. If neither is supplied, the default
+        directory is searched for index files and those are indexed.
+        """
         self.clear_variables_index()
-        element_object_files = storage.dug_elements_objects()
+        if element_object_files is None:
+            element_object_files = storage.dug_elements_objects(input_data_path)
         for file_ in element_object_files:
             self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
-    def validate_indexed_variables(self, to_string=None, input_data_path=None,
-                                   output_data_path=None):
+    def validate_indexed_variables(self, to_string=None,
+                                   element_object_files=None,
+                                   input_data_path=None):
         "Validate output from index variables task for pipeline"
-        element_object_files = storage.dug_elements_objects()
-        for eleents_object_file in elements_object_files:
-            log.info("Validating %s", str(elements_object_file))
-            self.validate_indexed_element_file(elements_object_file)
-        output_log = dug.log_stream.getvalue() if to_string else ''
+        if not element_object_files:
+            element_object_files = storage.dug_elements_objects(input_data_path)
+        for file_ in element_object_files:
+            log.info("Validating %s", str(file_))
+            self.validate_indexed_element_file(file_)
+        output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
-    def make_kg_tagged(self, to_string=False, input_data_path=None,
-                       output_data_path=None):
+    def make_kg_tagged(self, to_string=False, elements_files=None,
+                       input_data_path=None, output_data_path=None):
         "Create tagged knowledge graphs from elements"
-        output_base_path = storage.dug_kgx_path("")
-        storage.clear_dir(output_base_path)
+        if not output_data_path:
+            output_data_path = storage.dug_kgx_path("")
+        storage.clear_dir(output_data_path)
         log.info("Starting building KGX files")
 
-        elements_files = storage.dug_elements_objects()
+        if not elements_files:
+            elements_files = storage.dug_elements_objects(input_data_path)
         for file_ in elements_files:
             elements = storage.read_object(file_)
             if "topmed_" in file_:
-                kg = dug.make_tagged_kg(elements)
+                kg = self.make_tagged_kg(elements)
             else:
-                kg = dug.convert_to_kgx_json(elements)
+                kg = self.convert_to_kgx_json(elements)
             dug_base_file_name = file_.split(os.path.sep)[-2]
-            output_file_path = os.path.join(output_base_path,
+            output_file_path = os.path.join(output_data_path,
                                             dug_base_file_name + '_kgx.json')
             storage.write_object(kg, output_file_path)
             log.info("Wrote %d and %d edges, to %s", len(kg['nodes']),
                      len(kg['edges']), output_file_path)
-        output_log = dug.log_stream.getvalue() if to_string else ''
+        output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
-    def crawl_tranql(self, to_string=False, input_data_path=None,
-                     output_data_path=None):
+    def crawl_tranql(self, to_string=False, concept_files=None,
+                     input_data_path=None, output_data_path=None):
+        "Perform the tranql crawl"
         log.debug("Configuration: %s", str(self.config.dict))
 
-        concept_files = storage.dug_concepts_objects()
+        if not concept_files:
+            concept_files = storage.dug_concepts_objects(input_data_path)
 
-        crawl_dir = storage.dug_crawl_path('crawl_output')
+        if output_data_path:
+            crawl_dir = os.path.join(output_data_path, 'crawl_output')
+            expanded_concepts_dir = os.path.join(output_data_path,
+                                                 'expanded_concepts')
+        else:
+            crawl_dir = storage.dug_crawl_path('crawl_output')
+            expanded_concepts_dir = storage.dug_expanded_concepts_path("")
         log.info("Clearing crawl output dir %s", crawl_dir)
         storage.clear_dir(crawl_dir)
 
-        expanded_concepts_dir = storage.dug_expanded_concepts_path("")
         log.info("Clearing expanded concepts dir: %s", expanded_concepts_dir)
         storage.clear_dir(expanded_concepts_dir)
+
         log.info("Crawling Dug Concepts, found %d file(s).",
-                 len(concepts_files))
-        for file in concepts_files:
-            data_set = storage.read_object(file)
+                 len(concept_files))
+        for file_ in concept_files:
+            data_set = storage.read_object(file_)
             original_variables_dataset_name = os.path.split(
-                os.path.dirname(file))[-1]
-            dug.crawl_concepts(concepts=data_set,
-                               data_set_name=original_variables_dataset_name)
-        output_log = dug.log_stream.getvalue() if to_string else ''
+                os.path.dirname(file_))[-1]
+            self.crawl_concepts(concepts=data_set,
+                                data_set_name=original_variables_dataset_name)
+        output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
-    def index_concepts(self, to_string=False):
+    def index_concepts(self, to_string=False, expanded_concepts_files=None,
+                       input_data_path=None):
         "Index concepts from expanded concept files"
         # These are concepts that have knowledge graphs  from tranql
         # clear out concepts and kg indicies from previous runs
-        dug.clear_concepts_index()
-        dug.clear_kg_index()
-        expanded_concepts_files = storage.dug_expanded_concept_objects()
+        self.clear_concepts_index()
+        self.clear_kg_index()
+        if not expanded_concepts_files:
+            expanded_concepts_files = storage.dug_expanded_concept_objects(
+                input_data_path)
         for file_ in expanded_concepts_files:
             concepts = storage.read_object(file_)
-            dug.index_concepts(concepts=concepts)
-        output_log = dug.log_stream.getvalue() if to_string else ''
+            self.index_concepts(concepts=concepts)
+        output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
