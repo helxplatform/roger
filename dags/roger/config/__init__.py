@@ -27,6 +27,17 @@ class RedisConfig(DictLike):
 
 
 @dataclass
+class LakefsConfig(DictLike):
+    host: str
+    access_key_id: str
+    secret_access_key: str
+    branch: str
+    repo: str
+    enabled: bool = False
+
+
+
+@dataclass
 class LoggingConfig(DictLike):
     level: str = "DEBUG"
     format: str = '[%(name)s][%(filename)s][%(lineno)d][%(funcName)20s] %(levelname)s: %(message)s'
@@ -170,6 +181,7 @@ class RogerConfig(DictLike):
         self.annotation_base_data_uri: str = kwargs.pop("annotation_base_data_uri", "")
         self.validation = kwargs.pop("validation")
         self.dag_run = kwargs.pop('dag_run', None)
+        self.lakefs_config  = LakefsConfig(**kwargs.pop("lakefs_config"))
 
     def to_dug_conf(self) -> DugConfig:
         return DugConfig(
@@ -328,7 +340,7 @@ class Config:
     def __str__(self):
         flat = flatten(Config.__instance__)
         for k in flat:
-            if 'PASSWORD' in k or 'password' in k:
+            if 'PASSWORD' in k or 'password' in k or 'key' in k.lower():
                 flat[k] = '******'
         flat = unflatten(flat)
         result = json.dumps(flat)
