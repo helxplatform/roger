@@ -14,11 +14,12 @@ from typing import Union
 
 import requests
 
-from dug.core import get_parser, get_plugin_manager, DugConcept
-from dug.core.annotate import DugAnnotator, ConceptExpander
+from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept
+from dug.core.concept_expander import ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement
+from dug.core.annotators import Annotator
 from dug.core.async_search import Search
 from dug.core.index import Index
 
@@ -31,16 +32,19 @@ from utils.s3_utils import S3Utils
 
 log = get_logger()
 
+
 class PipelineException(Exception):
     "Exception raised from DugPipeline and related classes"
 
-def make_edge(subj,
-              obj,
-              predicate='biolink:related_to',
-              predicate_label='related to',
-              relation='biolink:related_to',
-              relation_label='related to'
-              ):
+
+def make_edge(
+    subj,
+    obj,
+    predicate="biolink:related_to",
+    predicate_label="related to",
+    relation="biolink:related_to",
+    relation_label="related to",
+):
     """Create an edge between two nodes.
 
     :param subj: The identifier of the subject.
@@ -52,8 +56,7 @@ def make_edge(subj,
     :param relation_label: Ontological edge type label.
     :returns: Returns and edge.
     """
-    edge_id = hashlib.md5(
-        f'{subj}{predicate}{obj}'.encode('utf-8')).hexdigest()
+    edge_id = hashlib.md5(f"{subj}{predicate}{obj}".encode("utf-8")).hexdigest()
     return {
         "subject": subj,
         "predicate": predicate,
@@ -62,16 +65,16 @@ def make_edge(subj,
         "relation": relation,
         "relation_label": relation_label,
         "object": obj,
-        "provided_by": "renci.bdc.semanticsearch.annotator"
+        "provided_by": "renci.bdc.semanticsearch.annotator",
     }
 
-class FileFetcher:
 
+class FileFetcher:
     def __init__(
-            self,
-            remote_host: str,
-            remote_dir: Union[str, Path],
-            local_dir: Union[str, Path] = "."
+        self,
+        remote_host: str,
+        remote_dir: Union[str, Path],
+        local_dir: Union[str, Path] = ".",
     ):
         self.remote_host = remote_host
         if isinstance(remote_dir, str):
@@ -93,14 +96,15 @@ class FileFetcher:
         else:
             log.debug(f"Response: {response.status_code}")
             if response.status_code == 200:
-                with local_path.open('wb') as file_obj:
+                with local_path.open("wb") as file_obj:
                     file_obj.write(response.content)
                 return local_path
             else:
                 log.debug(f"Unable to fetch {url}: {response.status_code}")
                 raise RuntimeError(f"Unable to fetch {url}")
 
-class DugPipeline():
+
+class DugPipeline:
     "Base class for dataset pipelines"
 
     pipeline_name = None
@@ -110,10 +114,12 @@ class DugPipeline():
         "Set instance variables and check to make sure we're overriden"
         if not (self.pipeline_name):
             raise PipelineException(
-                "Subclass must at least define pipeline_name as class var")
+                "Subclass must at least define pipeline_name as class var"
+            )
         dug_plugin_manager = get_plugin_manager()
-        self.parser: Parser = get_parser(dug_plugin_manager.hook,
-                                         self.get_parser_name())
+        self.parser: Parser = get_parser(
+            dug_plugin_manager.hook, self.get_parser_name()
+        )
 
         self.config = config
         self.bl_toolkit = BiolinkModel()
@@ -127,7 +133,9 @@ class DugPipeline():
             self.string_handler = logging.StreamHandler(self.log_stream)
             log.addHandler(self.string_handler)
 
-        self.annotator: DugAnnotator = self.factory.build_annotator()
+        self.annotator: Annotator = get_annotator(
+            dug_plugin_manager.hook, self.get_annotator_name(dug_conf)
+        )
 
         self.tranqlizer: ConceptExpander = self.factory.build_tranqlizer()
 
@@ -135,24 +143,28 @@ class DugPipeline():
         source = f"redis:{graph_name}"
         self.tranql_queries: dict = self.factory.build_tranql_queries(source)
         self.node_to_element_queries: list = (
-            self.factory.build_element_extraction_parameters(source))
+            self.factory.build_element_extraction_parameters(source)
+        )
 
         indexing_config = config.indexing
-        self.variables_index = indexing_config.get('variables_index')
-        self.concepts_index = indexing_config.get('concepts_index')
-        self.kg_index = indexing_config.get('kg_index')
+        self.variables_index = indexing_config.get("variables_index")
+        self.concepts_index = indexing_config.get("concepts_index")
+        self.kg_index = indexing_config.get("kg_index")
 
-        self.search_obj: Search = self.factory.build_search_obj([
-            self.variables_index,
-            self.concepts_index,
-            self.kg_index,
-        ])
-        self.index_obj: Index = self.factory.build_indexer_obj([
+        self.search_obj: Search = self.factory.build_search_obj(
+            [
                 self.variables_index,
                 self.concepts_index,
                 self.kg_index,
-
-        ])
+            ]
+        )
+        self.index_obj: Index = self.factory.build_indexer_obj(
+            [
+                self.variables_index,
+                self.concepts_index,
+                self.kg_index,
+            ]
+        )
 
     def __enter__(self):
         self.event_loop = asyncio.new_event_loop()
@@ -175,7 +187,7 @@ class DugPipeline():
         Defaults to pipeline_name unless self.data_format is set. This method
         can also be overriden
         """
-        return getattr(self, 'data_format', self.pipeline_name)
+        return getattr(self, "data_format", self.pipeline_name)
 
     def get_files_dir(self):
         """Access method for files_dir parameter
@@ -183,7 +195,7 @@ class DugPipeline():
         Defaults to pipeline_name unless self.files_dir is set. This method can
         also be overriden.
         """
-        return getattr(self, 'files_dir', self.pipeline_name)
+        return getattr(self, "files_dir", self.pipeline_name)
 
     def get_parser_name(self):
         """Access method for parser_name
@@ -191,7 +203,14 @@ class DugPipeline():
         Defaults to pipeline_name unless self.parser_name is set. This method
         can also be overriden.
         """
-        return getattr(self, 'parser_name', self.pipeline_name)
+        return getattr(self, "parser_name", self.pipeline_name)
+
+    def get_annotator_name(dug_conf):
+        """
+        Access method for annotator_name
+        Defaults to annotator_monarch unless specified using annotation.annotator_type in the configuration file.
+        """
+        return getattr(dug_conf, "annotator_type", "annotator_monarch")
 
     def annotate_files(self, parsable_files, output_data_path=None):
         """
@@ -202,33 +221,29 @@ class DugPipeline():
         """
         dug_plugin_manager = get_plugin_manager()
         if not output_data_path:
-            output_data_path = storage.dug_annotation_path('')
+            output_data_path = storage.dug_annotation_path("")
         log.info("Parsing files")
         for parse_file in parsable_files:
-            log.debug("Creating Dug Crawler object on parse_file %s",
-                      parse_file)
+            log.debug("Creating Dug Crawler object on parse_file %s", parse_file)
             crawler = Crawler(
                 crawl_file=parse_file,
                 parser=self.parser,
                 annotator=self.annotator,
-                tranqlizer='',
+                tranqlizer="",
                 tranql_queries=[],
-                http_session=self.cached_session
+                http_session=self.cached_session,
             )
 
             # configure output space.
-            current_file_name = '.'.join(
-                os.path.basename(parse_file).split('.')[:-1])
-            elements_file_path = os.path.join(
-                output_data_path, current_file_name)
-            elements_file = os.path.join(elements_file_path, 'elements.pickle')
-            concepts_file = os.path.join(elements_file_path, 'concepts.pickle')
+            current_file_name = ".".join(os.path.basename(parse_file).split(".")[:-1])
+            elements_file_path = os.path.join(output_data_path, current_file_name)
+            elements_file = os.path.join(elements_file_path, "elements.pickle")
+            concepts_file = os.path.join(elements_file_path, "concepts.pickle")
 
             # This is a file that the crawler will later populate. We start here
             # by creating an empty elements file.
             # This also creates output dir if it doesn't exist.
-            elements_json = os.path.join(elements_file_path,
-                                         'element_file.json')
+            elements_json = os.path.join(elements_file_path, "element_file.json")
             log.debug("Creating empty file: %s", elements_json)
             storage.write_object({}, elements_json)
 
@@ -272,12 +287,9 @@ class DugPipeline():
         """
         if written_nodes is None:
             written_nodes = set()
-        graph = {
-            "nodes": [],
-            "edges": []
-        }
-        edges = graph['edges']
-        nodes = graph['nodes']
+        graph = {"nodes": [], "edges": []}
+        edges = graph["edges"]
+        nodes = graph["nodes"]
 
         for _, element in enumerate(elements):
             # DugElement means a variable (Study variable...)
@@ -285,28 +297,32 @@ class DugPipeline():
                 continue
             study_id = element.collection_id
             if study_id not in written_nodes:
-                nodes.append({
-                    "id": study_id,
-                    "category": ["biolink:Study"],
-                    "name": study_id
-                })
+                nodes.append(
+                    {"id": study_id, "category": ["biolink:Study"], "name": study_id}
+                )
                 written_nodes.add(study_id)
 
             # connect the study and the variable.
-            edges.append(make_edge(
-                subj=element.id,
-                relation_label='part of',
-                relation='BFO:0000050',
-                obj=study_id,
-                predicate='biolink:part_of',
-                predicate_label='part of'))
-            edges.append(make_edge(
-                subj=study_id,
-                relation_label='has part',
-                relation="BFO:0000051",
-                obj=element.id,
-                predicate='biolink:has_part',
-                predicate_label='has part'))
+            edges.append(
+                make_edge(
+                    subj=element.id,
+                    relation_label="part of",
+                    relation="BFO:0000050",
+                    obj=study_id,
+                    predicate="biolink:part_of",
+                    predicate_label="part of",
+                )
+            )
+            edges.append(
+                make_edge(
+                    subj=study_id,
+                    relation_label="has part",
+                    relation="BFO:0000051",
+                    obj=element.id,
+                    predicate="biolink:has_part",
+                    predicate_label="has part",
+                )
+            )
 
             # a node for the variable. Should be BL compatible
             variable_node = {
@@ -315,7 +331,8 @@ class DugPipeline():
                 "category": ["biolink:StudyVariable"],
                 # bulk loader parsing issue
                 "description": (
-                    element.description.replace("'", '`').replace('\n', ' '))
+                    element.description.replace("'", "`").replace("\n", " ")
+                ),
             }
             if element.id not in written_nodes:
                 nodes.append(variable_node)
@@ -343,39 +360,28 @@ class DugPipeline():
                     continue
                 if identifier not in written_nodes:
                     if isinstance(category, str):
-                        bl_element = self.bl_toolkit.toolkit.get_element(
-                            category)
+                        bl_element = self.bl_toolkit.toolkit.get_element(category)
                         category = [bl_element.class_uri or bl_element.slot_uri]
-                    nodes.append({
-                        "id": identifier,
-                        "category": category,
-                        "name": metadata.name
-                    })
+                    nodes.append(
+                        {"id": identifier, "category": category, "name": metadata.name}
+                    )
                     written_nodes.add(identifier)
                 # related to edge
-                edges.append(make_edge(
-                    subj=element.id,
-                    obj=identifier
-                    ))
+                edges.append(make_edge(subj=element.id, obj=identifier))
                 # related to edge
-                edges.append(make_edge(
-                    subj=identifier,
-                    obj=element.id))
+                edges.append(make_edge(subj=identifier, obj=element.id))
         return graph
 
     def make_tagged_kg(self, elements):
-        """ Make a Translator standard knowledge graph representing
+        """Make a Translator standard knowledge graph representing
         tagged study variables.
         :param variables: The variables to model.
         :param tags: The tags characterizing the variables.
         :returns: dict with nodes and edges modeling a Translator/Biolink KG.
         """
-        graph = {
-            "nodes": [],
-            "edges": []
-        }
-        edges = graph['edges']
-        nodes = graph['nodes']
+        graph = {"nodes": [], "edges": []}
+        edges = graph["edges"]
+        nodes = graph["nodes"]
 
         # Create graph elements to model tags and their
         # links to identifiers gathered by semantic tagging
@@ -384,45 +390,44 @@ class DugPipeline():
         topmed_tag_concept_type = "TOPMed Phenotype Concept"
         nodes_written = set()
         for tag in elements:
-            if not (isinstance(tag, DugConcept)
-                    and tag.type == topmed_tag_concept_type):
+            if not (
+                isinstance(tag, DugConcept) and tag.type == topmed_tag_concept_type
+            ):
                 continue
             tag_id = tag.id
             tag_map[tag_id] = tag
-            nodes.append({
-                "id": tag_id,
-                "name": tag.name,
-                "description": tag.description.replace("'", "`"),
-                "category": ["biolink:InformationContentEntity"]
-            })
+            nodes.append(
+                {
+                    "id": tag_id,
+                    "name": tag.name,
+                    "description": tag.description.replace("'", "`"),
+                    "category": ["biolink:InformationContentEntity"],
+                }
+            )
 
             # Link ontology identifiers we've found for this tag via nlp.
             for identifier, metadata in tag.identifiers.items():
                 if isinstance(metadata.types, str):
-                    bl_element = self.bl_toolkit.toolkit.get_element(
-                        metadata.types)
+                    bl_element = self.bl_toolkit.toolkit.get_element(metadata.types)
                     category = [bl_element.class_uri or bl_element.slot_uri]
                 else:
                     category = metadata.types
                 synonyms = metadata.synonyms if metadata.synonyms else []
-                nodes.append({
-                    "id": identifier,
-                    "name": metadata.label,
-                    "category": category,
-                    "synonyms": synonyms
-                })
+                nodes.append(
+                    {
+                        "id": identifier,
+                        "name": metadata.label,
+                        "category": category,
+                        "synonyms": synonyms,
+                    }
+                )
                 nodes_written.add(identifier)
-                edges.append(make_edge(
-                    subj=tag_id,
-                    obj=identifier))
-                edges.append(make_edge(
-                    subj=identifier,
-                    obj=tag_id))
+                edges.append(make_edge(subj=tag_id, obj=identifier))
+                edges.append(make_edge(subj=identifier, obj=tag_id))
 
-        concepts_graph = self.convert_to_kgx_json(elements,
-                                                  written_nodes=nodes_written)
-        graph['nodes'] += concepts_graph['nodes']
-        graph['edges'] += concepts_graph['edges']
+        concepts_graph = self.convert_to_kgx_json(elements, written_nodes=nodes_written)
+        graph["nodes"] += concepts_graph["nodes"]
+        graph["edges"] += concepts_graph["edges"]
 
         return graph
 
@@ -441,47 +446,58 @@ class DugPipeline():
                 # override data-type with mapping values
                 if element.type.lower() in self.element_mapping:
                     element.type = self.element_mapping[element.type.lower()]
-                self.index_obj.index_element(
-                    element, index=self.variables_index)
+                self.index_obj.index_element(element, index=self.variables_index)
             percent_complete = (count / total) * 100
             if percent_complete % 10 == 0:
                 log.info("%d %%", percent_complete)
         log.info("Done indexing %s.", elements_file)
 
     def validate_indexed_element_file(self, elements_file):
-        elements = [x for x in storage.read_object(elements_file)
-                    if not isinstance(x, DugConcept)]
+        elements = [
+            x
+            for x in storage.read_object(elements_file)
+            if not isinstance(x, DugConcept)
+        ]
         # Pick ~ 10 %
         sample_size = int(len(elements) * 0.1)
 
         # random.choices(elements, k=sample_size)
         test_elements = elements[:sample_size]
-        log.info(f"Picked {len(test_elements)} "
-                 f"from {elements_file} for validation.")
+        log.info(
+            f"Picked {len(test_elements)} " f"from {elements_file} for validation."
+        )
         for element in test_elements:
             # Pick a concept
-            concepts = [element.concepts[curie] for curie in element.concepts
-                        if element.concepts[curie].name]
+            concepts = [
+                element.concepts[curie]
+                for curie in element.concepts
+                if element.concepts[curie].name
+            ]
 
             if len(concepts):
                 # Pick the first concept
                 concept = concepts[0]
                 curie = concept.id
-                search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', concept.name)
-                log.debug(f"Searching for Concept: {curie} "
-                          f"and Search term: {search_term}")
+                search_term = re.sub(r"[^a-zA-Z0-9_\ ]+", "", concept.name)
+                log.debug(
+                    f"Searching for Concept: {curie} " f"and Search term: {search_term}"
+                )
                 all_elements_ids = self._search_elements(curie, search_term)
                 present = element.id in all_elements_ids
                 if not present:
-                    log.error(f"Did not find expected variable "
-                              f"{element.id} in search result.")
-                    log.error(f"Concept id : {concept.id}, "
-                              f"Search term: {search_term}")
+                    log.error(
+                        f"Did not find expected variable "
+                        f"{element.id} in search result."
+                    )
+                    log.error(
+                        f"Concept id : {concept.id}, " f"Search term: {search_term}"
+                    )
                     raise PipelineException(
                         f"Validation exception - did not find variable "
                         f"{element.id} from {str(elements_file)}"
                         f"when searching variable index with Concept ID : "
-                        f"{concept.id} using Search Term : {search_term} ")
+                        f"{concept.id} using Search Term : {search_term} "
+                    )
             else:
                 log.info(
                     f"{element.id} has no concepts annotated. "
@@ -490,22 +506,26 @@ class DugPipeline():
 
     def _search_elements(self, curie, search_term):
         response = self.event_loop.run_until_complete(
-            self.search_obj.search_vars_unscored(
-                concept=curie,
-                query=search_term))
+            self.search_obj.search_vars_unscored(concept=curie, query=search_term)
+        )
         ids_dict = []
-        if 'total_items' in response:
-            if response['total_items'] == 0:
-                log.error(f"No search elements returned for variable search:"
-                          f" {self.variables_index}.")
+        if "total_items" in response:
+            if response["total_items"] == 0:
+                log.error(
+                    f"No search elements returned for variable search:"
+                    f" {self.variables_index}."
+                )
                 log.error(f"Concept id : {curie}, Search term: {search_term}")
                 # raise Exception(f"Validation error - Did not find {curie} for"
                 #                 f"Search term: {search_term}")
         else:
             for element_type in response:
-                all_elements_ids = [e['id'] for e in
-                                    reduce(lambda x, y: x + y['elements'],
-                                           response[element_type], [])]
+                all_elements_ids = [
+                    e["id"]
+                    for e in reduce(
+                        lambda x, y: x + y["elements"], response[element_type], []
+                    )
+                ]
                 ids_dict += all_elements_ids
         return ids_dict
 
@@ -517,14 +537,15 @@ class DugPipeline():
         :param data_set_name:
         :return:
         """
-        crawl_dir = storage.dug_crawl_path('crawl_output')
-        output_file_name = os.path.join(data_set_name,
-                                        'expanded_concepts.pickle')
-        extracted_dug_elements_file_name = os.path.join(data_set_name,
-                                                        'extracted_graph_elements.pickle')
+        crawl_dir = storage.dug_crawl_path("crawl_output")
+        output_file_name = os.path.join(data_set_name, "expanded_concepts.pickle")
+        extracted_dug_elements_file_name = os.path.join(
+            data_set_name, "extracted_graph_elements.pickle"
+        )
         output_file = storage.dug_expanded_concepts_path(output_file_name)
         extracted_output_file = storage.dug_expanded_concepts_path(
-            extracted_dug_elements_file_name)
+            extracted_dug_elements_file_name
+        )
         Path(crawl_dir).mkdir(parents=True, exist_ok=True)
         extracted_dug_elements = []
         log.debug("Creating Dug Crawler object")
@@ -550,22 +571,21 @@ class DugPipeline():
                 raise e
             for query in self.node_to_element_queries:
                 log.info(query)
-                casting_config = query['casting_config']
-                tranql_source = query['tranql_source']
-                dug_element_type = query['output_dug_type']
+                casting_config = query["casting_config"]
+                tranql_source = query["tranql_source"]
+                dug_element_type = query["output_dug_type"]
                 extracted_dug_elements += crawler.expand_to_dug_element(
                     concept=concept,
                     casting_config=casting_config,
                     dug_element_type=dug_element_type,
-                    tranql_source=tranql_source
+                    tranql_source=tranql_source,
                 )
             concept.clean()
             percent_complete = int((counter / total) * 100)
             if percent_complete % 10 == 0:
                 log.info(f"{percent_complete}%")
         storage.write_object(obj=concepts, path=output_file)
-        storage.write_object(obj=extracted_dug_elements,
-                             path=extracted_output_file)
+        storage.write_object(obj=extracted_dug_elements, path=extracted_output_file)
 
     def index_concepts(self, concepts):
         log.info("Indexing Concepts")
@@ -580,7 +600,7 @@ class DugPipeline():
                     concept_id=concept_id,
                     kg_answer=kg_answer,
                     index=self.kg_index,
-                    id_suffix=kg_answer_id
+                    id_suffix=kg_answer_id,
                 )
             percent_complete = int((count / total) * 100)
             if percent_complete % 10 == 0:
@@ -596,15 +616,17 @@ class DugPipeline():
         """
         # 1 . Find concepts with KG <= 10% of all concepts,
         # <= because we might have no results for some concepts from tranql
-        sample_concepts = {key: value for key, value
-                           in concepts.items() if value.kg_answers}
+        sample_concepts = {
+            key: value for key, value in concepts.items() if value.kg_answers
+        }
         if len(concepts) == 0:
             log.info("No Concepts found.")
             return
         log.info(
             f"Found only {len(sample_concepts)} Concepts with "
             f"Knowledge graph out of {len(concepts)}. "
-            f"{(len(sample_concepts) / len(concepts)) * 100} %")
+            f"{(len(sample_concepts) / len(concepts)) * 100} %"
+        )
         # 2. pick elements that have concepts in the sample concepts set
         sample_elements = {}
         for element in elements:
@@ -613,8 +635,7 @@ class DugPipeline():
             for concept in element.concepts:
                 # add elements that have kg
                 if concept in sample_concepts:
-                    sample_elements[concept] = sample_elements.get(
-                        concept, set())
+                    sample_elements[concept] = sample_elements.get(concept, set())
                     sample_elements[concept].add(element.id)
 
         # Time for some validation
@@ -636,43 +657,50 @@ class DugPipeline():
             # make unique
             search_terms_cap = 10
             search_terms = list(set(search_terms))[:search_terms_cap]
-            log.debug(f"Using {len(search_terms)} "
-                      f"Search terms for concept {curie}")
+            log.debug(f"Using {len(search_terms)} " f"Search terms for concept {curie}")
             for search_term in search_terms:
                 # avoids elastic failure due to some reserved characters
                 # 'search_phase_execution_exception',
                 # 'token_mgr_error: Lexical error ...
-                search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', search_term)
+                search_term = re.sub(r"[^a-zA-Z0-9_\ ]+", "", search_term)
 
                 searched_element_ids = self._search_elements(curie, search_term)
 
                 if curie not in sample_elements:
                     log.error(f"Did not find Curie id {curie} in Elements.")
-                    log.error(f"Concept id : {concept.id}, "
-                              f"Search term: {search_term}")
+                    log.error(
+                        f"Concept id : {concept.id}, " f"Search term: {search_term}"
+                    )
                     raise PipelineException(
                         f"Validation error - Did not find {element.id} for"
                         f" Concept id : {concept.id}, "
-                        f"Search term: {search_term}")
+                        f"Search term: {search_term}"
+                    )
                 else:
-                    present = bool([x for x in sample_elements[curie]
-                                    if x in searched_element_ids])
+                    present = bool(
+                        [x for x in sample_elements[curie] if x in searched_element_ids]
+                    )
                     if not present:
-                        log.error(f"Did not find expected variable "
-                                  f"{element.id} in search result.")
-                        log.error(f"Concept id : {concept.id}, "
-                                  f"Search term: {search_term}")
+                        log.error(
+                            f"Did not find expected variable "
+                            f"{element.id} in search result."
+                        )
+                        log.error(
+                            f"Concept id : {concept.id}, " f"Search term: {search_term}"
+                        )
                         raise PipelineException(
                             f"Validation error - Did not find {element.id} for"
                             f" Concept id : {concept.id}, "
-                            f"Search term: {search_term}")
+                            f"Search term: {search_term}"
+                        )
 
     def clear_index(self, index_id):
         exists = self.search_obj.es.indices.exists(index=index_id)
         if exists:
             log.info("Deleting index %s", str(index_id))
             response = self.event_loop.run_until_complete(
-                self.search_obj.es.indices.delete(index=index_id))
+                self.search_obj.es.indices.delete(index=index_id)
+            )
             log.info("Cleared Elastic : %s", str(response))
         log.info("Re-initializing the indicies")
         self.index_obj.init_indices()
@@ -694,11 +722,9 @@ class DugPipeline():
     # call directly.
 
     def get_versioned_files(self):
-        """ Fetches a dug input data files to input file directory
-        """
+        """Fetches a dug input data files to input file directory"""
         meta_data = storage.read_relative_object("../../metadata.yaml")
-        output_dir: Path = storage.dug_input_files_path(
-            self.get_files_dir())
+        output_dir: Path = storage.dug_input_files_path(self.get_files_dir())
         data_store = self.config.dug_inputs.data_source
 
         # clear dir
@@ -708,15 +734,17 @@ class DugPipeline():
         pulled_files = []
         s3_utils = S3Utils(self.config.s3_config)
         for data_set in data_sets:
-            data_set_name, current_version = data_set.split(':')
+            data_set_name, current_version = data_set.split(":")
             for item in meta_data["dug_inputs"]["versions"]:
-                if (item["version"] == current_version and
-                    item["name"] == data_set_name and
-                    item["format"] == self.get_data_format()):
+                if (
+                    item["version"] == current_version
+                    and item["name"] == data_set_name
+                    and item["format"] == self.get_data_format()
+                ):
                     if data_store == "s3":
                         for filename in item["files"]["s3"]:
                             log.info("Fetching %s", filename)
-                            output_name = filename.split('/')[-1]
+                            output_name = filename.split("/")[-1]
                             output_path = output_dir / output_name
                             s3_utils.get(
                                 str(filename),
@@ -735,7 +763,8 @@ class DugPipeline():
                             fetch = FileFetcher(
                                 remote_host=remote_host,
                                 remote_dir=current_version,
-                                local_dir=output_dir)
+                                local_dir=output_dir,
+                            )
                             output_path = fetch(filename)
                             if self.unzip_source:
                                 log.info("Unzipping %s", str(output_path))
@@ -751,45 +780,47 @@ class DugPipeline():
         frequently, it is expected.
         """
         if not input_data_path:
-            input_data_path = storage.dug_input_files_path(
-                self.get_files_dir())
+            input_data_path = storage.dug_input_files_path(self.get_files_dir())
         files = storage.get_files_recursive(
-            lambda file_name: file_name.endswith('.xml'),
-            input_data_path)
+            lambda file_name: file_name.endswith(".xml"), input_data_path
+        )
         return sorted([str(f) for f in files])
 
-    def annotate(self, to_string=False, files=None, input_data_path=None,
-                 output_data_path=None):
+    def annotate(
+        self, to_string=False, files=None, input_data_path=None, output_data_path=None
+    ):
         "Annotate files with the appropriate parsers and crawlers"
         if files is None:
             files = self.get_objects(input_data_path=input_data_path)
-        self.annotate_files(parsable_files=files,
-                            output_data_path=output_data_path)
-        output_log = self.log_stream.get_value() if to_string else ''
+        self.annotate_files(parsable_files=files, output_data_path=output_data_path)
+        output_log = self.log_stream.get_value() if to_string else ""
         return output_log
 
-    def index_variables(self, to_string=False, input_data_path=None,
-                        output_data_path=None):
+    def index_variables(
+        self, to_string=False, input_data_path=None, output_data_path=None
+    ):
         "Index variables from element object files for pipeline"
         self.clear_variables_index()
         element_object_files = storage.dug_elements_objects()
         for file_ in element_object_files:
             self.index_elements(file_)
-        output_log = self.log_stream.getvalue() if to_string else ''
+        output_log = self.log_stream.getvalue() if to_string else ""
         return output_log
 
-    def validate_indexed_variables(self, to_string=None, input_data_path=None,
-                                   output_data_path=None):
+    def validate_indexed_variables(
+        self, to_string=None, input_data_path=None, output_data_path=None
+    ):
         "Validate output from index variables task for pipeline"
         element_object_files = storage.dug_elements_objects()
         for eleents_object_file in elements_object_files:
             log.info("Validating %s", str(elements_object_file))
             self.validate_indexed_element_file(elements_object_file)
-        output_log = dug.log_stream.getvalue() if to_string else ''
+        output_log = dug.log_stream.getvalue() if to_string else ""
         return output_log
 
-    def make_kg_tagged(self, to_string=False, input_data_path=None,
-                       output_data_path=None):
+    def make_kg_tagged(
+        self, to_string=False, input_data_path=None, output_data_path=None
+    ):
         "Create tagged knowledge graphs from elements"
         output_base_path = storage.dug_kgx_path("")
         storage.clear_dir(output_base_path)
@@ -803,36 +834,41 @@ class DugPipeline():
             else:
                 kg = dug.convert_to_kgx_json(elements)
             dug_base_file_name = file_.split(os.path.sep)[-2]
-            output_file_path = os.path.join(output_base_path,
-                                            dug_base_file_name + '_kgx.json')
+            output_file_path = os.path.join(
+                output_base_path, dug_base_file_name + "_kgx.json"
+            )
             storage.write_object(kg, output_file_path)
-            log.info("Wrote %d and %d edges, to %s", len(kg['nodes']),
-                     len(kg['edges']), output_file_path)
-        output_log = dug.log_stream.getvalue() if to_string else ''
+            log.info(
+                "Wrote %d and %d edges, to %s",
+                len(kg["nodes"]),
+                len(kg["edges"]),
+                output_file_path,
+            )
+        output_log = dug.log_stream.getvalue() if to_string else ""
         return output_log
 
-    def crawl_tranql(self, to_string=False, input_data_path=None,
-                     output_data_path=None):
+    def crawl_tranql(
+        self, to_string=False, input_data_path=None, output_data_path=None
+    ):
         log.debug("Configuration: %s", str(self.config.dict))
 
         concept_files = storage.dug_concepts_objects()
 
-        crawl_dir = storage.dug_crawl_path('crawl_output')
+        crawl_dir = storage.dug_crawl_path("crawl_output")
         log.info("Clearing crawl output dir %s", crawl_dir)
         storage.clear_dir(crawl_dir)
 
         expanded_concepts_dir = storage.dug_expanded_concepts_path("")
         log.info("Clearing expanded concepts dir: %s", expanded_concepts_dir)
         storage.clear_dir(expanded_concepts_dir)
-        log.info("Crawling Dug Concepts, found %d file(s).",
-                 len(concepts_files))
+        log.info("Crawling Dug Concepts, found %d file(s).", len(concepts_files))
         for file in concepts_files:
             data_set = storage.read_object(file)
-            original_variables_dataset_name = os.path.split(
-                os.path.dirname(file))[-1]
-            dug.crawl_concepts(concepts=data_set,
-                               data_set_name=original_variables_dataset_name)
-        output_log = dug.log_stream.getvalue() if to_string else ''
+            original_variables_dataset_name = os.path.split(os.path.dirname(file))[-1]
+            dug.crawl_concepts(
+                concepts=data_set, data_set_name=original_variables_dataset_name
+            )
+        output_log = dug.log_stream.getvalue() if to_string else ""
         return output_log
 
     def index_concepts(self, to_string=False):
@@ -845,5 +881,5 @@ class DugPipeline():
         for file_ in expanded_concepts_files:
             concepts = storage.read_object(file_)
             dug.index_concepts(concepts=concepts)
-        output_log = dug.log_stream.getvalue() if to_string else ''
+        output_log = dug.log_stream.getvalue() if to_string else ""
         return output_log

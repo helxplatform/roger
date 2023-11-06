@@ -11,10 +11,12 @@ from pathlib import Path
 from typing import Union, List
 
 import requests
-from dug.core import get_parser, get_plugin_manager, DugConcept
-from dug.core.annotate import DugAnnotator, ConceptExpander
+from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept
+# from dug.core.annotate import DugAnnotator, ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
+from dug.core.concept_expander import ConceptExpander
+from dug.core.annotators import Annotator
 from dug.core.parsers import Parser, DugElement
 from dug.core.async_search import Search
 from dug.core.index import Index
@@ -44,8 +46,7 @@ class Dug:
             self.string_handler = logging.StreamHandler(self.log_stream)
             log.addHandler(self.string_handler)
 
-        self.annotator: DugAnnotator = self.factory.build_annotator()
-
+        
         self.tranqlizer: ConceptExpander = self.factory.build_tranqlizer()
 
         graph_name = self.config["redisgraph"]["graph"]
@@ -86,7 +87,7 @@ class Dug:
             log.exception("Got an exception")
 
     def annotate_files(self, parser_name, parsable_files,
-                       output_data_path=None):
+                       output_data_path=None, annotator_name="annotator-monarch"):
         """
         Annotates a Data element file using a Dug parser.
         :param parser_name: Name of Dug parser to use.
@@ -95,6 +96,7 @@ class Dug:
         """
         dug_plugin_manager = get_plugin_manager()
         parser: Parser = get_parser(dug_plugin_manager.hook, parser_name)
+        annotator: Annotator = get_annotator(dug_plugin_manager.hook, annotator_name)
         if not output_data_path:
             output_data_path = storage.dug_annotation_path('')
         log.info("Parsing files")
@@ -103,7 +105,7 @@ class Dug:
             crawler = Crawler(
                 crawl_file=parse_file,
                 parser=parser,
-                annotator=self.annotator,
+                annotator=annotator,
                 tranqlizer='',
                 tranql_queries=[],
                 http_session=self.cached_session
@@ -723,7 +725,7 @@ class DugUtil():
             log.info(files)
             dug.annotate_files(parser_name=parser_name,
                                parsable_files=files,
-                               output_data_path=output_data_path)
+                               output_data_path=output_data_path, )
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
