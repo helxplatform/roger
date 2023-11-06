@@ -14,11 +14,12 @@ from typing import Union
 
 import requests
 
-from dug.core import get_parser, get_plugin_manager, DugConcept
-from dug.core.annotate import DugAnnotator, ConceptExpander
+from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept
+from dug.core.concept_expander import ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement
+from dug.core.annotators import Annotator
 from dug.core.async_search import Search
 from dug.core.index import Index
 
@@ -130,8 +131,9 @@ class DugPipeline():
             log.addHandler(self.string_handler)
         self.s3_utils = S3Utils(self.config.s3_config)
 
-        self.annotator: DugAnnotator = self.factory.build_annotator()
-
+        self.annotator: Annotator = get_annotator(
+            dug_plugin_manager.hook, self.get_annotator_name(dug_conf)
+        )
         self.tranqlizer: ConceptExpander = self.factory.build_tranqlizer()
 
         graph_name = self.config["redisgraph"]["graph"]
@@ -195,6 +197,13 @@ class DugPipeline():
         can also be overriden.
         """
         return getattr(self, 'parser_name', self.pipeline_name)
+    
+    def get_annotator_name(dug_conf):
+        """
+        Access method for annotator_name
+        Defaults to annotator_monarch unless specified using annotation.annotator_type in the configuration file.
+        """
+        return getattr(dug_conf, "annotator_type", "annotator_monarch")
 
     def annotate_files(self, parsable_files, output_data_path=None):
         """

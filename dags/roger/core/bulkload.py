@@ -42,6 +42,11 @@ class BulkLoad:
             targets=glob.glob (storage.bulk_path ("nodes/**.csv")) + \
             glob.glob (storage.bulk_path ("edges/**.csv")))
 
+    def create (self):
+        """Used in the CLI on args.create_bulk"""
+        self.create_nodes_csv_file()
+        self.create_edges_csv_file()
+
     def create_nodes_csv_file(self):
         if self.tables_up_to_date ():
             log.info ("up to date.")
