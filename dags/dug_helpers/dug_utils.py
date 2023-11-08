@@ -388,6 +388,7 @@ class Dug:
                 raise Exception(f"Validation error - Did not find {curie} for"
                                 f"Search term: {search_term}")
             else:
+                del response['total_items']
                 for element_type in response:
                     all_elements_ids = [e['id'] for e in
                                         reduce(lambda x, y: x + y['elements'], response[element_type], [])]
