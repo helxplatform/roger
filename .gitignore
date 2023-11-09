@@ -1,7 +1,4 @@
 # Git ignore bioler plate from https://github.com/github/gitignore/blob/master/Python.gitignore
-.secret-env
-Merge-helm/
-Merge-Dug-Architecture.md
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
