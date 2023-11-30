@@ -477,11 +477,14 @@ class KGXModel:
                 edges['id'] = xxh64_hexdigest(
                     edges['subject'] + edges['predicate'] +
                     edges['object'] +
-                    edges.get("biolink:primary_knowledge_source", ""))                
+                    edges.get("biolink:primary_knowledge_source", ""))
+                keys_to_del = set()
                 for key in edges:
                     if key.startswith('biolink:'):
                         edges[key.replace('biolink:', '')] = edges[key]
-                        del edges[key]
+                        keys_to_del.add(key)
+                for k in keys_to_del:
+                    del edges[k]
                 stream.write(json.dumps(edges).decode('utf-8') + '\n')
 
         write_merge_metric['edges_writing_time'] = time.time() - start_edge_jsonl
