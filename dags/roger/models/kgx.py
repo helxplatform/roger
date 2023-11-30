@@ -480,7 +480,6 @@ class KGXModel:
                     edges.get("biolink:primary_knowledge_source", ""))                
                 for key in edges:
                     if key.startswith('biolink:'):
-                        keys_to_del.append(key)
                         edges[key.replace('biolink:', '')] = edges[key]
                         del edges[key]
                 stream.write(json.dumps(edges).decode('utf-8') + '\n')
