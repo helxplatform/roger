@@ -281,7 +281,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     op_kwargs = {
         "python_callable": a_callable,
         "to_string": True,
-        "pass_conf"
+        "pass_conf": pass_conf
     }
     if func_kwargs is None:
         func_kwargs = {}
