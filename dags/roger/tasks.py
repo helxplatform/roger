@@ -41,6 +41,7 @@ def task_wrapper(python_callable, **kwargs):
     """
     # get dag config provided
     dag_run = kwargs.get('dag_run')
+    pass_conf = kwargs.get('pass_conf', True)
 
     # get input path
     input_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
@@ -59,7 +60,9 @@ def task_wrapper(python_callable, **kwargs):
     logger.info(f"Task function args: {func_args}")
     # overrides values
     config.dag_run = dag_run
-    return python_callable(config=config, **func_args)
+    if pass_conf:
+        return python_callable(config=config, **func_args)
+    return python_callable(**func_args)
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
     """ Get an executor configuration.
@@ -268,7 +271,7 @@ def setup_input_data(context, exec_conf):
         )
 
 def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
-                       input_branch=None):
+                       input_branch=None, pass_conf=True):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -278,6 +281,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     op_kwargs = {
         "python_callable": a_callable,
         "to_string": True,
+        "pass_conf"
     }
     if func_kwargs is None:
         func_kwargs = {}
@@ -336,36 +340,42 @@ def create_pipeline_taskgroup(
             annotate_task = create_python_task(
                 dag,
                 f"annotate_{name}_files",
-                pipeline.annotate)
+                pipeline.annotate, 
+                pass_conf=False)
 
             index_variables_task = create_python_task(
                 dag,
                 f"index_{name}_variables",
-                pipeline.index_variables)
+                pipeline.index_variables,
+                pass_conf=False)
             index_variables_task.set_upstream(annotate_task)
 
             validate_index_variables_task = create_python_task(
                 dag,
                 f"validate_{name}_index_variables",
-                pipeline.validate_indexed_variables)
+                pipeline.validate_indexed_variables,
+                pass_conf=False)
             validate_index_variables_task.set_upstream(index_variables_task)
 
             make_kgx_task = create_python_task(
                 dag,
                 f"make_kgx_{name}",
-                pipeline.make_kg_tagged) # TODO
+                pipeline.make_kg_tagged,
+                pass_conf=False) # TODO
             make_kgx_task.set_upstream(annotate_task)
 
             crawl_task = create_python_task(
                 dag,
                 f"crawl_{name}",
-                pipeline.crawl_tranql) #TODO
+                pipeline.crawl_tranql,
+                pass_conf=False) #TODO
             crawl_task.set_upstream(annotate_task)
 
             index_concepts_task = create_python_task(
                 dag,
                 f"index_{name}_concepts",
-                pipeline.index_concepts) # TODO
+                pipeline.index_concepts,
+                pass_conf=False) # TODO
             index_concepts_task.set_upstream(crawl_task)
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
