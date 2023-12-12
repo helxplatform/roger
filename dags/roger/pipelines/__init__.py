@@ -21,7 +21,8 @@ def get_pipeline_classes():
         importlib.import_module(f"{__name__}.{mod_name}")
 
     pipeline_list = []
+    testing_pps = ['anvil']
     for subclass in DugPipeline.__subclasses__():
-        if getattr(subclass, 'pipeline_name'):
+        if getattr(subclass, 'pipeline_name') and getattr(subclass, 'pipeline_name') in testing_pps:
             pipeline_list.append(subclass)
     return pipeline_list
