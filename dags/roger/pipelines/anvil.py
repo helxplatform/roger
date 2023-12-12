@@ -8,7 +8,7 @@ class AnvilPipeline(DugPipeline):
     pipeline_name = 'anvil'
     parser_name = 'Anvil'
 
-    def get_objects(input_data_path=None):
+    def get_objects(self, input_data_path=None):
         """Retrieve anvil objects
 
         This code is imported from roger.core.storage.dug_anvil_objects
