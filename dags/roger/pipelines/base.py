@@ -788,7 +788,7 @@ class DugPipeline():
             files = self.get_objects(input_data_path=input_data_path)
         self.annotate_files(parsable_files=files,
                             output_data_path=output_data_path)
-        output_log = self.log_stream.get_value() if to_string else ''
+        output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
     def index_variables(self, to_string=False, element_object_files=None,
