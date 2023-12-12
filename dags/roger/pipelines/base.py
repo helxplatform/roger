@@ -108,7 +108,7 @@ class DugPipeline():
     pipeline_name = None
     unzip_source = True
 
-    def __init__(self, config: RogerConfig, to_string=True):
+    def __init__(self, config: RogerConfig, to_string=False):
         "Set instance variables and check to make sure we're overriden"
         if not self.pipeline_name:
             raise PipelineException(
