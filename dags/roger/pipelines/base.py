@@ -124,8 +124,8 @@ class DugPipeline():
         self.factory = DugFactory(dug_conf)
         self.cached_session = self.factory.build_http_session()
         self.event_loop = asyncio.new_event_loop()
+        self.log_stream = StringIO()
         if to_string:
-            self.log_stream = StringIO()
             self.string_handler = logging.StreamHandler(self.log_stream)
             log.addHandler(self.string_handler)
         self.s3_utils = S3Utils(self.config.s3_config)
