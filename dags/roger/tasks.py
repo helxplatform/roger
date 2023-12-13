@@ -342,7 +342,9 @@ def create_pipeline_taskgroup(
             annotate_task = create_python_task(
                 dag,
                 f"annotate_{name}_files",
-                pipeline.annotate, 
+                pipeline.annotate,
+                input_repo=getattr(pipeline_class, 'pipeline_name'),
+                input_branch='v1.0'
                 pass_conf=False)
 
             index_variables_task = create_python_task(
