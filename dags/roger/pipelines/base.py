@@ -830,6 +830,7 @@ class DugPipeline():
 
         if not elements_files:
             elements_files = storage.dug_elements_objects(input_data_path)
+        log.info(f"found {len(elements_files)} files : {elements_files}")
         for file_ in elements_files:
             elements = storage.read_object(file_)
             if "topmed_" in file_:
