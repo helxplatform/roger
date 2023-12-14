@@ -244,9 +244,8 @@ def setup_input_data(context, exec_conf):
     input_repo = exec_conf['input_repo']
     input_branch = exec_conf['input_branch']
     # If input repo is provided use that as source of files
-    if exec_conf.get('input_repo'):
-
-        remote_paths = ['*'] # root path to get all sub dirs
+    if exec_conf.get('path') and exec_conf.get('path') == '*':
+        remote_paths =  ['*'] # root path to get all sub dirs
     # else figure out what to pull from the repo based on task name etc...
     else:
         task_instance: TaskInstance = context['ti']
@@ -289,7 +288,10 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
         func_kwargs = {}
     op_kwargs.update(func_kwargs)
     if config.lakefs_config.enabled:
-        pre_exec_conf = {}
+        pre_exec_conf = {
+            'input_repo': config.lakefs_config.repo,
+            'input_branch': config.lakefs_config.branch
+        }
         # configure pre-excute function
         pre_exec = setup_input_data
         if input_repo and input_branch:
@@ -297,7 +299,8 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
             # and we want to pull data from a different repo.
             pre_exec_conf = {
                 'input_repo': input_repo,
-                'input_branch': input_branch
+                'input_branch': input_branch, 
+                'path': '*'
             }
             # if this is not defined , we can use the context (dag context) to
             # resolve the previous task output dir.
