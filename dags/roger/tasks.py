@@ -359,7 +359,7 @@ def create_pipeline_taskgroup(
                 f"validate_{name}_index_variables",
                 pipeline.validate_indexed_variables,
                 pass_conf=False)
-            validate_index_variables_task.set_upstream(index_variables_task)
+            validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
 
             make_kgx_task = create_python_task(
                 dag,
