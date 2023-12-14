@@ -288,7 +288,9 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     if func_kwargs is None:
         func_kwargs = {}
     op_kwargs.update(func_kwargs)
-    if config.lakefs_config.enabled:        
+    if config.lakefs_config.enabled:
+        pre_exec_conf = {}
+        # configure pre-excute function
         pre_exec = setup_input_data
         if input_repo and input_branch:
             # if the task is a root task , begining of the dag...
