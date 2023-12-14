@@ -288,12 +288,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     if func_kwargs is None:
         func_kwargs = {}
     op_kwargs.update(func_kwargs)
-    if config.lakefs_config.enabled:
-        pre_exec_conf = {
-            'input_repo': config.lakefs_config.repo,
-            'input_branch': config.lakefs_config.branch
-        }
-        # configure pre-excute function
+    if config.lakefs_config.enabled:        
         pre_exec = setup_input_data
         if input_repo and input_branch:
             # if the task is a root task , begining of the dag...
@@ -365,21 +360,21 @@ def create_pipeline_taskgroup(
                 dag,
                 f"make_kgx_{name}",
                 pipeline.make_kg_tagged,
-                pass_conf=False) # TODO
+                pass_conf=False)
             make_kgx_task.set_upstream(annotate_task)
 
             crawl_task = create_python_task(
                 dag,
                 f"crawl_{name}",
                 pipeline.crawl_tranql,
-                pass_conf=False) #TODO
+                pass_conf=False) 
             crawl_task.set_upstream(annotate_task)
 
             index_concepts_task = create_python_task(
                 dag,
                 f"index_{name}_concepts",
                 pipeline.index_concepts,
-                pass_conf=False) # TODO
+                pass_conf=False)
             index_concepts_task.set_upstream(crawl_task)
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
