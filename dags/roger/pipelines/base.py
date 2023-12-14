@@ -800,7 +800,7 @@ class DugPipeline():
         return output_log
 
     def index_variables(self, to_string=False, element_object_files=None,
-                        input_data_path=None):
+                        input_data_path=None, output_data_path=None):
         """Index variables from element object files for pipeline
 
         if element_object_files is specified, only those files are
@@ -818,7 +818,8 @@ class DugPipeline():
 
     def validate_indexed_variables(self, to_string=None,
                                    element_object_files=None,
-                                   input_data_path=None):
+                                   input_data_path=None,
+                                   output_data_path=None):
         "Validate output from index variables task for pipeline"
         if not element_object_files:
             element_object_files = storage.dug_elements_objects(input_data_path)
@@ -887,7 +888,7 @@ class DugPipeline():
         return output_log
 
     def index_concepts(self, to_string=False, expanded_concepts_files=None,
-                       input_data_path=None):
+                       input_data_path=None, output_data_path=None):
         "Index concepts from expanded concept files"
         # These are concepts that have knowledge graphs  from tranql
         # clear out concepts and kg indicies from previous runs
