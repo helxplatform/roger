@@ -233,8 +233,8 @@ def dug_elements_objects(data_path=None):
             os.path.join('*', 'elements.pickle'))
     else:
         concepts_file_pattern = os.path.join(
-            data_path, '*', 'elements.pickle')
-    return sorted(glob.glob(concepts_file_pattern))
+            data_path, '**', 'elements.pickle')
+    return sorted(glob.glob(concepts_file_pattern, recursive=True))
 
 def dug_input_files_path(name) -> pathlib.Path:
     path = ROGER_DATA_DIR / "dug" / "input_files" / name
