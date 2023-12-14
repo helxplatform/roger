@@ -222,9 +222,9 @@ def dug_concepts_objects(data_path):
         concepts_file_path = dug_annotation_path(
             os.path.join('*','concepts.pickle'))
     else:
-        concepts_file_pattern = os.path.join(
-            data_path, '*', 'concepts.pickle')
-    return sorted(glob.glob(concepts_file_path))
+        concepts_file_path = os.path.join(
+            data_path, '**', 'concepts.pickle')
+    return sorted(glob.glob(concepts_file_path, recursive=True))
 
 def dug_elements_objects(data_path=None):
     """ A list of dug annotation Objects. """
