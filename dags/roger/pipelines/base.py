@@ -516,7 +516,7 @@ class DugPipeline():
                 ids_dict += all_elements_ids
         return ids_dict
 
-    def crawl_concepts(self, concepts, data_set_name):
+    def crawl_concepts(self, concepts, data_set_name, output_path=None):
         """Adds tranql KG to Concepts
 
         Terms grabbed from KG are also added as search terms
@@ -524,14 +524,22 @@ class DugPipeline():
         :param data_set_name:
         :return:
         """
+        # TODO crawl dir seems to be storaing crawling info to avoid re-crawling, but is that consting us much? , it was when tranql was slow, but
+        # might right to consider getting rid of it.
         crawl_dir = storage.dug_crawl_path('crawl_output')
         output_file_name = os.path.join(data_set_name,
                                         'expanded_concepts.pickle')
         extracted_dug_elements_file_name = os.path.join(data_set_name,
                                                         'extracted_graph_elements.pickle')
-        output_file = storage.dug_expanded_concepts_path(output_file_name)
-        extracted_output_file = storage.dug_expanded_concepts_path(
-            extracted_dug_elements_file_name)
+        if not output_path:
+            output_file = storage.dug_expanded_concepts_path(output_file_name)
+            extracted_output_file = storage.dug_expanded_concepts_path(
+                extracted_dug_elements_file_name
+                )
+        else:
+            output_file = os.path.join(output_path, output_file_name)
+            extracted_output_file = os.path.join( output_path, extracted_dug_elements_file_name)
+        
         Path(crawl_dir).mkdir(parents=True, exist_ok=True)
         extracted_dug_elements = []
         log.debug("Creating Dug Crawler object")
@@ -874,7 +882,7 @@ class DugPipeline():
             original_variables_dataset_name = os.path.split(
                 os.path.dirname(file_))[-1]
             self.crawl_concepts(concepts=data_set,
-                                data_set_name=original_variables_dataset_name)
+                                data_set_name=original_variables_dataset_name, output_path= output_data_path)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
