@@ -42,15 +42,17 @@ def task_wrapper(python_callable, **kwargs):
     # get dag config provided
     dag_run = kwargs.get('dag_run')
     pass_conf = kwargs.get('pass_conf', True)
-
-    # get input path
-    input_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
-                                                           roger_config=config,
-                                                           suffix='input')
-    # get output path from task id run id dag id combo
-    output_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
-                                                           roger_config=config,
-                                                           suffix='output')
+    if config.lakefs_config.enabled:
+        # get input path
+        input_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
+                                                            roger_config=config,
+                                                            suffix='input')
+        # get output path from task id run id dag id combo
+        output_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
+                                                            roger_config=config,
+                                                            suffix='output')
+    else: 
+        input_data_path, output_data_path = None, None
     # cast it to a path object
     func_args = {
         'input_data_path': input_data_path,
@@ -272,59 +274,66 @@ def setup_input_data(context, exec_conf):
         )
 
 def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
-                       input_branch=None, pass_conf=True):
+                       input_branch=None, pass_conf=True, no_output_files=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
     """
+    # these are actual arguments passed down to the task function
     op_kwargs = {
         "python_callable": a_callable,
         "to_string": True,
         "pass_conf": pass_conf
     }
+    # update / override some of the args passed to the task function by default
     if func_kwargs is None:
         func_kwargs = {}
     op_kwargs.update(func_kwargs)
+
+
+    # Python operator arguments , by default for non-lakefs config this is all we need. 
+    python_operator_args = {
+            "task_id": name,
+            "python_callable":task_wrapper,            
+            "executor_config" : get_executor_config(),
+            "dag": dag,
+            "provide_context" : True
+    }
+
+    # if we have lakefs...
     if config.lakefs_config.enabled:
+
+        # repo and branch for pre-execution , to download input objects
         pre_exec_conf = {
             'input_repo': config.lakefs_config.repo,
             'input_branch': config.lakefs_config.branch
         }
-        # configure pre-excute function
-        pre_exec = setup_input_data
+
         if input_repo and input_branch:
             # if the task is a root task , begining of the dag...
             # and we want to pull data from a different repo.
             pre_exec_conf = {
                 'input_repo': input_repo,
                 'input_branch': input_branch, 
+                # if path is not defined , we can use the context (dag context) to
+                # resolve the previous task dir in lakefs.
                 'path': '*'
             }
-            # if this is not defined , we can use the context (dag context) to
-            # resolve the previous task output dir.
+            
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
-        return PythonOperator(
-            task_id=name,
-            python_callable=task_wrapper,
-            op_kwargs=op_kwargs,
-            executor_config=get_executor_config(),
-            dag=dag,
-            provide_context=True,
-            on_success_callback=partial(avalon_commit_callback,
-                                        kwargs=op_kwargs),
-            pre_execute=pre_exec
-        )
-    else:
-        return PythonOperator(
-            task_id=name,
-            python_callable=task_wrapper,
-            op_kwargs=op_kwargs,
-            executor_config=get_executor_config(),
-            dag=dag,
-            provide_context=True
-        )
+        # add pre_exec partial function as an argument to python executor conf 
+        python_operator_args['pre_execute'] = pre_exec
+
+        # if the task has  output files, we will add a commit callback  
+        if not no_output_files:
+            python_operator_args['on_success_callback'] = partial(avalon_commit_callback, kwargs=op_kwargs)
+        
+    # add kwargs
+    python_operator_args["op_kwargs"] = op_kwargs
+
+    return PythonOperator(**python_operator_args)
 
 def create_pipeline_taskgroup(
         dag,
@@ -351,14 +360,19 @@ def create_pipeline_taskgroup(
                 dag,
                 f"index_{name}_variables",
                 pipeline.index_variables,
-                pass_conf=False)
+                pass_conf=False,
+                # declare that this task will not generate files.
+                no_output_files=True)
             index_variables_task.set_upstream(annotate_task)
 
             validate_index_variables_task = create_python_task(
                 dag,
                 f"validate_{name}_index_variables",
-                pipeline.validate_indexed_variables,
-                pass_conf=False)
+                pipeline.validate_indexed_variables,                
+                pass_conf=False,
+                 # declare that this task will not generate files.
+                no_output_files=True
+                )
             validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
 
             make_kgx_task = create_python_task(
@@ -379,8 +393,13 @@ def create_pipeline_taskgroup(
                 dag,
                 f"index_{name}_concepts",
                 pipeline.index_concepts,
-                pass_conf=False)
+                pass_conf=False,
+                 # declare that this task will not generate files.
+                no_output_files=True)
             index_concepts_task.set_upstream(crawl_task)
+
+
+            #@TODO add validate_concepts call.
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
             complete_task.set_upstream(
