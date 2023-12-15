@@ -6,9 +6,6 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.empty import EmptyOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.dates import days_ago
-
-from roger.config import config, RogerConfig
-
 from airflow.models import DAG
 from airflow.models.dag import DagContext
 from airflow.models.taskinstance import TaskInstance
@@ -16,10 +13,10 @@ from typing import Union
 from pathlib import Path
 import glob
 import shutil
-from roger.config import config
 
 from roger.config import config, RogerConfig
 from roger.logger import get_logger
+from roger.pipelines.base import DugPipeline
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 import lakefs_client
 from functools import partial
@@ -348,6 +345,7 @@ def create_pipeline_taskgroup(
 
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
         with pipeline_class(config=configparam, **kwargs) as pipeline:
+            pipeline: DugPipeline
             annotate_task = create_python_task(
                 dag,
                 f"annotate_{name}_files",
@@ -398,12 +396,20 @@ def create_pipeline_taskgroup(
                 no_output_files=True)
             index_concepts_task.set_upstream(crawl_task)
 
+            validate_index_concepts_task = create_python_task(
+                dag,
+                f"validate_{name}_index_concepts",
+                pipeline.validate_indexed_concepts,
+                pass_conf=False,
+                 # declare that this task will not generate files.
+                no_output_files=True
+            )
+            validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task])
 
-            #@TODO add validate_concepts call.
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
             complete_task.set_upstream(
-                (make_kgx_task, index_concepts_task,
-                 validate_index_variables_task))
+                (make_kgx_task,
+                 validate_index_variables_task, validate_index_concepts_task))
 
     return tg
