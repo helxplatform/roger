@@ -603,7 +603,7 @@ class DugPipeline():
                 log.info("%s %%", percent_complete)
         log.info("Done Indexing concepts")
 
-    def validate_indexed_concepts(self, elements, concepts):
+    def _validate_indexed_concepts(self, elements, concepts):
         """
         Validates linked concepts are searchable
         :param elements: Annotated dug elements
@@ -826,6 +826,40 @@ class DugPipeline():
         for file_ in element_object_files:
             log.info("Validating %s", str(file_))
             self.validate_indexed_element_file(file_)
+        output_log = self.log_stream.getvalue() if to_string else ''
+        return output_log
+
+    def validate_indexed_concepts(self, config=None, to_string=None, input_data_path=None, output_data_path=None):
+        """
+        Entry for validate concepts
+        """
+        get_data_set_name = lambda file: os.path.split(os.path.dirname(file))[-1]
+        expanded_concepts_files_dict = {
+            get_data_set_name(file): file for file  in storage.dug_expanded_concept_objects(data_path=input_data_path)
+        }
+        annotated_elements_files_dict = {
+            get_data_set_name(file): file for file in storage.dug_elements_objects(data_path=input_data_path)   
+        }
+        try: 
+            assert len(expanded_concepts_files_dict) == len(annotated_elements_files_dict)
+        except:
+            log.error("Files Annotated Elements files and Expanded concepts files, should be pairs")
+            if len(expanded_concepts_files_dict) > len(annotated_elements_files_dict):
+                log.error("Some Annotated Elements files (from load_and_annotate task) are missing")
+            else:
+                log.error("Some Expanded Concepts files (from crawl task) are missing")
+            log.error(f"Annotated Datasets : {list(annotated_elements_files_dict.keys())}")
+            log.error(f"Expanded Concepts Datasets: {list(expanded_concepts_files_dict.keys())}")
+            exit(-1)
+        for data_set_name in annotated_elements_files_dict:
+            log.debug(f"Reading concepts and elements for dataset {data_set_name}")
+            elements_file_path = annotated_elements_files_dict[data_set_name]
+            concepts_file_path = expanded_concepts_files_dict[data_set_name]
+            dug_elements = storage.read_object(elements_file_path)
+            dug_concepts = storage.read_object(concepts_file_path)
+            log.debug(f"Read {len(dug_elements)} elements, and {len(dug_concepts)} Concepts")
+            log.info(f"Validating {data_set_name}")
+            self._validate_indexed_concepts(elements=dug_elements, concepts=dug_concepts)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 

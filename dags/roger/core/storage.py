@@ -194,14 +194,14 @@ def dug_annotation_path(name):
 def dug_expanded_concepts_path(name):
     return str(ROGER_DATA_DIR / 'dug' / 'expanded_concepts' / name)
 
-def dug_expanded_concept_objects(data_path):
+def dug_expanded_concept_objects(data_path=None):
     "Return a list of files containing expaneded concept objects"
     if data_path:
-        file_pattern = os.path.join(data_path, '*', 'expanded_concepts.pickle')
+        file_pattern = os.path.join(data_path, '**', 'expanded_concepts.pickle')
     else:
         file_pattern = dug_expanded_concepts_path(
             os.path.join('*','expanded_concepts.pickle'))
-    return sorted(glob.glob(file_pattern))
+    return sorted(glob.glob(file_pattern, recursive=True))
 
 def dug_extracted_elements_objects():
     file_pattern = dug_expanded_concepts_path(
