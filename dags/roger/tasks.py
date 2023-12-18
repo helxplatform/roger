@@ -404,7 +404,7 @@ def create_pipeline_taskgroup(
                  # declare that this task will not generate files.
                 no_output_files=True
             )
-            validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task])
+            validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, index_variables_task])
 
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
