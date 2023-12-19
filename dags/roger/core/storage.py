@@ -194,13 +194,13 @@ def dug_annotation_path(name):
 def dug_expanded_concepts_path(name):
     return str(ROGER_DATA_DIR / 'dug' / 'expanded_concepts' / name)
 
-def dug_expanded_concept_objects(data_path=None):
+def dug_expanded_concept_objects(data_path=None, format="pickle"):
     "Return a list of files containing expaneded concept objects"
     if data_path:
-        file_pattern = os.path.join(data_path, '**', 'expanded_concepts.pickle')
+        file_pattern = os.path.join(data_path, '**', f'expanded_concepts.{format}')
     else:
         file_pattern = dug_expanded_concepts_path(
-            os.path.join('*','expanded_concepts.pickle'))
+            os.path.join('*',f'expanded_concepts.{format}'))
     return sorted(glob.glob(file_pattern, recursive=True))
 
 def dug_extracted_elements_objects():
@@ -216,24 +216,24 @@ def dug_kgx_objects():
     dug_kgx_pattern = dug_kgx_path("**.json")
     return sorted(glob.glob(dug_kgx_pattern))
 
-def dug_concepts_objects(data_path):
+def dug_concepts_objects(data_path, format="pickle"):
     """ A list of dug annotation Objects. """
     if not data_path:
         concepts_file_path = dug_annotation_path(
-            os.path.join('*','concepts.pickle'))
+            os.path.join('*',f'concepts.{format}'))
     else:
         concepts_file_path = os.path.join(
-            data_path, '**', 'concepts.pickle')
+            data_path, '**', f'concepts.{format}')
     return sorted(glob.glob(concepts_file_path, recursive=True))
 
-def dug_elements_objects(data_path=None):
+def dug_elements_objects(data_path=None, format='pickle'):
     """ A list of dug annotation Objects. """
     if not data_path:
         concepts_file_pattern = dug_annotation_path(
-            os.path.join('*', 'elements.pickle'))
+            os.path.join('*', f'elements.{format}'))
     else:
         concepts_file_pattern = os.path.join(
-            data_path, '**', 'elements.pickle')
+            data_path, '**', f'elements.{format}')
     return sorted(glob.glob(concepts_file_pattern, recursive=True))
 
 def dug_input_files_path(name) -> pathlib.Path:
