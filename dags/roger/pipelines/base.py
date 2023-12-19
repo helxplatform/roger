@@ -890,12 +890,10 @@ class DugPipeline():
 
     def crawl_tranql(self, to_string=False, concept_files=None,
                      input_data_path=None, output_data_path=None):
-        "Perform the tranql crawl"
-        log.debug("Configuration: %s", str(self.config.dict))
+        "Perform the tranql crawl"        
 
         if not concept_files:
-            concept_json = storage.dug_concepts_objects(input_data_path, format='json') or {}
-            concept_files = {k: self.concepts_from_json(v) for k, v in concept_json.items()}
+            concept_files = storage.dug_concepts_objects(input_data_path, format='json')          
 
         if output_data_path:
             crawl_dir = os.path.join(output_data_path, 'crawl_output')
