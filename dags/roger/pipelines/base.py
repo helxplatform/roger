@@ -933,7 +933,7 @@ class DugPipeline():
 
     def elements_from_json(self, elements_json):
         concepts = {}
-        for curie, value in elements_json['concepts']:
+        for curie, value in elements_json.get('concepts', {}).items():
             concepts[curie] = self.concepts_from_json(value)
         elements_json['concepts'] = concepts
         return DugElement(**elements_json)
