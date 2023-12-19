@@ -18,7 +18,8 @@ from dug.core import get_parser, get_plugin_manager, DugConcept
 from dug.core.annotate import DugAnnotator, ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
-from dug.core.parsers import Parser, DugElement
+from dug.core.parsers import Parser, DugElement, DugConcept
+from dug.core.annotate import Identifier
 from dug.core.async_search import Search
 from dug.core.index import Index
 
@@ -431,7 +432,7 @@ class DugPipeline():
     def index_elements(self, elements_file):
         "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
-        elements = storage.read_object(elements_file)
+        elements = [self.elements_from_json(e) for e in storage.read_object(elements_file)]
         count = 0
         total = len(elements)
         # Index Annotated Elements
@@ -526,9 +527,9 @@ class DugPipeline():
         # might right to consider getting rid of it.
         crawl_dir = storage.dug_crawl_path('crawl_output')
         output_file_name = os.path.join(data_set_name,
-                                        'expanded_concepts.pickle')
+                                        'expanded_concepts.json')
         extracted_dug_elements_file_name = os.path.join(data_set_name,
-                                                        'extracted_graph_elements.pickle')
+                                                        'extracted_graph_elements.json')
         if not output_path:
             output_file = storage.dug_expanded_concepts_path(output_file_name)
             extracted_output_file = storage.dug_expanded_concepts_path(
@@ -893,7 +894,7 @@ class DugPipeline():
         log.debug("Configuration: %s", str(self.config.dict))
 
         if not concept_files:
-            concept_files = storage.dug_concepts_objects(input_data_path)
+            concept_files = {k: self.concepts_from_json(v) for k, v in storage.dug_concepts_objects(input_data_path, format='json')}
 
         if output_data_path:
             crawl_dir = os.path.join(output_data_path, 'crawl_output')
@@ -911,13 +912,31 @@ class DugPipeline():
         log.info("Crawling Dug Concepts, found %d file(s).",
                  len(concept_files))
         for file_ in concept_files:
-            data_set = storage.read_object(file_)
+            objects = storage.read_object(file_) 
+            objects = objects or {} 
+            if not objects:
+                log.info(f'no concepts in {file_}')
+            data_set = {k: self.concepts_from_json(v) for k, v in objects.items()}
             original_variables_dataset_name = os.path.split(
                 os.path.dirname(file_))[-1]
             self.crawl_concepts(concepts=data_set,
                                 data_set_name=original_variables_dataset_name, output_path= output_data_path)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
+
+    def concepts_from_json(self, concept_json):
+        identifiers = {}
+        for curie, value in concept_json['identifiers'].items():
+            identifiers[curie] = Identifier(**value)
+        concept_json['identifiers'] = identifiers
+        return DugConcept(**concept_json)
+
+    def elements_from_json(self, elements_json):
+        concepts = {}
+        for curie, value in elements_json['concepts']:
+            concepts[curie] = self.concepts_from_json(value)
+        elements_json['concepts'] = concepts
+        return DugElement(**elements_json)
 
     def index_concepts(self, to_string=False,
                        input_data_path=None, output_data_path=None):
@@ -927,9 +946,12 @@ class DugPipeline():
         self.clear_concepts_index()
         self.clear_kg_index()
         expanded_concepts_files = storage.dug_expanded_concept_objects(
-            input_data_path)
+            input_data_path, format="json")
         for file_ in expanded_concepts_files:
             concepts = storage.read_object(file_)
-            self._index_concepts(concepts=concepts)
+            concepts_objects = {}
+            for curie, value in concepts.items():
+                concepts_objects[curie] = self.concepts_from_json(value)
+            self._index_concepts(concepts=concepts_objects)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
