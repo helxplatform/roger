@@ -557,7 +557,6 @@ class DugPipeline():
             counter += 1
             try:
                 crawler.expand_concept(concept)
-                log.info(concept.search_terms)
                 concept.set_search_terms()
                 concept.set_optional_terms()
             except Exception as e:
@@ -578,8 +577,8 @@ class DugPipeline():
             percent_complete = int((counter / total) * 100)
             if percent_complete % 10 == 0:
                 log.info("%d%%", percent_complete)
-        storage.write_object(obj=concepts, path=output_file)
-        storage.write_object(obj=extracted_dug_elements,
+        storage.write_object(obj={k: v.jsonable() for k, v in concepts.items()}, path=output_file)
+        storage.write_object(obj=[v.jsonable() for v in extracted_dug_elements],
                              path=extracted_output_file)
 
     def _index_concepts(self, concepts):
