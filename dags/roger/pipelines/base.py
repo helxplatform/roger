@@ -223,16 +223,16 @@ class DugPipeline():
                 os.path.basename(parse_file).split('.')[:-1])
             elements_file_path = os.path.join(
                 output_data_path, current_file_name)
-            elements_file = os.path.join(elements_file_path, 'elements.pickle')
-            concepts_file = os.path.join(elements_file_path, 'concepts.pickle')
+            elements_file = os.path.join(elements_file_path, 'elements.json')
+            concepts_file = os.path.join(elements_file_path, 'concepts.json')
 
             # This is a file that the crawler will later populate. We start here
             # by creating an empty elements file.
             # This also creates output dir if it doesn't exist.
-            elements_json = os.path.join(elements_file_path,
-                                         'element_file.json')
-            log.debug("Creating empty file: %s", elements_json)
-            storage.write_object({}, elements_json)
+            # elements_json = os.path.join(elements_file_path,
+            #                              'element_file.json')
+            # log.debug("Creating empty file: %s", elements_json)
+            # storage.write_object({}, elements_json)
 
             # Use the specified parser to parse the parse_file into elements.
             log.debug("Parser is %s", str(self.parser))
@@ -259,10 +259,10 @@ class DugPipeline():
             # Write pickles of objects to file
             log.info("Parsed and annotated: %s", parse_file)
 
-            storage.write_object(elements, elements_file)
-            log.info("Pickled annotated elements to : %s", elements_file)
-            storage.write_object(non_expanded_concepts, concepts_file)
-            log.info("Pickled annotated concepts to : %s", concepts_file)
+            storage.write_object([e.jsonable() for e in elements], elements_file)
+            log.info("Serialized annotated elements to : %s", elements_file)
+            storage.write_object([c.jsonable() for c in non_expanded_concepts], concepts_file)
+            log.info("Serialized annotated concepts to : %s", concepts_file)
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """
