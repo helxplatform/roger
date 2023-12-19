@@ -894,7 +894,8 @@ class DugPipeline():
         log.debug("Configuration: %s", str(self.config.dict))
 
         if not concept_files:
-            concept_files = {k: self.concepts_from_json(v) for k, v in storage.dug_concepts_objects(input_data_path, format='json')}
+            concept_json = storage.dug_concepts_objects(input_data_path, format='json') or {}
+            concept_files = {k: self.concepts_from_json(v) for k, v in concept_json.items()}
 
         if output_data_path:
             crawl_dir = os.path.join(output_data_path, 'crawl_output')
