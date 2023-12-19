@@ -686,7 +686,7 @@ class DugPipeline():
 
     def clear_index(self, index_id):
         "Delete the index specified by index_id from ES"
-        exists = self.search_obj.es.indices.exists(index=index_id)
+        exists = self.event_loop.run_until_complete(self.search_obj.es.indices.exists(index=index_id)
         if exists:
             log.info("Deleting index %s", str(index_id))
             response = self.event_loop.run_until_complete(
