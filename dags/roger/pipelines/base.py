@@ -928,9 +928,8 @@ class DugPipeline():
         # clear out concepts and kg indicies from previous runs
         self.clear_concepts_index()
         self.clear_kg_index()
-        if not expanded_concepts_files:
-            expanded_concepts_files = storage.dug_expanded_concept_objects(
-                input_data_path)
+        expanded_concepts_files = storage.dug_expanded_concept_objects(
+            input_data_path)
         for file_ in expanded_concepts_files:
             concepts = storage.read_object(file_)
             self._index_concepts(concepts=concepts)
