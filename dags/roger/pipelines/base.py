@@ -582,7 +582,7 @@ class DugPipeline():
         storage.write_object(obj=extracted_dug_elements,
                              path=extracted_output_file)
 
-    def index_concepts(self, concepts):
+    def _index_concepts(self, concepts):
         "Submit concepts to ElasticSearch for indexing"
         log.info("Indexing Concepts")
         total = len(concepts)
@@ -921,7 +921,7 @@ class DugPipeline():
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
-    def index_concepts(self, to_string=False, expanded_concepts_files=None,
+    def index_concepts(self, to_string=False,
                        input_data_path=None, output_data_path=None):
         "Index concepts from expanded concept files"
         # These are concepts that have knowledge graphs  from tranql
@@ -933,6 +933,6 @@ class DugPipeline():
                 input_data_path)
         for file_ in expanded_concepts_files:
             concepts = storage.read_object(file_)
-            self.index_concepts(concepts=concepts)
+            self._index_concepts(concepts=concepts)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
