@@ -809,8 +809,8 @@ class DugPipeline():
         """
         self.clear_variables_index()
         if element_object_files is None:
-            element_object_files = storage.dug_elements_objects(input_data_path)
-        for file_ in element_object_files:
+            element_object_files = storage.dug_elements_objects(input_data_path,format='json')
+        for file_ in element_object_files:            
             self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
