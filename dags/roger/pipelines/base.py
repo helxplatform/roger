@@ -261,7 +261,7 @@ class DugPipeline():
 
             storage.write_object([e.jsonable() for e in elements], elements_file)
             log.info("Serialized annotated elements to : %s", elements_file)
-            storage.write_object([c.jsonable() for c in non_expanded_concepts], concepts_file)
+            storage.write_object({c: v.jsonable() for c ,v  in non_expanded_concepts.items()}, concepts_file)
             log.info("Serialized annotated concepts to : %s", concepts_file)
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
