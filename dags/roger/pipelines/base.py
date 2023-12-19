@@ -495,25 +495,23 @@ class DugPipeline():
 
     def _search_elements(self, curie, search_term):
         "Asynchronously call a search on the curie and search term"
-        response = self.event_loop.run_until_complete(
-            self.search_obj.search_vars_unscored(
-                concept=curie,
-                query=search_term))
+        response = self.event_loop.run_until_complete(self.search_obj.search_vars_unscored(
+            concept=curie,
+            query=search_term
+        ))
         ids_dict = []
         if 'total_items' in response:
             if response['total_items'] == 0:
-                log.error("No search elements returned for variable search: %s.",
-                          str(self.variables_index))
-                log.error("Concept id : %s, Search term: %s",
-                          str(curie), search_term)
-                # raise Exception(f"Validation error - Did not find {curie} for"
-                #                 f"Search term: {search_term}")
-        else:
-            for element_type in response:
-                all_elements_ids = [e['id'] for e in
-                                    reduce(lambda x, y: x + y['elements'],
-                                           response[element_type], [])]
-                ids_dict += all_elements_ids
+                log.error(f"No search elements returned for variable search: {self.variables_index}.")
+                log.error(f"Concept id : {curie}, Search term: {search_term}")
+                raise Exception(f"Validation error - Did not find {curie} for"
+                                f"Search term: {search_term}")
+            else:
+                del response['total_items']
+                for element_type in response:
+                    all_elements_ids = [e['id'] for e in
+                                        reduce(lambda x, y: x + y['elements'], response[element_type], [])]
+                    ids_dict += all_elements_ids
         return ids_dict
 
     def crawl_concepts(self, concepts, data_set_name, output_path=None):
