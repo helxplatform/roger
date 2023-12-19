@@ -557,6 +557,7 @@ class DugPipeline():
             counter += 1
             try:
                 crawler.expand_concept(concept)
+                log.info(concept.search_terms)
                 concept.set_search_terms()
                 concept.set_optional_terms()
             except Exception as e:
@@ -891,7 +892,6 @@ class DugPipeline():
     def crawl_tranql(self, to_string=False, concept_files=None,
                      input_data_path=None, output_data_path=None):
         "Perform the tranql crawl"        
-
         if not concept_files:
             concept_files = storage.dug_concepts_objects(input_data_path, format='json')          
 
