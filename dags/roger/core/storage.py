@@ -117,7 +117,7 @@ def write_object (obj, path, key=None):
             yaml.dump (obj, outfile)
     elif path.endswith (".json"):
         with open (path, "w", encoding='utf-8') as stream:
-            stream.write(str(json.dumps (obj).decode('utf-8')))
+            stream.write(str(json.dumps (obj, indent=2).decode('utf-8')))
     elif path.endswith(".pickle"):
         with open (path, "wb") as stream:
             pickle.dump(obj, file=stream)
