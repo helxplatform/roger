@@ -207,9 +207,9 @@ class DugPipeline():
         if not output_data_path:
             output_data_path = storage.dug_annotation_path('')
         log.info("Parsing files")
-        for parse_file in parsable_files:
-            log.debug("Creating Dug Crawler object on parse_file %s",
-                      parse_file)
+        for _, parse_file in enumerate(parsable_files):
+            log.debug("Creating Dug Crawler object on parse_file %s at %d of %d",
+                      parse_file, _ , len(parsable_files))
             crawler = Crawler(
                 crawl_file=parse_file,
                 parser=self.parser,
@@ -259,11 +259,19 @@ class DugPipeline():
 
             # Write pickles of objects to file
             log.info("Parsed and annotated: %s", parse_file)
-
-            storage.write_object([e.jsonable() for e in elements], elements_file)
+            json_elements = [e.jsonable() for e in elements]
+            storage.write_object(json_elements, elements_file)
             log.info("Serialized annotated elements to : %s", elements_file)
-            storage.write_object({c: v.jsonable() for c ,v  in non_expanded_concepts.items()}, concepts_file)
+            log.info("Deleting in memory elements and elements json")
+            # to avoid memory leak
+            del json_elements, elements
+                        
+            json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
+            storage.write_object(json_concepts, concepts_file)
             log.info("Serialized annotated concepts to : %s", concepts_file)
+            log.info("Deleting concepts and concepts jsonable")
+            # to avoid memory leak
+            del json_concepts, json_elements
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """
