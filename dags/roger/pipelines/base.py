@@ -284,7 +284,9 @@ class DugPipeline():
 
         for _, element in enumerate(elements):
             # DugElement means a variable (Study variable...)
-            if not isinstance(element, DugElement):
+            try:
+                element = self.elements_from_json(element)
+            except:
                 continue
             study_id = element.collection_id
             if study_id not in written_nodes:
@@ -387,6 +389,10 @@ class DugPipeline():
         topmed_tag_concept_type = "TOPMed Phenotype Concept"
         nodes_written = set()
         for tag in elements:
+            try:
+                tag = self.elements_from_json(tag)
+            except TypeError as err:
+                tag = self.concepts_from_json(tag)
             if not (isinstance(tag, DugConcept)
                     and tag.type == topmed_tag_concept_type):
                 continue
@@ -871,7 +877,7 @@ class DugPipeline():
         log.info("Starting building KGX files")
 
         if not elements_files:
-            elements_files = storage.dug_elements_objects(input_data_path)
+            elements_files = storage.dug_elements_objects(input_data_path, format='json')
         log.info(f"found {len(elements_files)} files : {elements_files}")
         for file_ in elements_files:
             elements = storage.read_object(file_)

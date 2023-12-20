@@ -181,25 +181,26 @@ def avalon_commit_callback(context: DagContext, **kwargs):
                                   repository=repo, left_ref=branch,
                                   right_ref=temp_branch_name):
         logger.info("Diff: " + str(diff))
+    
+    try:
+        # merging temp branch to working branch
+        client._client.refs_api.merge_into_branch(repository=repo,
+                                                source_ref=temp_branch_name,
+                                                destination_branch=branch)
 
-    # merging temp branch to working branch
-
-    client._client.refs_api.merge_into_branch(repository=repo,
-                                              source_ref=temp_branch_name,
-                                              destination_branch=branch)
-
-    logger.info(f"merged branch {temp_branch_name} into {branch}")
-
+        logger.info(f"merged branch {temp_branch_name} into {branch}")
+    except Exception as e:
+        # remove temp 
+        logger.error(e)
     # delete temp branch
-
-    client._client.branches_api.delete_branch(
-        repository=repo,
-        branch=temp_branch_name
-    )
-
-    logger.info(f"deleted temp branch {temp_branch_name}")
-    logger.info(f"deleting local dir {local_path}")
-    files_to_clean = glob.glob(local_path + '*')
+    finally:
+        client._client.branches_api.delete_branch(
+            repository=repo,
+            branch=temp_branch_name
+        )
+        logger.info(f"deleted temp branch {temp_branch_name}")
+        logger.info(f"deleting local dir {local_path}")
+        files_to_clean = glob.glob(local_path + '**', recursive=True) + [local_path]
     for f in files_to_clean:
         shutil.rmtree(f)
 
