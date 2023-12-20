@@ -265,13 +265,13 @@ class DugPipeline():
             log.info("Deleting in memory elements and elements json")
             # to avoid memory leak
             del json_elements, elements
-                        
+
             json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
             storage.write_object(json_concepts, concepts_file)
             log.info("Serialized annotated concepts to : %s", concepts_file)
             log.info("Deleting concepts and concepts jsonable")
             # to avoid memory leak
-            del json_concepts, json_elements
+            del json_concepts, non_expanded_concepts
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """
