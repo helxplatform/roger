@@ -225,7 +225,9 @@ class DugPipeline():
             elements_file_path = os.path.join(
                 output_data_path, current_file_name)
             elements_file = os.path.join(elements_file_path, 'elements.json')
+            elements_file_pickle = elements_file.replace('.json', '.pickle')
             concepts_file = os.path.join(elements_file_path, 'concepts.json')
+            concepts_file_pickle = concepts_file.replace('.json', '.pickle')
 
             # This is a file that the crawler will later populate. We start here
             # by creating an empty elements file.
@@ -257,8 +259,15 @@ class DugPipeline():
             # so we want to make sure to catch those modifications.
             elements = crawler.elements
 
+            # store pickles for testing
+            storage.write_object(elements, elements_file_pickle)
+            storage.write_object(non_expanded_concepts, concepts_file_pickle)
+
+
+
             # Write pickles of objects to file
             log.info("Parsed and annotated: %s", parse_file)
+            
             json_elements = [e.jsonable() for e in elements]
             storage.write_object(json_elements, elements_file)
             log.info("Serialized annotated elements to : %s", elements_file)
