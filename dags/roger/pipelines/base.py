@@ -262,14 +262,14 @@ class DugPipeline():
             json_elements = [e.jsonable() for e in elements]
             storage.write_object(json_elements, elements_file)
             log.info("Serialized annotated elements to : %s", elements_file)
-            log.info("Deleting in memory elements and elements json")
+            log.info("Deleting in memory elements and elements json from memory")
             # to avoid memory leak
             del json_elements, elements
 
             json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
             storage.write_object(json_concepts, concepts_file)
             log.info("Serialized annotated concepts to : %s", concepts_file)
-            log.info("Deleting concepts and concepts jsonable")
+            log.info("Deleting concepts and concepts jsonable from memory")
             # to avoid memory leak
             del json_concepts, non_expanded_concepts
 
@@ -591,9 +591,18 @@ class DugPipeline():
             percent_complete = int((counter / total) * 100)
             if percent_complete % 10 == 0:
                 log.info("%d%%", percent_complete)
-        storage.write_object(obj={k: v.jsonable() for k, v in concepts.items()}, path=output_file)
-        storage.write_object(obj=[v.jsonable() for v in extracted_dug_elements],
+        log.info("Crawling %s done", data_set_name)
+        json_concepts = {k: v.jsonable() for k, v in concepts.items()}
+        storage.write_object(obj=json_concepts, path=output_file)
+        log.info ("Concepts serialized to %s", output_file)
+        del json_concepts, concepts
+        log.info("Deleted concepts and concepts json from memory")
+        json_extracted_concepts = [v.jsonable() for v in extracted_dug_elements]
+        storage.write_object(obj=json_extracted_concepts,
                              path=extracted_output_file)
+        log.info("Extracted elements serialized to %s", extracted_output_file)
+        del json_extracted_concepts, extracted_dug_elements
+        log.info("Deleted extracted elements and json extracted elements from memory")
 
     def _index_concepts(self, concepts):
         "Submit concepts to ElasticSearch for indexing"
