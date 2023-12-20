@@ -813,7 +813,7 @@ class DugPipeline():
         under that path are indexed. If neither is supplied, the default
         directory is searched for index files and those are indexed.
         """
-        self.clear_variables_index()
+        # self.clear_variables_index()
         if element_object_files is None:
             element_object_files = storage.dug_elements_objects(input_data_path,format='json')
         for file_ in element_object_files:            
@@ -947,8 +947,8 @@ class DugPipeline():
         "Index concepts from expanded concept files"
         # These are concepts that have knowledge graphs  from tranql
         # clear out concepts and kg indicies from previous runs
-        self.clear_concepts_index()
-        self.clear_kg_index()
+        # self.clear_concepts_index()
+        # self.clear_kg_index()
         expanded_concepts_files = storage.dug_expanded_concept_objects(
             input_data_path, format="json")
         for file_ in expanded_concepts_files:
