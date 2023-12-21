@@ -230,13 +230,7 @@ class DugPipeline():
             elements_file = os.path.join(elements_file_path, 'elements.json')
             elements_file_pickle = elements_file.replace('.json', '.pickle')
             concepts_file = os.path.join(elements_file_path, 'concepts.json')
-            concepts_file_pickle = concepts_file.replace('.json', '.pickle')
-            log.info(f"""
-            ******************
-                     {crawler.elements}
-                     {crawler.concepts}
-            *************
-            """)
+            concepts_file_pickle = concepts_file.replace('.json', '.pickle')            
             # This is a file that the crawler will later populate. We start here
             # by creating an empty elements file.
             # This also creates output dir if it doesn't exist.
@@ -279,19 +273,19 @@ class DugPipeline():
             # Write pickles of objects to file
             log.info("Parsed and annotated: %s", parse_file)
             
-            json_elements = [e.jsonable() for e in elements]
-            storage.write_object(json_elements, elements_file)
-            log.info("Serialized annotated elements to : %s", elements_file)
-            log.info("Deleting in memory elements and elements json from memory")
-            # to avoid memory leak
-            del json_elements, elements            
+            # json_elements = [e.jsonable() for e in elements]
+            # storage.write_object(json_elements, elements_file)
+            # log.info("Serialized annotated elements to : %s", elements_file)
+            # log.info("Deleting in memory elements and elements json from memory")
+            # # to avoid memory leak
+            # del json_elements, elements            
 
-            json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
-            storage.write_object(json_concepts, concepts_file)
-            log.info("Serialized annotated concepts to : %s", concepts_file)
-            log.info("Deleting concepts and concepts jsonable from memory")
-            # to avoid memory leak
-            del json_concepts, non_expanded_concepts
+            # json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
+            # storage.write_object(json_concepts, concepts_file)
+            # log.info("Serialized annotated concepts to : %s", concepts_file)
+            # log.info("Deleting concepts and concepts jsonable from memory")
+            # # to avoid memory leak
+            # del json_concepts, non_expanded_concepts
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """
