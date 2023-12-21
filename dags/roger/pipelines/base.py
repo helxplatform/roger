@@ -588,7 +588,7 @@ class DugPipeline():
             if percent_complete % 10 == 0:
                 log.info("%d%%", percent_complete)
         log.info("Crawling %s done", data_set_name)
-        storage.write_object(obj=jsonpickle.encode(concept, indent=2), path=output_file)
+        storage.write_object(obj=jsonpickle.encode(concepts, indent=2), path=output_file)
         log.info ("Concepts serialized to %s", output_file)
         storage.write_object(obj=jsonpickle.encode(extracted_dug_elements, indent=2),
                              path=extracted_output_file)
