@@ -113,11 +113,7 @@ class DugPipeline():
         "Set instance variables and check to make sure we're overriden"
         if not self.pipeline_name:
             raise PipelineException(
-                "Subclass must at least define pipeline_name as class var")
-        dug_plugin_manager = get_plugin_manager()
-        self.parser: Parser = get_parser(dug_plugin_manager.hook,
-                                         self.get_parser_name())
-
+                "Subclass must at least define pipeline_name as class var")        
         self.config = config
         self.bl_toolkit = BiolinkModel()
         dug_conf = config.to_dug_conf()
@@ -196,6 +192,12 @@ class DugPipeline():
         can also be overriden.
         """
         return getattr(self, 'parser_name', self.pipeline_name)
+    
+    def get_parser(self):
+        dug_plugin_manager = get_plugin_manager()
+        parser: Parser = get_parser(dug_plugin_manager.hook,
+                                         self.get_parser_name())
+        return parser
 
     def annotate_files(self, parsable_files, output_data_path=None):
         """
@@ -210,9 +212,10 @@ class DugPipeline():
         for _, parse_file in enumerate(parsable_files):
             log.debug("Creating Dug Crawler object on parse_file %s at %d of %d",
                       parse_file, _ , len(parsable_files))
+            parser = self.get_parser()
             crawler = Crawler(
                 crawl_file=parse_file,
-                parser=self.parser,
+                parser=parser,
                 annotator=self.annotator,
                 tranqlizer='',
                 tranql_queries=[],
@@ -244,7 +247,7 @@ class DugPipeline():
 
             # Use the specified parser to parse the parse_file into elements.
             log.debug("Parser is %s", str(self.parser))
-            elements = self.parser(parse_file)
+            elements = parser(parse_file)
             log.debug("Parsed elements: %s", str(elements))
 
             # This inserts the list of elements into the crawler where
@@ -264,6 +267,9 @@ class DugPipeline():
             # so we want to make sure to catch those modifications.
             elements = crawler.elements
 
+            crawler.elements = []
+            crawler.concepts = {}
+
             # store pickles for testing
             storage.write_object(elements, elements_file_pickle)
             storage.write_object(non_expanded_concepts, concepts_file_pickle)
@@ -278,7 +284,7 @@ class DugPipeline():
             log.info("Serialized annotated elements to : %s", elements_file)
             log.info("Deleting in memory elements and elements json from memory")
             # to avoid memory leak
-            del json_elements, elements
+            del json_elements, elements            
 
             json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
             storage.write_object(json_concepts, concepts_file)
