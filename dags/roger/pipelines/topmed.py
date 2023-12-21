@@ -3,7 +3,7 @@
 from roger.pipelines import DugPipeline
 from roger.core import storage
 
-class kfdrcPipeline(DugPipeline):
+class TopmedPipeline(DugPipeline):
     "Pipeline for BACPAC data set"
     pipeline_name = "topmed"
     parser_name = "TOPMedTag"

@@ -1,6 +1,6 @@
 "Dug pipeline for dbGaP data set"
 
-from .base import DugPipeline
+from roger.pipelines import DugPipeline
 
 class dbGaPPipeline(DugPipeline):
     "Pipeline for the dbGaP data set"
