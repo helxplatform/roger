@@ -537,9 +537,9 @@ class DugPipeline():
         # might right to consider getting rid of it.
         crawl_dir = storage.dug_crawl_path('crawl_output')
         output_file_name = os.path.join(data_set_name,
-                                        'expanded_concepts.json')
+                                        'expanded_concepts.txt')
         extracted_dug_elements_file_name = os.path.join(data_set_name,
-                                                        'extracted_graph_elements.json')
+                                                        'extracted_graph_elements.txt')
         if not output_path:
             output_file = storage.dug_expanded_concepts_path(output_file_name)
             extracted_output_file = storage.dug_expanded_concepts_path(
@@ -588,17 +588,11 @@ class DugPipeline():
             if percent_complete % 10 == 0:
                 log.info("%d%%", percent_complete)
         log.info("Crawling %s done", data_set_name)
-        json_concepts = {k: v.jsonable() for k, v in concepts.items()}
-        storage.write_object(obj=json_concepts, path=output_file)
+        storage.write_object(obj=jsonpickle.encode(concept, indent=2), path=output_file)
         log.info ("Concepts serialized to %s", output_file)
-        del json_concepts, concepts
-        log.info("Deleted concepts and concepts json from memory")
-        json_extracted_concepts = [v.jsonable() for v in extracted_dug_elements]
-        storage.write_object(obj=json_extracted_concepts,
+        storage.write_object(obj=jsonpickle.encode(extracted_dug_elements, indent=2),
                              path=extracted_output_file)
         log.info("Extracted elements serialized to %s", extracted_output_file)
-        del json_extracted_concepts, extracted_dug_elements
-        log.info("Deleted extracted elements and json extracted elements from memory")
 
     def _index_concepts(self, concepts):
         "Submit concepts to ElasticSearch for indexing"
@@ -853,10 +847,12 @@ class DugPipeline():
         """
         get_data_set_name = lambda file: os.path.split(os.path.dirname(file))[-1]
         expanded_concepts_files_dict = {
-            get_data_set_name(file): file for file  in storage.dug_expanded_concept_objects(data_path=input_data_path)
+            get_data_set_name(file): file for file  in 
+            jsonpickle.decode(storage.dug_expanded_concept_objects(data_path=input_data_path, format='txt'))
         }
         annotated_elements_files_dict = {
-            get_data_set_name(file): file for file in storage.dug_elements_objects(data_path=input_data_path)   
+            get_data_set_name(file): file for file in 
+            jsonpickle.decode(storage.dug_elements_objects(data_path=input_data_path, format='txt'))
         }
         try: 
             assert len(expanded_concepts_files_dict) == len(annotated_elements_files_dict)
@@ -911,7 +907,7 @@ class DugPipeline():
                      input_data_path=None, output_data_path=None):
         "Perform the tranql crawl"        
         if not concept_files:
-            concept_files = storage.dug_concepts_objects(input_data_path, format='json')          
+            concept_files = storage.dug_concepts_objects(input_data_path, format='txt')          
 
         if output_data_path:
             crawl_dir = os.path.join(output_data_path, 'crawl_output')
@@ -933,7 +929,7 @@ class DugPipeline():
             objects = objects or {} 
             if not objects:
                 log.info(f'no concepts in {file_}')
-            data_set = {k: self.concepts_from_json(v) for k, v in objects.items()}
+            data_set =  jsonpickle.decode(objects)
             original_variables_dataset_name = os.path.split(
                 os.path.dirname(file_))[-1]
             self.crawl_concepts(concepts=data_set,
