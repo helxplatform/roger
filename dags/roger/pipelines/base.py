@@ -466,7 +466,7 @@ class DugPipeline():
 
     def validate_indexed_element_file(self, elements_file):
         "After submitting elements for indexing, verify that they're available"
-        elements = [x for x in storage.read_object(elements_file)
+        elements = [x for x in jsonpickle.decode(storage.read_object(elements_file))
                     if not isinstance(x, DugConcept)]
         # Pick ~ 10 %
         sample_size = int(len(elements) * 0.1)
@@ -840,7 +840,7 @@ class DugPipeline():
                                    output_data_path=None):
         "Validate output from index variables task for pipeline"
         if not element_object_files:
-            element_object_files = storage.dug_elements_objects(input_data_path)
+            element_object_files = storage.dug_elements_objects(input_data_path, format='txt')
         for file_ in element_object_files:
             log.info("Validating %s", str(file_))
             self.validate_indexed_element_file(file_)
