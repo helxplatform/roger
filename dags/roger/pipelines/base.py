@@ -287,11 +287,7 @@ class DugPipeline():
         nodes = graph['nodes']
 
         for _, element in enumerate(elements):
-            # DugElement means a variable (Study variable...)
-            try:
-                element = self.elements_from_json(element)
-            except:
-                continue
+            # DugElement means a variable (Study variable...)            
             study_id = element.collection_id
             if study_id not in written_nodes:
                 nodes.append({
@@ -392,11 +388,7 @@ class DugPipeline():
         # @TODO extract this into config or maybe dug ??
         topmed_tag_concept_type = "TOPMed Phenotype Concept"
         nodes_written = set()
-        for tag in elements:
-            try:
-                tag = self.elements_from_json(tag)
-            except TypeError as err:
-                tag = self.concepts_from_json(tag)
+        for tag in elements:            
             if not (isinstance(tag, DugConcept)
                     and tag.type == topmed_tag_concept_type):
                 continue
@@ -884,10 +876,10 @@ class DugPipeline():
         log.info("Starting building KGX files")
 
         if not elements_files:
-            elements_files = storage.dug_elements_objects(input_data_path, format='json')
+            elements_files = storage.dug_elements_objects(input_data_path, format='txt')
         log.info(f"found {len(elements_files)} files : {elements_files}")
         for file_ in elements_files:
-            elements = storage.read_object(file_)
+            elements = jsonpickle.decode(storage.read_object(file_))
             if "topmed_" in file_:
                 kg = self.make_tagged_kg(elements)
             else:
