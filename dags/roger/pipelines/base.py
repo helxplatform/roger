@@ -11,6 +11,7 @@ from functools import reduce
 from pathlib import Path
 import tarfile
 from typing import Union
+import jsonpickle
 
 import requests
 
@@ -108,16 +109,13 @@ class DugPipeline():
 
     pipeline_name = None
     unzip_source = True
+    input_version = ""
 
     def __init__(self, config: RogerConfig, to_string=False):
         "Set instance variables and check to make sure we're overriden"
         if not self.pipeline_name:
             raise PipelineException(
-                "Subclass must at least define pipeline_name as class var")
-        dug_plugin_manager = get_plugin_manager()
-        self.parser: Parser = get_parser(dug_plugin_manager.hook,
-                                         self.get_parser_name())
-
+                "Subclass must at least define pipeline_name as class var")        
         self.config = config
         self.bl_toolkit = BiolinkModel()
         dug_conf = config.to_dug_conf()
@@ -196,6 +194,12 @@ class DugPipeline():
         can also be overriden.
         """
         return getattr(self, 'parser_name', self.pipeline_name)
+    
+    def get_parser(self):
+        dug_plugin_manager = get_plugin_manager()
+        parser: Parser = get_parser(dug_plugin_manager.hook,
+                                         self.get_parser_name())
+        return parser
 
     def annotate_files(self, parsable_files, output_data_path=None):
         """
@@ -210,9 +214,10 @@ class DugPipeline():
         for _, parse_file in enumerate(parsable_files):
             log.debug("Creating Dug Crawler object on parse_file %s at %d of %d",
                       parse_file, _ , len(parsable_files))
+            parser = self.get_parser()
             crawler = Crawler(
                 crawl_file=parse_file,
-                parser=self.parser,
+                parser=parser,
                 annotator=self.annotator,
                 tranqlizer='',
                 tranql_queries=[],
@@ -224,11 +229,8 @@ class DugPipeline():
                 os.path.basename(parse_file).split('.')[:-1])
             elements_file_path = os.path.join(
                 output_data_path, current_file_name)
-            elements_file = os.path.join(elements_file_path, 'elements.json')
-            elements_file_pickle = elements_file.replace('.json', '.pickle')
-            concepts_file = os.path.join(elements_file_path, 'concepts.json')
-            concepts_file_pickle = concepts_file.replace('.json', '.pickle')
-
+            elements_file = os.path.join(elements_file_path, 'elements.txt')
+            concepts_file = os.path.join(elements_file_path, 'concepts.txt')         
             # This is a file that the crawler will later populate. We start here
             # by creating an empty elements file.
             # This also creates output dir if it doesn't exist.
@@ -238,8 +240,8 @@ class DugPipeline():
             # storage.write_object({}, elements_json)
 
             # Use the specified parser to parse the parse_file into elements.
-            log.debug("Parser is %s", str(self.parser))
-            elements = self.parser(parse_file)
+            log.debug("Parser is %s", str(parser))
+            elements = parser(parse_file)
             log.debug("Parsed elements: %s", str(elements))
 
             # This inserts the list of elements into the crawler where
@@ -259,26 +261,14 @@ class DugPipeline():
             # so we want to make sure to catch those modifications.
             elements = crawler.elements
 
-            # store pickles for testing
-            storage.write_object(elements, elements_file_pickle)
-            storage.write_object(non_expanded_concepts, concepts_file_pickle)
-
             # Write pickles of objects to file
-            log.info("Parsed and annotated: %s", parse_file)
+            log.info("Parsed and annotated: %s", parse_file)            
             
-            json_elements = [e.jsonable() for e in elements]
-            storage.write_object(json_elements, elements_file)
+            storage.write_object(jsonpickle.encode(elements, indent=2), elements_file)
             log.info("Serialized annotated elements to : %s", elements_file)
-            log.info("Deleting in memory elements and elements json from memory")
-            # to avoid memory leak
-            del json_elements, elements
 
-            json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
-            storage.write_object(json_concepts, concepts_file)
+            storage.write_object(jsonpickle.encode(non_expanded_concepts, indent=2), concepts_file)
             log.info("Serialized annotated concepts to : %s", concepts_file)
-            log.info("Deleting concepts and concepts jsonable from memory")
-            # to avoid memory leak
-            del json_concepts, non_expanded_concepts
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """
@@ -298,11 +288,7 @@ class DugPipeline():
         nodes = graph['nodes']
 
         for _, element in enumerate(elements):
-            # DugElement means a variable (Study variable...)
-            try:
-                element = self.elements_from_json(element)
-            except:
-                continue
+            # DugElement means a variable (Study variable...)            
             study_id = element.collection_id
             if study_id not in written_nodes:
                 nodes.append({
@@ -403,11 +389,7 @@ class DugPipeline():
         # @TODO extract this into config or maybe dug ??
         topmed_tag_concept_type = "TOPMed Phenotype Concept"
         nodes_written = set()
-        for tag in elements:
-            try:
-                tag = self.elements_from_json(tag)
-            except TypeError as err:
-                tag = self.concepts_from_json(tag)
+        for tag in elements:            
             if not (isinstance(tag, DugConcept)
                     and tag.type == topmed_tag_concept_type):
                 continue
@@ -453,7 +435,7 @@ class DugPipeline():
     def index_elements(self, elements_file):
         "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
-        elements = [self.elements_from_json(e) for e in storage.read_object(elements_file)]
+        elements =jsonpickle.decode(storage.read_object(elements_file))
         count = 0
         total = len(elements)
         # Index Annotated Elements
@@ -477,7 +459,7 @@ class DugPipeline():
 
     def validate_indexed_element_file(self, elements_file):
         "After submitting elements for indexing, verify that they're available"
-        elements = [x for x in storage.read_object(elements_file)
+        elements = [x for x in jsonpickle.decode(storage.read_object(elements_file))
                     if not isinstance(x, DugConcept)]
         # Pick ~ 10 %
         sample_size = int(len(elements) * 0.1)
@@ -548,9 +530,9 @@ class DugPipeline():
         # might right to consider getting rid of it.
         crawl_dir = storage.dug_crawl_path('crawl_output')
         output_file_name = os.path.join(data_set_name,
-                                        'expanded_concepts.json')
+                                        'expanded_concepts.txt')
         extracted_dug_elements_file_name = os.path.join(data_set_name,
-                                                        'extracted_graph_elements.json')
+                                                        'extracted_graph_elements.txt')
         if not output_path:
             output_file = storage.dug_expanded_concepts_path(output_file_name)
             extracted_output_file = storage.dug_expanded_concepts_path(
@@ -599,17 +581,11 @@ class DugPipeline():
             if percent_complete % 10 == 0:
                 log.info("%d%%", percent_complete)
         log.info("Crawling %s done", data_set_name)
-        json_concepts = {k: v.jsonable() for k, v in concepts.items()}
-        storage.write_object(obj=json_concepts, path=output_file)
+        storage.write_object(obj=jsonpickle.encode(concepts, indent=2), path=output_file)
         log.info ("Concepts serialized to %s", output_file)
-        del json_concepts, concepts
-        log.info("Deleted concepts and concepts json from memory")
-        json_extracted_concepts = [v.jsonable() for v in extracted_dug_elements]
-        storage.write_object(obj=json_extracted_concepts,
+        storage.write_object(obj=jsonpickle.encode(extracted_dug_elements, indent=2),
                              path=extracted_output_file)
         log.info("Extracted elements serialized to %s", extracted_output_file)
-        del json_extracted_concepts, extracted_dug_elements
-        log.info("Deleted extracted elements and json extracted elements from memory")
 
     def _index_concepts(self, concepts):
         "Submit concepts to ElasticSearch for indexing"
@@ -839,7 +815,7 @@ class DugPipeline():
         """
         # self.clear_variables_index()
         if element_object_files is None:
-            element_object_files = storage.dug_elements_objects(input_data_path,format='json')
+            element_object_files = storage.dug_elements_objects(input_data_path,format='txt')
         for file_ in element_object_files:            
             self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
@@ -851,7 +827,7 @@ class DugPipeline():
                                    output_data_path=None):
         "Validate output from index variables task for pipeline"
         if not element_object_files:
-            element_object_files = storage.dug_elements_objects(input_data_path)
+            element_object_files = storage.dug_elements_objects(input_data_path, format='txt')
         for file_ in element_object_files:
             log.info("Validating %s", str(file_))
             self.validate_indexed_element_file(file_)
@@ -864,10 +840,10 @@ class DugPipeline():
         """
         get_data_set_name = lambda file: os.path.split(os.path.dirname(file))[-1]
         expanded_concepts_files_dict = {
-            get_data_set_name(file): file for file  in storage.dug_expanded_concept_objects(data_path=input_data_path)
+            get_data_set_name(file): file for file  in storage.dug_expanded_concept_objects(data_path=input_data_path, format='txt')
         }
         annotated_elements_files_dict = {
-            get_data_set_name(file): file for file in storage.dug_elements_objects(data_path=input_data_path)   
+            get_data_set_name(file): file for file in storage.dug_elements_objects(data_path=input_data_path, format='txt')
         }
         try: 
             assert len(expanded_concepts_files_dict) == len(annotated_elements_files_dict)
@@ -884,8 +860,8 @@ class DugPipeline():
             log.debug(f"Reading concepts and elements for dataset {data_set_name}")
             elements_file_path = annotated_elements_files_dict[data_set_name]
             concepts_file_path = expanded_concepts_files_dict[data_set_name]
-            dug_elements = storage.read_object(elements_file_path)
-            dug_concepts = storage.read_object(concepts_file_path)
+            dug_elements = jsonpickle.decode(storage.read_object(elements_file_path))
+            dug_concepts = jsonpickle.decode(storage.read_object(concepts_file_path))
             log.debug(f"Read {len(dug_elements)} elements, and {len(dug_concepts)} Concepts")
             log.info(f"Validating {data_set_name}")
             self._validate_indexed_concepts(elements=dug_elements, concepts=dug_concepts)
@@ -901,10 +877,10 @@ class DugPipeline():
         log.info("Starting building KGX files")
 
         if not elements_files:
-            elements_files = storage.dug_elements_objects(input_data_path, format='json')
+            elements_files = storage.dug_elements_objects(input_data_path, format='txt')
         log.info(f"found {len(elements_files)} files : {elements_files}")
         for file_ in elements_files:
-            elements = storage.read_object(file_)
+            elements = jsonpickle.decode(storage.read_object(file_))
             if "topmed_" in file_:
                 kg = self.make_tagged_kg(elements)
             else:
@@ -922,7 +898,7 @@ class DugPipeline():
                      input_data_path=None, output_data_path=None):
         "Perform the tranql crawl"        
         if not concept_files:
-            concept_files = storage.dug_concepts_objects(input_data_path, format='json')          
+            concept_files = storage.dug_concepts_objects(input_data_path, format='txt')          
 
         if output_data_path:
             crawl_dir = os.path.join(output_data_path, 'crawl_output')
@@ -944,27 +920,13 @@ class DugPipeline():
             objects = objects or {} 
             if not objects:
                 log.info(f'no concepts in {file_}')
-            data_set = {k: self.concepts_from_json(v) for k, v in objects.items()}
+            data_set =  jsonpickle.decode(objects)
             original_variables_dataset_name = os.path.split(
                 os.path.dirname(file_))[-1]
             self.crawl_concepts(concepts=data_set,
                                 data_set_name=original_variables_dataset_name, output_path= output_data_path)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
-
-    def concepts_from_json(self, concept_json):
-        identifiers = {}
-        for curie, value in concept_json['identifiers'].items():
-            identifiers[curie] = Identifier(**value)
-        concept_json['identifiers'] = identifiers
-        return DugConcept(**concept_json)
-
-    def elements_from_json(self, elements_json):
-        concepts = {}
-        for curie, value in elements_json.get('concepts', {}).items():
-            concepts[curie] = self.concepts_from_json(value)
-        elements_json['concepts'] = concepts
-        return DugElement(**elements_json)
 
     def index_concepts(self, to_string=False,
                        input_data_path=None, output_data_path=None):
@@ -974,12 +936,9 @@ class DugPipeline():
         # self.clear_concepts_index()
         # self.clear_kg_index()
         expanded_concepts_files = storage.dug_expanded_concept_objects(
-            input_data_path, format="json")
+            input_data_path, format="txt")
         for file_ in expanded_concepts_files:
-            concepts = storage.read_object(file_)
-            concepts_objects = {}
-            for curie, value in concepts.items():
-                concepts_objects[curie] = self.concepts_from_json(value)
-            self._index_concepts(concepts=concepts_objects)
+            concepts = jsonpickle.decode(storage.read_object(file_))            
+            self._index_concepts(concepts=concepts)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
