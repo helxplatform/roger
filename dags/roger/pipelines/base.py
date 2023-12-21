@@ -228,7 +228,12 @@ class DugPipeline():
             elements_file_pickle = elements_file.replace('.json', '.pickle')
             concepts_file = os.path.join(elements_file_path, 'concepts.json')
             concepts_file_pickle = concepts_file.replace('.json', '.pickle')
-
+            log.info(f"""
+            ******************
+                     {crawler.elements}
+                     {crawler.concepts}
+            *************
+            """)
             # This is a file that the crawler will later populate. We start here
             # by creating an empty elements file.
             # This also creates output dir if it doesn't exist.
