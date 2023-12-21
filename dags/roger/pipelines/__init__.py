@@ -6,7 +6,7 @@ import importlib
 
 from .base import DugPipeline
 
-def get_pipeline_classes():
+def get_pipeline_classes(pipeline_list):
     """Return a list of all defined pipeline classes
     """
 
@@ -20,9 +20,8 @@ def get_pipeline_classes():
         # show up below in __subclasses__.
         importlib.import_module(f"{__name__}.{mod_name}")
 
-    pipeline_list = []
-    testing_pps = ['anvil']
+    
     for subclass in DugPipeline.__subclasses__():
-        if getattr(subclass, 'pipeline_name') and getattr(subclass, 'pipeline_name') in testing_pps:
+        if getattr(subclass, 'pipeline_name') and getattr(subclass, 'pipeline_name') in pipeline_list:
             pipeline_list.append(subclass)
     return pipeline_list

@@ -25,8 +25,10 @@ with DAG(
 
     from roger import pipelines
     from roger.config import config
-
-    for pipeline_class in pipelines.get_pipeline_classes():
+    envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed")
+    data_sets = envspec.split(",")
+    pipeline_names = [x.split(':')[0] for x in data_sets]
+    for pipeline_class in pipelines.get_pipeline_classes(pipeline_names):
         # Only use pipeline classes that are in the enabled datasets list and
         # that have a properly defined pipeline_name attribute
 
