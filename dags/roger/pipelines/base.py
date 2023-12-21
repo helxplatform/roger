@@ -943,12 +943,9 @@ class DugPipeline():
         # self.clear_concepts_index()
         # self.clear_kg_index()
         expanded_concepts_files = storage.dug_expanded_concept_objects(
-            input_data_path, format="json")
+            input_data_path, format="txt")
         for file_ in expanded_concepts_files:
-            concepts = storage.read_object(file_)
-            concepts_objects = {}
-            for curie, value in concepts.items():
-                concepts_objects[curie] = self.concepts_from_json(value)
-            self._index_concepts(concepts=concepts_objects)
+            concepts = jsonpickle.decode(storage.read_object(file_))            
+            self._index_concepts(concepts=concepts)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
