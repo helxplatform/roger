@@ -2,6 +2,7 @@ boto3==1.18.23
 botocore==1.21.23
 elasticsearch==8.5.2
 flatten-dict
+jsonpickle
 redisgraph-bulk-loader==0.12.3
 pytest
 PyYAML
