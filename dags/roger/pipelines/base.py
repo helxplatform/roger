@@ -246,7 +246,7 @@ class DugPipeline():
             # storage.write_object({}, elements_json)
 
             # Use the specified parser to parse the parse_file into elements.
-            log.debug("Parser is %s", str(self.parser))
+            log.debug("Parser is %s", str(parser))
             elements = parser(parse_file)
             log.debug("Parsed elements: %s", str(elements))
 
