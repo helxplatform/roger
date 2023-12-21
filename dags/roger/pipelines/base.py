@@ -263,8 +263,6 @@ class DugPipeline():
             storage.write_object(elements, elements_file_pickle)
             storage.write_object(non_expanded_concepts, concepts_file_pickle)
 
-
-
             # Write pickles of objects to file
             log.info("Parsed and annotated: %s", parse_file)
             
