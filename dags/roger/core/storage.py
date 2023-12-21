@@ -121,7 +121,7 @@ def write_object (obj, path, key=None):
     elif path.endswith(".pickle"):
         with open (path, "wb") as stream:
             pickle.dump(obj, file=stream)
-    elif path.endswith(".jsonl"):
+    elif path.endswith(".jsonl") or path.endswith('.txt'):
         with open (path, "w", encoding="utf-8") as stream:
             stream.write(obj)
     else:

@@ -11,6 +11,7 @@ from functools import reduce
 from pathlib import Path
 import tarfile
 from typing import Union
+import jsonpickle
 
 import requests
 
@@ -227,10 +228,8 @@ class DugPipeline():
                 os.path.basename(parse_file).split('.')[:-1])
             elements_file_path = os.path.join(
                 output_data_path, current_file_name)
-            elements_file = os.path.join(elements_file_path, 'elements.json')
-            elements_file_pickle = elements_file.replace('.json', '.pickle')
-            concepts_file = os.path.join(elements_file_path, 'concepts.json')
-            concepts_file_pickle = concepts_file.replace('.json', '.pickle')            
+            elements_file = os.path.join(elements_file_path, 'elements.txt')
+            concepts_file = os.path.join(elements_file_path, 'concepts.txt')         
             # This is a file that the crawler will later populate. We start here
             # by creating an empty elements file.
             # This also creates output dir if it doesn't exist.
@@ -261,26 +260,14 @@ class DugPipeline():
             # so we want to make sure to catch those modifications.
             elements = crawler.elements
 
-            crawler.elements = []
-            crawler.concepts = {}
-
-
             # Write pickles of objects to file
-            log.info("Parsed and annotated: %s", parse_file)
+            log.info("Parsed and annotated: %s", parse_file)            
             
-            json_elements = [e.jsonable() for e in elements]
-            storage.write_object(json_elements, elements_file)
+            storage.write_object(jsonpickle.encode(elements, indent=2), elements_file)
             log.info("Serialized annotated elements to : %s", elements_file)
-            log.info("Deleting in memory elements and elements json from memory")
-            # to avoid memory leak
-            del json_elements, elements            
 
-            json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
-            storage.write_object(json_concepts, concepts_file)
+            storage.write_object(jsonpickle.encode(non_expanded_concepts, indent=2), concepts_file)
             log.info("Serialized annotated concepts to : %s", concepts_file)
-            log.info("Deleting concepts and concepts jsonable from memory")
-            # to avoid memory leak
-            del json_concepts, non_expanded_concepts
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """
@@ -953,20 +940,6 @@ class DugPipeline():
                                 data_set_name=original_variables_dataset_name, output_path= output_data_path)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
-
-    def concepts_from_json(self, concept_json):
-        identifiers = {}
-        for curie, value in concept_json['identifiers'].items():
-            identifiers[curie] = Identifier(**value)
-        concept_json['identifiers'] = identifiers
-        return DugConcept(**concept_json)
-
-    def elements_from_json(self, elements_json):
-        concepts = {}
-        for curie, value in elements_json.get('concepts', {}).items():
-            concepts[curie] = self.concepts_from_json(value)
-        elements_json['concepts'] = concepts
-        return DugElement(**elements_json)
 
     def index_concepts(self, to_string=False,
                        input_data_path=None, output_data_path=None):
