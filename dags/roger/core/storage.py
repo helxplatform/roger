@@ -85,7 +85,7 @@ def read_object(path, key=None):
     elif path.endswith(".pickle"):
         with open(file=path, mode="rb") as stream:
             obj = pickle.load(stream)
-    elif path.endswith(".jsonl"):
+    elif path.endswith(".jsonl") or path.endswith('.txt'):
         obj = read_data(path)
     return obj
 

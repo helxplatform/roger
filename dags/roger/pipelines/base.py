@@ -442,7 +442,7 @@ class DugPipeline():
     def index_elements(self, elements_file):
         "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
-        elements = [self.elements_from_json(e) for e in storage.read_object(elements_file)]
+        elements =jsonpickle.decode(storage.read_object(elements_file))
         count = 0
         total = len(elements)
         # Index Annotated Elements
@@ -828,7 +828,7 @@ class DugPipeline():
         """
         # self.clear_variables_index()
         if element_object_files is None:
-            element_object_files = storage.dug_elements_objects(input_data_path,format='json')
+            element_object_files = storage.dug_elements_objects(input_data_path,format='txt')
         for file_ in element_object_files:            
             self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
