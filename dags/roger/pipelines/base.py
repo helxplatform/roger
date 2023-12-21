@@ -264,28 +264,23 @@ class DugPipeline():
             crawler.elements = []
             crawler.concepts = {}
 
-            # store pickles for testing
-            storage.write_object(elements, elements_file_pickle)
-            storage.write_object(non_expanded_concepts, concepts_file_pickle)
-
-
 
             # Write pickles of objects to file
             log.info("Parsed and annotated: %s", parse_file)
             
-            # json_elements = [e.jsonable() for e in elements]
-            # storage.write_object(json_elements, elements_file)
-            # log.info("Serialized annotated elements to : %s", elements_file)
-            # log.info("Deleting in memory elements and elements json from memory")
-            # # to avoid memory leak
-            # del json_elements, elements            
+            json_elements = [e.jsonable() for e in elements]
+            storage.write_object(json_elements, elements_file)
+            log.info("Serialized annotated elements to : %s", elements_file)
+            log.info("Deleting in memory elements and elements json from memory")
+            # to avoid memory leak
+            del json_elements, elements            
 
-            # json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
-            # storage.write_object(json_concepts, concepts_file)
-            # log.info("Serialized annotated concepts to : %s", concepts_file)
-            # log.info("Deleting concepts and concepts jsonable from memory")
-            # # to avoid memory leak
-            # del json_concepts, non_expanded_concepts
+            json_concepts = {c: v.jsonable() for c ,v  in non_expanded_concepts.items()}
+            storage.write_object(json_concepts, concepts_file)
+            log.info("Serialized annotated concepts to : %s", concepts_file)
+            log.info("Deleting concepts and concepts jsonable from memory")
+            # to avoid memory leak
+            del json_concepts, non_expanded_concepts
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """
