@@ -109,6 +109,7 @@ class DugPipeline():
 
     pipeline_name = None
     unzip_source = True
+    input_version = ""
 
     def __init__(self, config: RogerConfig, to_string=False):
         "Set instance variables and check to make sure we're overriden"

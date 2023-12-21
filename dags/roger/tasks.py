@@ -343,6 +343,7 @@ def create_pipeline_taskgroup(
     Extra kwargs are passed to the pipeline class init call.
     """
     name = pipeline_class.pipeline_name
+    input_dataset_version = pipeline_class.input_version
 
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
         with pipeline_class(config=configparam, **kwargs) as pipeline:
@@ -352,7 +353,7 @@ def create_pipeline_taskgroup(
                 f"annotate_{name}_files",
                 pipeline.annotate,
                 input_repo=getattr(pipeline_class, 'pipeline_name'),
-                input_branch='v1.0',
+                input_branch=input_dataset_version,
                 pass_conf=False)
 
             index_variables_task = create_python_task(
