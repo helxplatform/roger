@@ -847,12 +847,10 @@ class DugPipeline():
         """
         get_data_set_name = lambda file: os.path.split(os.path.dirname(file))[-1]
         expanded_concepts_files_dict = {
-            get_data_set_name(file): file for file  in 
-            jsonpickle.decode(storage.dug_expanded_concept_objects(data_path=input_data_path, format='txt'))
+            get_data_set_name(file): file for file  in storage.dug_expanded_concept_objects(data_path=input_data_path, format='txt')
         }
         annotated_elements_files_dict = {
-            get_data_set_name(file): file for file in 
-            jsonpickle.decode(storage.dug_elements_objects(data_path=input_data_path, format='txt'))
+            get_data_set_name(file): file for file in storage.dug_elements_objects(data_path=input_data_path, format='txt')
         }
         try: 
             assert len(expanded_concepts_files_dict) == len(annotated_elements_files_dict)
@@ -869,8 +867,8 @@ class DugPipeline():
             log.debug(f"Reading concepts and elements for dataset {data_set_name}")
             elements_file_path = annotated_elements_files_dict[data_set_name]
             concepts_file_path = expanded_concepts_files_dict[data_set_name]
-            dug_elements = storage.read_object(elements_file_path)
-            dug_concepts = storage.read_object(concepts_file_path)
+            dug_elements = jsonpickle.decode(storage.read_object(elements_file_path))
+            dug_concepts = jsonpickle.decode(storage.read_object(concepts_file_path))
             log.debug(f"Read {len(dug_elements)} elements, and {len(dug_concepts)} Concepts")
             log.info(f"Validating {data_set_name}")
             self._validate_indexed_concepts(elements=dug_elements, concepts=dug_concepts)
