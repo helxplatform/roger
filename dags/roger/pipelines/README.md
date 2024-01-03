@@ -25,9 +25,9 @@ graph TD;
     crawl_tranql-->validate_index_concepts;
     index_concepts-->validate_index_concepts;
     annotate-->validate_index_concepts;
-    validate_index_concepts->finish;
-    validate_index_variables->finish;
-    make_kg_tagged->finish;
+    validate_index_concepts-->finish;
+    validate_index_variables-->finish;
+    make_kg_tagged-->finish;
 ```
 The pipeline steps are briefly described below
 
