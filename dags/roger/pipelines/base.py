@@ -19,13 +19,8 @@ from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept
 from dug.core.concept_expander import ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
-<<<<<<< HEAD
 from dug.core.parsers import Parser, DugElement
 from dug.core.annotators import Annotator
-=======
-from dug.core.parsers import Parser, DugElement, DugConcept
-from dug.core.annotate import Identifier
->>>>>>> pipeline_parameterize_restructure
 from dug.core.async_search import Search
 from dug.core.index import Index
 
