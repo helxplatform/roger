@@ -6,9 +6,6 @@ from airflow.operators.python import PythonOperator
 from airflow.operators.empty import EmptyOperator
 from airflow.utils.task_group import TaskGroup
 from airflow.utils.dates import days_ago
-
-from roger.config import config, RogerConfig
-
 from airflow.models import DAG
 from airflow.models.dag import DagContext
 from airflow.models.taskinstance import TaskInstance
@@ -16,10 +13,10 @@ from typing import Union
 from pathlib import Path
 import glob
 import shutil
-from roger.config import config
 
 from roger.config import config, RogerConfig
 from roger.logger import get_logger
+from roger.pipelines.base import DugPipeline
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 import lakefs_client
 from functools import partial
@@ -41,15 +38,18 @@ def task_wrapper(python_callable, **kwargs):
     """
     # get dag config provided
     dag_run = kwargs.get('dag_run')
-
-    # get input path
-    input_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
-                                                           roger_config=config,
-                                                           suffix='input')
-    # get output path from task id run id dag id combo
-    output_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
-                                                           roger_config=config,
-                                                           suffix='output')
+    pass_conf = kwargs.get('pass_conf', True)
+    if config.lakefs_config.enabled:
+        # get input path
+        input_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
+                                                            roger_config=config,
+                                                            suffix='input')
+        # get output path from task id run id dag id combo
+        output_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
+                                                            roger_config=config,
+                                                            suffix='output')
+    else: 
+        input_data_path, output_data_path = None, None
     # cast it to a path object
     func_args = {
         'input_data_path': input_data_path,
@@ -59,7 +59,9 @@ def task_wrapper(python_callable, **kwargs):
     logger.info(f"Task function args: {func_args}")
     # overrides values
     config.dag_run = dag_run
-    return python_callable(config=config, **func_args)
+    if pass_conf:
+        return python_callable(config=config, **func_args)
+    return python_callable(**func_args)
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
     """ Get an executor configuration.
@@ -134,7 +136,9 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # since lakefs branch id must consist of letters, digits, underscores and dashes, 
     # and cannot start with a dash
     run_id_normalized = run_id.replace('-','_').replace(':','_').replace('+','_').replace('.','_')
-    temp_branch_name = f'{dag_id}_{task_id}_{run_id_normalized}'
+    dag_id_normalized = dag_id.replace('-','_').replace(':','_').replace('+','_').replace('.','_')
+    task_id_normalized = task_id.replace('-','_').replace(':','_').replace('+','_').replace('.','_')
+    temp_branch_name = f'{dag_id_normalized}_{task_id_normalized}_{run_id_normalized}'
     # remote path to upload the files to.
     remote_path = f'{dag_id}/{task_id}/'
 
@@ -177,25 +181,26 @@ def avalon_commit_callback(context: DagContext, **kwargs):
                                   repository=repo, left_ref=branch,
                                   right_ref=temp_branch_name):
         logger.info("Diff: " + str(diff))
+    
+    try:
+        # merging temp branch to working branch
+        client._client.refs_api.merge_into_branch(repository=repo,
+                                                source_ref=temp_branch_name,
+                                                destination_branch=branch)
 
-    # merging temp branch to working branch
-
-    client._client.refs_api.merge_into_branch(repository=repo,
-                                              source_ref=temp_branch_name,
-                                              destination_branch=branch)
-
-    logger.info(f"merged branch {temp_branch_name} into {branch}")
-
+        logger.info(f"merged branch {temp_branch_name} into {branch}")
+    except Exception as e:
+        # remove temp 
+        logger.error(e)
     # delete temp branch
-
-    client._client.branches_api.delete_branch(
-        repository=repo,
-        branch=temp_branch_name
-    )
-
-    logger.info(f"deleted temp branch {temp_branch_name}")
-    logger.info(f"deleting local dir {local_path}")
-    files_to_clean = glob.glob(local_path + '*')
+    finally:
+        client._client.branches_api.delete_branch(
+            repository=repo,
+            branch=temp_branch_name
+        )
+        logger.info(f"deleted temp branch {temp_branch_name}")
+        logger.info(f"deleting local dir {local_path}")
+        files_to_clean = glob.glob(local_path + '**', recursive=True) + [local_path]
     for f in files_to_clean:
         shutil.rmtree(f)
 
@@ -239,9 +244,8 @@ def setup_input_data(context, exec_conf):
     input_repo = exec_conf['input_repo']
     input_branch = exec_conf['input_branch']
     # If input repo is provided use that as source of files
-    if exec_conf.get('input_repo'):
-
-        remote_paths = ['*'] # root path to get all sub dirs
+    if exec_conf.get('path') and exec_conf.get('path') == '*':
+        remote_paths =  ['*'] # root path to get all sub dirs
     # else figure out what to pull from the repo based on task name etc...
     else:
         task_instance: TaskInstance = context['ti']
@@ -268,57 +272,66 @@ def setup_input_data(context, exec_conf):
         )
 
 def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
-                       input_branch=None):
+                       input_branch=None, pass_conf=True, no_output_files=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
     """
+    # these are actual arguments passed down to the task function
     op_kwargs = {
         "python_callable": a_callable,
         "to_string": True,
+        "pass_conf": pass_conf
     }
+    # update / override some of the args passed to the task function by default
     if func_kwargs is None:
         func_kwargs = {}
     op_kwargs.update(func_kwargs)
+
+
+    # Python operator arguments , by default for non-lakefs config this is all we need. 
+    python_operator_args = {
+            "task_id": name,
+            "python_callable":task_wrapper,            
+            "executor_config" : get_executor_config(),
+            "dag": dag,
+            "provide_context" : True
+    }
+
+    # if we have lakefs...
     if config.lakefs_config.enabled:
+
+        # repo and branch for pre-execution , to download input objects
         pre_exec_conf = {
             'input_repo': config.lakefs_config.repo,
             'input_branch': config.lakefs_config.branch
         }
-        # configure pre-excute function
-        pre_exec = setup_input_data
+
         if input_repo and input_branch:
             # if the task is a root task , begining of the dag...
             # and we want to pull data from a different repo.
             pre_exec_conf = {
                 'input_repo': input_repo,
-                'input_branch': input_branch
+                'input_branch': input_branch, 
+                # if path is not defined , we can use the context (dag context) to
+                # resolve the previous task dir in lakefs.
+                'path': '*'
             }
-            # if this is not defined , we can use the context (dag context) to
-            # resolve the previous task output dir.
+            
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
-        return PythonOperator(
-            task_id=name,
-            python_callable=task_wrapper,
-            op_kwargs=op_kwargs,
-            executor_config=get_executor_config(),
-            dag=dag,
-            provide_context=True,
-            on_success_callback=partial(avalon_commit_callback,
-                                        kwargs=op_kwargs),
-            pre_execute=pre_exec
-        )
-    else:
-        return PythonOperator(
-            task_id=name,
-            python_callable=task_wrapper,
-            op_kwargs=op_kwargs,
-            executor_config=get_executor_config(),
-            dag=dag,
-            provide_context=True
-        )
+        # add pre_exec partial function as an argument to python executor conf 
+        python_operator_args['pre_execute'] = pre_exec
+
+        # if the task has  output files, we will add a commit callback  
+        if not no_output_files:
+            python_operator_args['on_success_callback'] = partial(avalon_commit_callback, kwargs=op_kwargs)
+        
+    # add kwargs
+    python_operator_args["op_kwargs"] = op_kwargs
+
+    return PythonOperator(**python_operator_args)
 
 def create_pipeline_taskgroup(
         dag,
@@ -330,47 +343,75 @@ def create_pipeline_taskgroup(
     Extra kwargs are passed to the pipeline class init call.
     """
     name = pipeline_class.pipeline_name
+    input_dataset_version = pipeline_class.input_version
 
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
         with pipeline_class(config=configparam, **kwargs) as pipeline:
+            pipeline: DugPipeline
             annotate_task = create_python_task(
                 dag,
                 f"annotate_{name}_files",
-                pipeline.annotate)
+                pipeline.annotate,
+                input_repo=getattr(pipeline_class, 'pipeline_name'),
+                input_branch=input_dataset_version,
+                pass_conf=False)
 
             index_variables_task = create_python_task(
                 dag,
                 f"index_{name}_variables",
-                pipeline.index_variables)
+                pipeline.index_variables,
+                pass_conf=False,
+                # declare that this task will not generate files.
+                no_output_files=True)
             index_variables_task.set_upstream(annotate_task)
 
             validate_index_variables_task = create_python_task(
                 dag,
                 f"validate_{name}_index_variables",
-                pipeline.validate_indexed_variables)
-            validate_index_variables_task.set_upstream(index_variables_task)
+                pipeline.validate_indexed_variables,                
+                pass_conf=False,
+                 # declare that this task will not generate files.
+                no_output_files=True
+                )
+            validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
 
             make_kgx_task = create_python_task(
                 dag,
                 f"make_kgx_{name}",
-                pipeline.make_kg_tagged) # TODO
+                pipeline.make_kg_tagged,
+                pass_conf=False)
             make_kgx_task.set_upstream(annotate_task)
 
             crawl_task = create_python_task(
                 dag,
                 f"crawl_{name}",
-                pipeline.crawl_tranql) #TODO
+                pipeline.crawl_tranql,
+                pass_conf=False) 
             crawl_task.set_upstream(annotate_task)
 
             index_concepts_task = create_python_task(
                 dag,
                 f"index_{name}_concepts",
-                pipeline.index_concepts) # TODO
+                pipeline.index_concepts,
+                pass_conf=False,
+                 # declare that this task will not generate files.
+                no_output_files=True)
             index_concepts_task.set_upstream(crawl_task)
+
+            validate_index_concepts_task = create_python_task(
+                dag,
+                f"validate_{name}_index_concepts",
+                pipeline.validate_indexed_concepts,
+                pass_conf=False,
+                 # declare that this task will not generate files.
+                no_output_files=True
+            )
+            validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, annotate_task])
+
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
             complete_task.set_upstream(
-                (make_kgx_task, index_concepts_task,
-                 validate_index_variables_task))
+                (make_kgx_task,
+                 validate_index_variables_task, validate_index_concepts_task))
 
     return tg
