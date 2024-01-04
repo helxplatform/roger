@@ -44,10 +44,17 @@ bulk_loader:
 
 annotation:
   clear_http_cache: false
-  annotator: "https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content="
+  annotator_type: monarch
+  annotator_args:
+    monarch:
+      url: "https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content="
+    sapbert: 
+      classificationUrl": "https://med-nemo.apps.renci.org/annotate/"
+      annotatorUrl: "https://babel-sapbert.apps.renci.org/annotate/"
   normalizer: "https://nodenormalization-dev.apps.renci.org/get_normalized_nodes?conflate=false&description=true&curie="
   synonym_service: "https://name-resolution-sri.renci.org/reverse_lookup"
   ontology_metadata: "https://api.monarchinitiative.org/api/bioentity/"
+
   preprocessor:
     debreviator:
       BMI: "body mass index"
