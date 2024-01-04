@@ -198,7 +198,7 @@ class DugPipeline():
         Access method for annotator_name
         Defaults to annotator_monarch unless specified using annotation.annotator_type in the configuration file.
         """
-        return getattr(dug_conf, "annotator_type", "annotator-monarch")
+        return getattr(dug_conf, "annotator_type", "monarch")
     
 
     def get_parser(self):
