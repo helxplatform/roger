@@ -207,9 +207,7 @@ class RogerConfig(DictLike):
             nboost_host=self.elasticsearch.nboost_host,
             preprocessor=self.annotation.preprocessor,
             annotator_type=self.annotation.annotator_type,
-            annotator={
-                'url': self.annotation.annotator,
-            },
+            annotator_args=self.annotation.annotator_args,
             normalizer={
                 'url': self.annotation.normalizer,
             },
