@@ -193,12 +193,12 @@ class DugPipeline():
         """
         return getattr(self, 'parser_name', self.pipeline_name)
     
-    def get_annotator_name(dug_conf):
+    def get_annotator_name(self):
         """
         Access method for annotator_name
         Defaults to annotator_monarch unless specified using annotation.annotator_type in the configuration file.
         """
-        return getattr(dug_conf, "annotator_type", "monarch")
+        return self.config.annotation.annotator_type
     
 
     def get_parser(self):
