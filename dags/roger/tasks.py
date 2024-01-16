@@ -39,7 +39,7 @@ def task_wrapper(python_callable, **kwargs):
     # get dag config provided
     dag_run = kwargs.get('dag_run')
     pass_conf = kwargs.get('pass_conf', True)
-    config = kwargs.get('config', RogerConfig())
+    config = kwargs.get('config')
     if config.lakefs_config.enabled:
         # get input path
         logger.info("lakefs is enabled")
