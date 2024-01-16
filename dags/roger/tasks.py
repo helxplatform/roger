@@ -41,6 +41,7 @@ def task_wrapper(python_callable, **kwargs):
     pass_conf = kwargs.get('pass_conf', True)
     if config.lakefs_config.enabled:
         # get input path
+        logger.info("lakefs is enabled")
         input_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
                                                             roger_config=config,
                                                             suffix='input')
@@ -48,7 +49,8 @@ def task_wrapper(python_callable, **kwargs):
         output_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
                                                             roger_config=config,
                                                             suffix='output')
-    else: 
+    else:
+        logger.info("lakefs is disabled")
         input_data_path, output_data_path = None, None
     # cast it to a path object
     func_args = {
@@ -59,9 +61,11 @@ def task_wrapper(python_callable, **kwargs):
     logger.info(f"Task function args: {func_args}")
     # overrides values
     config.dag_run = dag_run
-    if pass_conf:
-        return python_callable(config=config, **func_args)
-    return python_callable(**func_args)
+    def dummy_func(*args, **kwargs):
+        return "yay"
+    # if pass_conf:
+    #     return python_callable(config=config, **func_args)
+    return dummy_func(**func_args)
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
     """ Get an executor configuration.
