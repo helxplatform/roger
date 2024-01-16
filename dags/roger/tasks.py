@@ -39,6 +39,7 @@ def task_wrapper(python_callable, **kwargs):
     # get dag config provided
     dag_run = kwargs.get('dag_run')
     pass_conf = kwargs.get('pass_conf', True)
+    config = kwargs.get('config', RogerConfig())
     if config.lakefs_config.enabled:
         # get input path
         logger.info("lakefs is enabled")
@@ -287,7 +288,8 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     op_kwargs = {
         "python_callable": a_callable,
         "to_string": True,
-        "pass_conf": pass_conf
+        "pass_conf": pass_conf,
+        "config": config
     }
     # update / override some of the args passed to the task function by default
     if func_kwargs is None:
@@ -304,7 +306,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
             "provide_context" : True
     }
     logger.info("Environ ROGER_LAKEFS__CONFIG_ENABLED ")
-    logger.info(os.environ.get('ROGER_LAKEFS__CONFIG_ENABLED '))
+    logger.info(os.environ.get('ROGER_LAKEFS__CONFIG_ENABLED'))
     logger.info('config lakefs enabled')
     logger.info(config.lakefs_config.enabled)
 
