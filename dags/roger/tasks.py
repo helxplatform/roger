@@ -222,12 +222,12 @@ def generate_dir_name_from_task_instance(task_instance: TaskInstance,
         f"{root_data_dir}/{dag_id}_{task_id}_{run_id}_{try_number}_{suffix}")
 
 def setup_input_data(context, exec_conf):
-    print("""
+    logger.info("""
         - Figures out the task name and id,
         - find its data dependencies
         - clean up and create in and out dir
         - put dependency data in input dir
-        - if for some reason data was not found raise an execption
+        - if for some reason data was not found raise an exception
           """)
     # Serves as a location where files the task will work on are placed.
     # computed as ROGER_DATA_DIR + /current task instance name_input_dir
@@ -299,6 +299,10 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
             "dag": dag,
             "provide_context" : True
     }
+    logger.info("Environ ROGER_LAKEFS__CONFIG_ENABLED ")
+    logger.info(os.environ.get('ROGER_LAKEFS__CONFIG_ENABLED '))
+    logger.info('config lakefs enabled')
+    logger.info(config.lakefs_config.enabled)
 
     # if we have lakefs...
     if config.lakefs_config.enabled:
@@ -310,7 +314,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
         }
 
         if input_repo and input_branch:
-            # if the task is a root task , begining of the dag...
+            # if the task is a root task , beginning of the dag...
             # and we want to pull data from a different repo.
             pre_exec_conf = {
                 'input_repo': input_repo,
