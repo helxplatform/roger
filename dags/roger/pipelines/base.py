@@ -16,7 +16,6 @@ import jsonpickle
 import requests
 
 from dug.core import get_parser, get_plugin_manager, DugConcept
-from dug.core.annotate import DugAnnotator, ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement, DugConcept
@@ -129,9 +128,9 @@ class DugPipeline():
             log.addHandler(self.string_handler)
         self.s3_utils = S3Utils(self.config.s3_config)
 
-        self.annotator: DugAnnotator = self.factory.build_annotator()
+        self.annotator = self.factory.build_annotator()
 
-        self.tranqlizer: ConceptExpander = self.factory.build_tranqlizer()
+        self.tranqlizer = self.factory.build_tranqlizer()
 
         graph_name = self.config["redisgraph"]["graph"]
         source = f"redis:{graph_name}"
