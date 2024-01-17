@@ -35,6 +35,10 @@ class LakefsConfig(DictLike):
     repo: str
     enabled: bool = False
 
+    def __post_init__(self):
+        if isinstance(self.enabled, str):
+            self.enabled = self.enabled.lower() == "true"
+
 
 
 @dataclass
