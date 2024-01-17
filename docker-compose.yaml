@@ -136,7 +136,7 @@ services:
   redis:
     # image: redislabs/redisgraph:2.10.9 #Alternative Image
     user: root
-    image: 'redis/redis-stack:6.2.4-v2'
+    image: 'redis/redis-stack:6.2.14'
     command: "redis-server --requirepass $REDIS_PASSWORD --loadmodule /opt/redis-stack/lib/redisgraph.so"
     environment:
       - REDIS_ARGS=--requirepass $REDIS_PASSWORD
@@ -173,7 +173,7 @@ services:
 
   elasticsearch:
     user: root
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.5.2
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.3
     environment:
       - ELASTIC_PASSWORD=$ELASTIC_PASSWORD
       - discovery.type=single-node
