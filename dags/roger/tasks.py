@@ -61,6 +61,7 @@ def task_wrapper(python_callable, **kwargs):
     config.dag_run = dag_run
     if pass_conf:
         return python_callable(config=config, **func_args)
+    return python_callable(**func_args)
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
     """ Get an executor configuration.
