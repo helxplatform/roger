@@ -39,10 +39,8 @@ def task_wrapper(python_callable, **kwargs):
     # get dag config provided
     dag_run = kwargs.get('dag_run')
     pass_conf = kwargs.get('pass_conf', True)
-    config = kwargs.get('config')
     if config.lakefs_config.enabled:
         # get input path
-        logger.info("lakefs is enabled")
         input_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
                                                             roger_config=config,
                                                             suffix='input')
@@ -51,7 +49,6 @@ def task_wrapper(python_callable, **kwargs):
                                                             roger_config=config,
                                                             suffix='output')
     else:
-        logger.info("lakefs is disabled")
         input_data_path, output_data_path = None, None
     # cast it to a path object
     func_args = {
@@ -62,11 +59,8 @@ def task_wrapper(python_callable, **kwargs):
     logger.info(f"Task function args: {func_args}")
     # overrides values
     config.dag_run = dag_run
-    def dummy_func(*args, **kwargs):
-        return "yay"
-    # if pass_conf:
-    #     return python_callable(config=config, **func_args)
-    return dummy_func(**func_args)
+    if pass_conf:
+        return python_callable(config=config, **func_args)
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
     """ Get an executor configuration.
@@ -156,7 +150,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     # right now lets stick to using one repo ,
 
     # issue Vladmir pointed out if uploads to a single lakefs branch have not
-    # been finilized with commit,
+    # been finalized with commit,
     # this would cause dirty commits if parallel tasks target the same branch.
 
     # solution: Lakefs team suggested we commit to a different temp branch per
@@ -288,8 +282,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     op_kwargs = {
         "python_callable": a_callable,
         "to_string": True,
-        "pass_conf": pass_conf,
-        "config": config
+        "pass_conf": pass_conf
     }
     # update / override some of the args passed to the task function by default
     if func_kwargs is None:
@@ -305,10 +298,6 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
             "dag": dag,
             "provide_context" : True
     }
-    logger.info("Environ ROGER_LAKEFS__CONFIG_ENABLED ")
-    logger.info(os.environ.get('ROGER_LAKEFS__CONFIG_ENABLED'))
-    logger.info('config lakefs enabled')
-    logger.info(config.lakefs_config.enabled)
 
     # if we have lakefs...
     if config.lakefs_config.enabled:
