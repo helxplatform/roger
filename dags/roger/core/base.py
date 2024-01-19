@@ -89,7 +89,7 @@ def create_nodes_schema(to_string=False, config=None):
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
-def merge_nodes(to_string=False, config=None):
+def merge_nodes(to_string=False, config=None, input_path="", output_path=""):
     "Run KGX merge"
     output = None
     with Roger (to_string, config=config) as roger:

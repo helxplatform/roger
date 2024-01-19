@@ -414,13 +414,17 @@ class KGXModel:
         dictionary = { k : v for k, v in schema.items () }
         storage.write_object (dictionary, file_name)
 
-    def merge(self):
+    def merge(self, input_path="", output_path=""):
         """ This version uses the disk merging from the kg_utils module """
         data_set_version = self.config.get('kgx', {}).get('dataset_version')
         metrics = {}
         start = time.time()
-        json_format_files = storage.kgx_objects("json")
-        jsonl_format_files = storage.kgx_objects("jsonl")
+        if input_path:
+            json_format_file = storage.kgx_objects("json", input_path)
+            jsonl_format_files = storage.kgx_objects("jsonl", input_path)
+        else:
+            json_format_files = storage.kgx_objects("json")
+            jsonl_format_files = storage.kgx_objects("jsonl")
 
         # Create lists of the nodes and edges files in both json and jsonl
         # formats

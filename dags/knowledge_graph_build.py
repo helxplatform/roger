@@ -9,6 +9,7 @@ from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 import roger
 from roger.tasks import get_executor_config, default_args, create_python_task
+from roger.config import config
 
 """ Build the workflow's tasks and DAG. """
 with DAG(
@@ -23,7 +24,28 @@ with DAG(
     # Merge nodes needs inputs from two sources
     # 1. baseline and/or CDE KGX files from LakeFS (External repo)
     # 2. Infer which local kgx files are needed based on dug_inputs and grab them from the current repo
-    merge_nodes = create_python_task (dag, "MergeNodes", roger.merge_nodes)
+
+    # build the annotate and index pipeline output locations
+    #lakefs://yk-heal/main/annotate_and_index/crdc_dataset_pipeline_task_group.make_kgx_crdc/
+    working_repo = config.lakefs_config.repo
+    branch = config.lakefs_config.branch
+    get_path_on_lakefs = lambda d: f"{working_repo}/{branch}/annotate_and_index/{d}_dataset_pipeline_task_group.make_kgx_{d}/"
+    kgx_files_to_grab = []
+    for dataset in config.dug_inputs.data_sets:
+        dataset_name = dataset.split(":")[0]
+        kgx_files_to_grab.append(get_path_on_lakefs(dataset_name))
+
+    print("***************************")
+    print(kgx_files_to_grab)
+
+
+    merge_nodes = create_python_task (dag, name="MergeNodes",
+                                      a_callable=roger.merge_nodes,
+                                      input_repo="cde",
+                                      input_branch="v5.0")
+
+
+
 
     # The rest of these  guys can just operate on the local lakefs repo/branch
     # we need to add input dir and output dir similar to what we did for dug tasks
