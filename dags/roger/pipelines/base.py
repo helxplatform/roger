@@ -15,12 +15,14 @@ import jsonpickle
 
 import requests
 
-from dug.core import get_parser, get_plugin_manager, DugConcept
+from dug.core import get_parser, get_plugin_manager
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement, DugConcept
 from dug.core.async_search import Search
 from dug.core.index import Index
+
+from roger.pipelines.exceptions import PipelineException
 
 from roger.config import RogerConfig
 from roger.core import storage
@@ -30,9 +32,6 @@ from roger.logger import get_logger
 from utils.s3_utils import S3Utils
 
 log = get_logger()
-
-class PipelineException(Exception):
-    "Exception raised from DugPipeline and related classes"
 
 def make_edge(subj,
               obj,

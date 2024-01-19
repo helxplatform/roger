@@ -337,6 +337,7 @@ def create_pipeline_taskgroup(
         dag,
         pipeline_class: type,
         configparam: RogerConfig,
+        input_version=None,
         **kwargs):
     """Emit an Airflow dag pipeline for the specified pipeline_class
 
@@ -348,6 +349,8 @@ def create_pipeline_taskgroup(
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
         with pipeline_class(config=configparam, **kwargs) as pipeline:
             pipeline: DugPipeline
+            if input_version:
+                pipeline.input_version = input_version
             annotate_task = create_python_task(
                 dag,
                 f"annotate_{name}_files",
@@ -368,12 +371,13 @@ def create_pipeline_taskgroup(
             validate_index_variables_task = create_python_task(
                 dag,
                 f"validate_{name}_index_variables",
-                pipeline.validate_indexed_variables,                
+                pipeline.validate_indexed_variables,
                 pass_conf=False,
                  # declare that this task will not generate files.
                 no_output_files=True
                 )
-            validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
+            validate_index_variables_task.set_upstream(
+                [annotate_task, index_variables_task])
 
             make_kgx_task = create_python_task(
                 dag,
@@ -386,7 +390,7 @@ def create_pipeline_taskgroup(
                 dag,
                 f"crawl_{name}",
                 pipeline.crawl_tranql,
-                pass_conf=False) 
+                pass_conf=False)
             crawl_task.set_upstream(annotate_task)
 
             index_concepts_task = create_python_task(
@@ -406,8 +410,8 @@ def create_pipeline_taskgroup(
                  # declare that this task will not generate files.
                 no_output_files=True
             )
-            validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, annotate_task])
-
+            validate_index_concepts_task.set_upstream(
+                [crawl_task, index_concepts_task, annotate_task])
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
             complete_task.set_upstream(

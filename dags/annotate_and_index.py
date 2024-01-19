@@ -11,9 +11,7 @@ import os
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 from roger.tasks import default_args, create_pipeline_taskgroup
-
-env_enabled_datasets = os.getenv(
-    "ROGER_DUG__INPUTS_DATA__SETS", "topmed,anvil").split(",")
+from roger.pipelines.exceptions import PipelineException
 
 with DAG(
         dag_id='annotate_and_index',
@@ -25,20 +23,34 @@ with DAG(
 
     from roger import pipelines
     from roger.config import config
-    envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed")
-    data_sets = envspec.split(",")
-    pipeline_names = {x.split(':')[0]: x.split(':')[1] for x in data_sets}
-    for pipeline_class in pipelines.get_pipeline_classes(pipeline_names):
+
+    # This envspec should be of the form:
+    # "pipeline1_name:pipeline1_version,pipeline2_name:pipeline2:version..."
+    #
+    # That will be converted here to a dict of the form:
+    # {
+    #   'pipeline1_name': 'pipeline1_version',
+    #   'pipeline2_name': 'pipeline2_version'
+    # }
+    envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS", "topmed:v1.0")
+    env_enabled_datasets = os.getenv(envspec).split(",")
+
+    try:
+        data_sets = envspec.split(",")
+        pipeline_name_dict = dict([x.split(':')[:2] for x in data_sets])
+    except IndexError as exc:
+        raise PipelineException(
+            "Invalid input data set specifier %s", envspec) from exc
+    for pipeline_class in pipelines.get_pipeline_classes():
         # Only use pipeline classes that are in the enabled datasets list and
         # that have a properly defined pipeline_name attribute
 
-        # TODO
-        # Overriding environment variable just to see if this is working.
-        # name = getattr(pipeline_class, 'pipeline_name', '*not defined*')
-        # if not name in env_enabled_datasets:
-        #     continue
+        name = getattr(pipeline_class, 'pipeline_name', '*not defined*')
+        if not name in env_enabled_datasets:
+            continue
 
-        # Do the thing to add the pipeline's subdag to the dag in the right way
-        # . . .
+        input_version = env_enabled_datasets[name]
+        taskgroup = create_pipeline_taskgroup(dag, pipeline_class, config,
+                                              input_version=input_version)
 
-        init >> create_pipeline_taskgroup(dag, pipeline_class, config) >> finish
+        init >> taskgroup >> finish
