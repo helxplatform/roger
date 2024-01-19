@@ -1,6 +1,11 @@
 "Tasks and methods related to Airflow implementations of Roger"
 
 import os
+from typing import Union
+from pathlib import Path
+import glob
+import shutil
+from functools import partial
 
 from airflow.operators.python import PythonOperator
 from airflow.operators.empty import EmptyOperator
@@ -9,17 +14,12 @@ from airflow.utils.dates import days_ago
 from airflow.models import DAG
 from airflow.models.dag import DagContext
 from airflow.models.taskinstance import TaskInstance
-from typing import Union
-from pathlib import Path
-import glob
-import shutil
 
 from roger.config import config, RogerConfig
 from roger.logger import get_logger
 from roger.pipelines.base import DugPipeline
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 import lakefs_client
-from functools import partial
 
 logger = get_logger()
 
@@ -48,7 +48,7 @@ def task_wrapper(python_callable, **kwargs):
         output_data_path = generate_dir_name_from_task_instance(kwargs['ti'],
                                                             roger_config=config,
                                                             suffix='output')
-    else: 
+    else:
         input_data_path, output_data_path = None, None
     # cast it to a path object
     func_args = {
@@ -102,6 +102,7 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     return k8s_executor_config
 
 def init_lakefs_client(config: RogerConfig) -> LakeFsWrapper:
+    """Initialize the LakeFS client"""
     configuration = lakefs_client.Configuration()
     configuration.username = config.lakefs_config.access_key_id
     configuration.password = config.lakefs_config.secret_access_key
@@ -119,26 +120,35 @@ def pagination_helper(page_fetcher, **kwargs):
             break
         kwargs['after'] = resp.pagination.next_offset
 
+def normalize_id(id_str: str):
+    """Perform normalization on special characters to underscores"""
+    id_str = id_str.replace('-', '_')
+    id_str = id_str.replace(':', '_')
+    id_str = id_str.replace('+', '_')
+    id_str = id_str.replace('.', '_')
+    return id_str
 
 def avalon_commit_callback(context: DagContext, **kwargs):
+    """Airflow callback to finalize the commit"""
     client: LakeFsWrapper  = init_lakefs_client(config=config)
     # now files have been processed,
     # this part should
     # get the out path of the task
-    local_path = str(generate_dir_name_from_task_instance(context['ti'],
-                                                           roger_config=config,
-                                                           suffix='output')).rstrip('/') + '/'
+    local_path = str(generate_dir_name_from_task_instance(
+        context['ti'], roger_config=config, suffix='output')).rstrip('/') + '/'
     task_id = context['ti'].task_id
     dag_id = context['ti'].dag_id
     run_id = context['ti'].run_id
     # run id looks like 2023-10-18T17:35:14.890186+00:00
     # normalized to 2023_10_18T17_35_14_890186_00_00
-    # since lakefs branch id must consist of letters, digits, underscores and dashes, 
-    # and cannot start with a dash
-    run_id_normalized = run_id.replace('-','_').replace(':','_').replace('+','_').replace('.','_')
-    dag_id_normalized = dag_id.replace('-','_').replace(':','_').replace('+','_').replace('.','_')
-    task_id_normalized = task_id.replace('-','_').replace(':','_').replace('+','_').replace('.','_')
-    temp_branch_name = f'{dag_id_normalized}_{task_id_normalized}_{run_id_normalized}'
+    # since lakefs branch id must consist of letters, digits, underscores and
+    # dashes, and cannot start with a dash
+    run_id_normalized = normalize_id(run_id)
+    dag_id_normalized = normalize_id(dag_id)
+    task_id_normalized = normalize_id(task_id)
+    temp_branch_name = (
+        f'{dag_id_normalized}_'
+        f'{task_id_normalized}_{run_id_normalized}')
     # remote path to upload the files to.
     remote_path = f'{dag_id}/{task_id}/'
 
@@ -181,7 +191,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
                                   repository=repo, left_ref=branch,
                                   right_ref=temp_branch_name):
         logger.info("Diff: " + str(diff))
-    
+
     try:
         # merging temp branch to working branch
         client._client.refs_api.merge_into_branch(repository=repo,
@@ -190,7 +200,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
 
         logger.info(f"merged branch {temp_branch_name} into {branch}")
     except Exception as e:
-        # remove temp 
+        # remove temp
         logger.error(e)
     # delete temp branch
     finally:
@@ -200,12 +210,11 @@ def avalon_commit_callback(context: DagContext, **kwargs):
         )
         logger.info(f"deleted temp branch {temp_branch_name}")
         logger.info(f"deleting local dir {local_path}")
-        files_to_clean = glob.glob(local_path + '**', recursive=True) + [local_path]
+        files_to_clean = (
+            glob.glob(local_path + '**', recursive=True) +
+            [local_path])
     for f in files_to_clean:
         shutil.rmtree(f)
-
-
-
 
 def generate_dir_name_from_task_instance(task_instance: TaskInstance,
                                          roger_config: RogerConfig, suffix:str):
@@ -271,8 +280,9 @@ def setup_input_data(context, exec_conf):
             lake_fs_client=client
         )
 
-def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
-                       input_branch=None, pass_conf=True, no_output_files=False):
+def create_python_task(dag, name, a_callable,
+                       func_kwargs=None, input_repo=None, input_branch=None,
+                       pass_conf=True, no_output_files=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -291,10 +301,11 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
     op_kwargs.update(func_kwargs)
 
 
-    # Python operator arguments , by default for non-lakefs config this is all we need. 
+    # Python operator arguments , by default for non-lakefs config this is all
+    # we need.
     python_operator_args = {
             "task_id": name,
-            "python_callable":task_wrapper,            
+            "python_callable":task_wrapper,
             "executor_config" : get_executor_config(),
             "dag": dag,
             "provide_context" : True
@@ -314,20 +325,21 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
             # and we want to pull data from a different repo.
             pre_exec_conf = {
                 'input_repo': input_repo,
-                'input_branch': input_branch, 
-                # if path is not defined , we can use the context (dag context) to
-                # resolve the previous task dir in lakefs.
+                'input_branch': input_branch,
+                # if path is not defined , we can use the context (dag context)
+                # to resolve the previous task dir in lakefs.
                 'path': '*'
             }
-            
+
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
-        # add pre_exec partial function as an argument to python executor conf 
+        # add pre_exec partial function as an argument to python executor conf
         python_operator_args['pre_execute'] = pre_exec
 
-        # if the task has  output files, we will add a commit callback  
+        # if the task has  output files, we will add a commit callback
         if not no_output_files:
-            python_operator_args['on_success_callback'] = partial(avalon_commit_callback, kwargs=op_kwargs)
-        
+            python_operator_args['on_success_callback'] = partial(
+                avalon_commit_callback, kwargs=op_kwargs)
+
     # add kwargs
     python_operator_args["op_kwargs"] = op_kwargs
 
