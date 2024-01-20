@@ -1,12 +1,12 @@
-boto3==1.18.23
-botocore==1.21.23
-elasticsearch==8.5.2
+boto3
+botocore
+elasticsearch
 flatten-dict
 jsonpickle
-redisgraph-bulk-loader==0.12.3
+redisgraph-bulk-loader
 pytest
 PyYAML
-git+https://github.com/helxplatform/dug@patch-nrslv-resp
+git+https://github.com/helxplatform/dug@sort_pickle_lists
 orjson
 kg-utils==0.0.6
 bmt==1.1.0
