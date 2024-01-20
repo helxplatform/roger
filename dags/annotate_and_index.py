@@ -10,7 +10,8 @@ import os
 
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
-from roger.tasks import default_args, create_pipeline_taskgroup
+from roger.tasks import (default_args, create_pipeline_taskgroup,
+                         get_env_datasets)
 from roger.pipelines.exceptions import PipelineException
 
 with DAG(
@@ -24,23 +25,7 @@ with DAG(
     from roger import pipelines
     from roger.config import config
 
-    # This envspec should be of the form:
-    # "pipeline1_name:pipeline1_version,pipeline2_name:pipeline2:version..."
-    #
-    # That will be converted here to a dict of the form:
-    # {
-    #   'pipeline1_name': 'pipeline1_version',
-    #   'pipeline2_name': 'pipeline2_version'
-    # }
-    envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS", "topmed:v1.0")
-    env_enabled_datasets = os.getenv(envspec).split(",")
-
-    try:
-        data_sets = envspec.split(",")
-        pipeline_name_dict = dict([x.split(':')[:2] for x in data_sets])
-    except IndexError as exc:
-        raise PipelineException(
-            "Invalid input data set specifier %s", envspec) from exc
+    env_enabled_datasets = get_env_datasets()
     for pipeline_class in pipelines.get_pipeline_classes():
         # Only use pipeline classes that are in the enabled datasets list and
         # that have a properly defined pipeline_name attribute

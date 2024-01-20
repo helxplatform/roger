@@ -18,6 +18,7 @@ from airflow.models.taskinstance import TaskInstance
 from roger.config import config, RogerConfig
 from roger.logger import get_logger
 from roger.pipelines.base import DugPipeline
+from roger.pipelines.exceptions import PipelineException
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 import lakefs_client
 
@@ -62,6 +63,30 @@ def task_wrapper(python_callable, **kwargs):
     if pass_conf:
         return python_callable(config=config, **func_args)
     return python_callable(**func_args)
+
+def get_env_datasets():
+    """Get a dict of desired datasets from the environment
+
+    This envspec should be of the form:
+    "pipeline1_name:pipeline1_version,pipeline2_name:pipeline2:version..."
+
+    That will be converted here to a dict of the form:
+    {
+      'pipeline1_name': 'pipeline1_version',
+      'pipeline2_name': 'pipeline2_version'
+    }
+    """
+    envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS", "topmed:v1.0")
+    env_enabled_datasets = envspec.split(",")
+
+    try:
+        data_sets = envspec.split(",")
+        pipeline_name_dict = dict([x.split(':')[:2] for x in data_sets])
+    except (IndexError, ValueError) as exc:
+        raise PipelineException(
+            "Invalid input data set specifier %s", envspec) from exc
+
+    return pipeline_name_dict
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
     """ Get an executor configuration.
