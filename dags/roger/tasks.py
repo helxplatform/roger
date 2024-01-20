@@ -84,7 +84,7 @@ def get_env_datasets():
         pipeline_name_dict = dict([x.split(':')[:2] for x in data_sets])
     except (IndexError, ValueError) as exc:
         raise PipelineException(
-            "Invalid input data set specifier %s", envspec) from exc
+            f"Invalid input data set specifier {envspec}") from exc
 
     return pipeline_name_dict
 
