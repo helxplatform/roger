@@ -89,7 +89,7 @@ def create_nodes_schema(to_string=False, config=None):
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
-def merge_nodes(to_string=False, config=None, input_path="", output_path=""):
+def merge_nodes(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Run KGX merge"
     output = None
     with Roger (to_string, config=config) as roger:
@@ -97,14 +97,14 @@ def merge_nodes(to_string=False, config=None, input_path="", output_path=""):
         output = roger.log_stream.getvalue () if to_string else None
     return output
 
-def create_bulk_load(to_string=False, config=None):
+def create_bulk_load(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Generate bulk load files"
     o1 = create_bulk_nodes(to_string=to_string, config=config)
     o2 = create_bulk_edges(to_string=to_string, config=config)
     output = (o1 + o2) if to_string else None
     return output
 
-def create_bulk_nodes(to_string=False, config=None):
+def create_bulk_nodes(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Generate bulk node CSV file"
     output = None
     with Roger(to_string, config=config) as roger:
@@ -112,7 +112,7 @@ def create_bulk_nodes(to_string=False, config=None):
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
-def create_bulk_edges(to_string=False, config=None):
+def create_bulk_edges(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Create bulk edges CSV file"
     output = None
     with Roger(to_string, config=config) as roger:
@@ -120,7 +120,7 @@ def create_bulk_edges(to_string=False, config=None):
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
-def bulk_load(to_string=False, config=None):
+def bulk_load(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Run bulk load insert process"
     output = None
     with Roger (to_string, config=config) as roger:
@@ -128,7 +128,7 @@ def bulk_load(to_string=False, config=None):
         output = roger.log_stream.getvalue () if to_string else None
     return output
 
-def validate (to_string=False, config=None):
+def validate (to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Run bulk validate process"
     output = None
     with Roger (to_string, config=config) as roger:
@@ -136,7 +136,7 @@ def validate (to_string=False, config=None):
         output = roger.log_stream.getvalue () if to_string else None
     return output
 
-def check_tranql(to_string=False, config=None):
+def check_tranql(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Tranql server smoke check"
     output = None
     with Roger(to_string, config=config) as roger:
