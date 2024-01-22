@@ -41,7 +41,7 @@ with DAG(
 
     merge_nodes = create_python_task (dag, name="MergeNodes",
                                       a_callable=roger.merge_nodes,
-                                      input_repo="cde",
+                                      input_repo="cde-graph",
                                       input_branch="v5.0")
 
 
