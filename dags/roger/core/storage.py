@@ -172,7 +172,12 @@ def merged_objects(file_type, path=None):
         merged_pattern = merge_path(f"**/{file_type}.jsonl")
     else:
         merged_pattern =  merge_path(f"**/{file_type}.jsonl", path=path)
-    return sorted(glob.glob (merged_pattern, recursive=True))
+    # this thing should always return one edges or nodes file (based on file_type)
+    try:
+        return sorted(glob.glob(merged_pattern, recursive=True))[0]
+    except IndexError:
+        raise ValueError(f"Could not find merged KGX of type {file_type} in {merged_pattern}")
+
 
 def schema_path(name, path=None):
     """ Path to a schema object.
