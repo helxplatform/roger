@@ -166,10 +166,13 @@ def merge_path(name, path: Path=None):
         return str(ROGER_DATA_DIR / 'merge' / name)
     return str(path.joinpath(name))
 
-def merged_objects():
+def merged_objects(file_type, path=None):
     """ A list of merged KGX objects. """
-    merged_pattern = merge_path("**.json")
-    return sorted(glob.glob (merged_pattern))
+    if not path:
+        merged_pattern = merge_path(f"**/{file_type}.jsonl")
+    else:
+        merged_pattern =  merge_path(f"**/{file_type}.jsonl", path=path)
+    return sorted(glob.glob (merged_pattern, recursive=True))
 
 def schema_path(name, path=None):
     """ Path to a schema object.

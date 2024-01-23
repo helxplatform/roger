@@ -112,7 +112,7 @@ def create_bulk_nodes(to_string=False, config=None, input_data_path=None, output
     "Generate bulk node CSV file"
     output = None
     with Roger(to_string, config=config) as roger:
-        roger.bulk.create_nodes_csv_file()
+        roger.bulk.create_nodes_csv_file(input_data_path, output_data_path)
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
@@ -120,7 +120,7 @@ def create_bulk_edges(to_string=False, config=None, input_data_path=None, output
     "Create bulk edges CSV file"
     output = None
     with Roger(to_string, config=config) as roger:
-        roger.bulk.create_edges_csv_file()
+        roger.bulk.create_edges_csv_file(input_data_path, output_data_path)
         output = roger.log_stream.getvalue() if to_string else None
     return output
 

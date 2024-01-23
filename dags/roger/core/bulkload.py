@@ -47,7 +47,7 @@ class BulkLoad:
         self.create_nodes_csv_file()
         self.create_edges_csv_file()
 
-    def create_nodes_csv_file(self):
+    def create_nodes_csv_file(self, input_data_path=None, output_data_path=None):
         if self.tables_up_to_date ():
             log.info ("up to date.")
             return
@@ -92,7 +92,7 @@ class BulkLoad:
                             categories, categories_schema,
                             state=state, is_relation=False)
 
-    def create_edges_csv_file(self):
+    def create_edges_csv_file(self, input_data_path=None, output_data_path=None):
         """ Write predicate data for bulk load. """
         if self.tables_up_to_date ():
             log.info ("up to date.")

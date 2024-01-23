@@ -309,7 +309,7 @@ class KGXModel:
 
         category_schemas = defaultdict(lambda: None)
         category_error_nodes = set()
-        merged_nodes_file = storage.merge_path("nodes.jsonl", input_data_path)
+        merged_nodes_file = storage.merged_objects("nodes", input_data_path)
         log.info(f"Processing : {merged_nodes_file}")
         counter = 0
         for node in storage.json_line_iter(merged_nodes_file):
