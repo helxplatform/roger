@@ -29,6 +29,7 @@ with DAG(
     #lakefs://yk-heal/main/annotate_and_index/crdc_dataset_pipeline_task_group.make_kgx_crdc/
     working_repo = config.lakefs_config.repo
     branch = config.lakefs_config.branch
+    kgx_repos = config.kgx.data_sets
     get_path_on_lakefs = lambda d: f"{working_repo}/{branch}/annotate_and_index/{d}_dataset_pipeline_task_group.make_kgx_{d}/"
     kgx_files_to_grab = []
     for dataset in config.dug_inputs.data_sets:

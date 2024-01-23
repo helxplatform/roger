@@ -159,10 +159,12 @@ def kgx_objects(format_="json", path=None):
         kgx_pattern = f"{path}/**/*.{format_}"
     return sorted(glob.glob (kgx_pattern, recursive=True))
 
-def merge_path(name):
+def merge_path(name, path=None):
     """ Form a merged KGX object path.
     :path name: Name of the merged KGX object. """
-    return str(ROGER_DATA_DIR / 'merge' / name)
+    if path is None:
+        return str(ROGER_DATA_DIR / 'merge' / name)
+    return path + os.path.sep + 'name'
 
 def merged_objects():
     """ A list of merged KGX objects. """

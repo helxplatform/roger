@@ -93,7 +93,7 @@ def merge_nodes(to_string=False, config=None, input_data_path=None, output_data_
     "Run KGX merge"
     output = None
     with Roger (to_string, config=config) as roger:
-        roger.kgx.merge()
+        roger.kgx.merge(input_path=input_data_path, output_path=output_data_path)
         output = roger.log_stream.getvalue () if to_string else None
     return output
 
