@@ -18,7 +18,7 @@ from roger.config import config, RogerConfig
 from roger.logger import get_logger
 from roger.pipelines.base import DugPipeline
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
-import lakefs_client
+from lakefs_sdk.configuration import Configuration
 from functools import partial
 
 logger = get_logger()
@@ -102,7 +102,7 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     return k8s_executor_config
 
 def init_lakefs_client(config: RogerConfig) -> LakeFsWrapper:
-    configuration = lakefs_client.Configuration()
+    configuration = Configuration()
     configuration.username = config.lakefs_config.access_key_id
     configuration.password = config.lakefs_config.secret_access_key
     configuration.host = config.lakefs_config.host
