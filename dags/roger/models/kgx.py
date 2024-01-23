@@ -462,7 +462,8 @@ class KGXModel:
         ## test code
 
         for edge in edge_iterators:
-            log.info(edge)
+            if 'subject' not in edge:
+                log.info("error on edge")
 
         ## end test code
 
