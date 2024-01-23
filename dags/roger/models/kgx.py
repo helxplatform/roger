@@ -459,6 +459,14 @@ class KGXModel:
         self.merger.merge_nodes(node_iterators)
         merged_nodes = self.merger.get_merged_nodes_jsonl()
 
+        ## test code
+
+        for edge in edge_iterators:
+            log.info(edge)
+
+        ## end test code
+
+
         self.merger.merge_edges(edge_iterators)
         merged_edges = self.merger.get_merged_edges_jsonl()
 
