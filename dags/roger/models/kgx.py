@@ -432,9 +432,9 @@ class KGXModel:
         # Create lists of the nodes and edges files in both json and jsonl
         # formats
         jsonl_node_files = {file for file in jsonl_format_files
-                            if "node" in file}
+                            if "node" in file.split('/')[-1]}
         jsonl_edge_files = {file for file in jsonl_format_files
-                            if "edge" in file}
+                            if "edge" in file.split('/')[-1]}
         log.info(f"Jsonl edge files : {jsonl_edge_files}")
         log.info(f"Jsonl node files : {jsonl_node_files}")
 
