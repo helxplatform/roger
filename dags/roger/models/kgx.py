@@ -414,7 +414,7 @@ class KGXModel:
         dictionary = { k : v for k, v in schema.items () }
         storage.write_object (dictionary, file_name)
 
-    def merge(self, input_path="", output_path=""):
+    def merge(self, input_path=None, output_path=None):
         """ This version uses the disk merging from the kg_utils module """
 
         metrics = {}
@@ -459,13 +459,13 @@ class KGXModel:
         self.merger.merge_nodes(node_iterators)
         merged_nodes = self.merger.get_merged_nodes_jsonl()
 
-        ## test code
-
-        for edge in edge_iterators:
-            if 'subject' not in edge:
-                log.info("error on edge")
-
-        ## end test code
+        # ## test code
+        #
+        # for edge in edge_iterators:
+        #     if 'subject' not in edge:
+        #         log.info("error on edge")
+        #
+        # ## end test code
 
 
         self.merger.merge_edges(edge_iterators)
@@ -474,6 +474,11 @@ class KGXModel:
         write_merge_metric = {}
         t = time.time()
         start_nodes_jsonl = time.time()
+
+        # create output dir
+        if not os.path.exists(output_path):
+            os.makedirs(output_path)
+
         nodes_file_path = storage.merge_path("nodes.jsonl", output_path)
 
         # stream out nodes to nodes.jsonl file
@@ -513,4 +518,6 @@ class KGXModel:
 
 if __name__ == '__main__':
     kg_merger = KGXModel()
-    kg_merger.merge(input_path="/home/kebedey/projects/helx/roger/kgx_dir",output_path="/home/kebedey/projects/helx/roger/kgx_dir_out")
+    import pathlib
+    kg_merger.merge(input_path=pathlib.Path("/home/kebedey/projects/helx/roger/kgx_dir"),
+                    output_path=pathlib.Path("/home/kebedey/projects/helx/roger/kgx_dir_out"))
