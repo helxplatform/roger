@@ -420,7 +420,7 @@ class KGXModel:
         metrics = {}
         start = time.time()
         if input_path:
-            json_format_file = storage.kgx_objects("json", input_path)
+            json_format_files = storage.kgx_objects("json", input_path)
             jsonl_format_files = storage.kgx_objects("jsonl", input_path)
         else:
             json_format_files = storage.kgx_objects("json")
