@@ -164,7 +164,7 @@ def merge_path(name, path=None):
     :path name: Name of the merged KGX object. """
     if path is None:
         return str(ROGER_DATA_DIR / 'merge' / name)
-    return path + os.path.sep + 'name'
+    return path + os.path.sep + name
 
 def merged_objects():
     """ A list of merged KGX objects. """

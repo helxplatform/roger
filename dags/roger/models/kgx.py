@@ -50,11 +50,11 @@ class KGXModel:
             self.biolink = BiolinkModel(self.biolink_version)
         else:
             self.biolink = biolink
-        self.redis_conn = redis.Redis(
-                    host=self.config.redisgraph.host,
-                    port=self.config.redisgraph.port,
-                    password=self.config.redisgraph.password,
-                    db=self.merge_db_id)
+        # self.redis_conn = redis.Redis(
+        #             host=self.config.redisgraph.host,
+        #             port=self.config.redisgraph.port,
+        #             password=self.config.redisgraph.password,
+        #             db=self.merge_db_id)
         self.enable_metrics = self.config.get('enable_metrics', False)
 
     def get_kgx_json_format(self, files: list, dataset_version: str):
@@ -416,9 +416,12 @@ class KGXModel:
 
     def merge(self, input_path="", output_path=""):
         """ This version uses the disk merging from the kg_utils module """
-        data_set_version = self.config.get('kgx', {}).get('dataset_version')
+
         metrics = {}
         start = time.time()
+
+        log.info(f"Input path = {input_path}, Output path = {output_path}")
+
         if input_path:
             json_format_files = storage.kgx_objects("json", input_path)
             jsonl_format_files = storage.kgx_objects("jsonl", input_path)
@@ -496,3 +499,9 @@ class KGXModel:
         if self.enable_metrics:
             metricsfile_path = storage.metrics_path('merge_metrics.yaml')
             storage.write_object(metrics, metricsfile_path)
+
+
+
+if __name__ == '__main__':
+    kg_merger = KGXModel()
+    kg_merger.merge(input_path="/home/kebedey/projects/helx/roger/kgx_dir",output_path="/home/kebedey/projects/helx/roger/kgx_dir_out")
