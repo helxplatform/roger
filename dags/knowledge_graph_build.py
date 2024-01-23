@@ -70,5 +70,15 @@ with DAG(
     finish = EmptyOperator(task_id='Finish')
 
     """ Build the DAG. """
-    intro >> merge_nodes >> [create_nodes_schema, create_edges_schema ] >> continue_task_bulk_load >> \
-    [create_bulk_load_nodes, create_bulk_load_edges] >> bulk_load >> continue_task_validate >>[validate, check_tranql ] >> finish
+    merge_nodes.set_upstream(intro)
+    create_nodes_schema.set_upstream(merge_nodes)
+    create_edges_schema.set_upstream(merge_nodes)
+    create_bulk_load_nodes.set_upstream(create_nodes_schema)
+    create_bulk_load_nodes.set_upstream(merge_nodes)
+    create_bulk_load_edges.set_upstream(create_edges_schema)
+    create_bulk_load_edges.set_upstream(merge_nodes)
+    bulk_load.set_upstream(create_bulk_load_nodes)
+    bulk_load.set_upstream(create_bulk_load_edges)
+    validate.set_upstream(bulk_load)
+    check_tranql.set_upstream(bulk_load)
+
