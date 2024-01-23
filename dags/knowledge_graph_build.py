@@ -45,8 +45,10 @@ with DAG(
     # The rest of these  guys can just operate on the local lakefs repo/branch
     # we need to add input dir and output dir similar to what we did for dug tasks
 
-    create_nodes_schema = create_python_task(dag, "CreateNodesSchema",
-                                             roger.create_nodes_schema)
+    create_nodes_schema = create_python_task(dag,
+                                            name="CreateNodesSchema",
+                                            a_callable=roger.create_nodes_schema
+                                            )
     create_edges_schema = create_python_task(dag, "CreateEdgesSchema",
                                              roger.create_edges_schema)
 

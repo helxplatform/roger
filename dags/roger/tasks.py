@@ -263,13 +263,11 @@ def setup_input_data(context, exec_conf):
             local_path=input_dir,
             remote_path=remote_path,
             branch=input_branch,
-            task_name=context['task'].task_id,
-            pipeline_id=context['dag'].dag_id,
             repo=input_repo,
             changes_only=False,
-            metafilename=None,
             lake_fs_client=client
         )
+
 
 def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
                        input_branch=None, pass_conf=True, no_output_files=False):
