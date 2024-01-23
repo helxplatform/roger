@@ -301,7 +301,7 @@ class KGXModel:
         log.info("Done copying dug KGX files.")
         return all_kgx_files
 
-    def create_nodes_schema(self):
+    def create_nodes_schema(self, input_data_path=None, output_data_path=None):
         """
         Extracts schema for nodes based on biolink leaf types
         :return:
@@ -309,7 +309,7 @@ class KGXModel:
 
         category_schemas = defaultdict(lambda: None)
         category_error_nodes = set()
-        merged_nodes_file = storage.merge_path("nodes.jsonl")
+        merged_nodes_file = storage.merge_path("nodes.jsonl", input_data_path)
         log.info(f"Processing : {merged_nodes_file}")
         counter = 0
         for node in storage.json_line_iter(merged_nodes_file):
@@ -356,15 +356,15 @@ class KGXModel:
                      f"These will be treated as {BiolinkModel.root_type}.")
 
         # Write node schemas.
-        self.write_schema(category_schemas, SchemaType.CATEGORY)
+        self.write_schema(category_schemas, SchemaType.CATEGORY, output_path=output_data_path)
 
-    def create_edges_schema(self):
+    def create_edges_schema(self, input_data_path=None, output_data_path=None):
         """
         Create unified schema for all edges in an edges jsonl file.
         :return:
         """
         predicate_schemas = defaultdict(lambda: None)
-        merged_edges_file = storage.merge_path("edges.jsonl")
+        merged_edges_file = storage.merge_path("edges.jsonl", input_data_path)
         """ Infer predicate schemas. """
         for edge in storage.json_line_iter(merged_edges_file):
             predicate = edge['predicate']
@@ -378,7 +378,7 @@ class KGXModel:
                     previous_type = predicate_schemas[predicate][k]
                     predicate_schemas[predicate][k] = compare_types(
                         previous_type, current_type)
-        self.write_schema(predicate_schemas, SchemaType.PREDICATE)
+        self.write_schema(predicate_schemas, SchemaType.PREDICATE, output_path=output_data_path)
 
     def create_schema (self):
         """Determine the schema of each type of object.
@@ -403,13 +403,13 @@ class KGXModel:
                     f"{SchemaType.PREDICATE.value}-schema.json")
             ])
 
-    def write_schema(self, schema, schema_type: SchemaType):
+    def write_schema(self, schema, schema_type: SchemaType ,output_path=None):
         """ Output the schema file.
  
         :param schema: Schema to get keys from.
         :param schema_type: Type of schema to write.
         """
-        file_name = storage.schema_path (f"{schema_type.value}-schema.json")
+        file_name = storage.schema_path (f"{schema_type.value}-schema.json", output_path)
         log.info("writing schema: %s", file_name)
         dictionary = { k : v for k, v in schema.items () }
         storage.write_object (dictionary, file_name)

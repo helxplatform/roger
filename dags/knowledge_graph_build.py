@@ -36,17 +36,11 @@ with DAG(
         dataset_name = dataset.split(":")[0]
         kgx_files_to_grab.append(get_path_on_lakefs(dataset_name))
 
-    print("***************************")
-    print(kgx_files_to_grab)
-
 
     merge_nodes = create_python_task (dag, name="MergeNodes",
                                       a_callable=roger.merge_nodes,
                                       input_repo="cde-graph",
                                       input_branch="v5.0")
-
-
-
 
     # The rest of these  guys can just operate on the local lakefs repo/branch
     # we need to add input dir and output dir similar to what we did for dug tasks
@@ -56,18 +50,15 @@ with DAG(
     create_edges_schema = create_python_task(dag, "CreateEdgesSchema",
                                              roger.create_edges_schema)
 
-
-    continue_task_bulk_load = EmptyOperator(task_id="continueBulkCreate")
     create_bulk_load_nodes = create_python_task(dag, "CreateBulkLoadNodes",
                                                 roger.create_bulk_nodes)
     create_bulk_load_edges = create_python_task(dag, "CreateBulkLoadEdges",
                                                 roger.create_bulk_edges)
     bulk_load = create_python_task(dag, "BulkLoad", roger.bulk_load)
-    continue_task_validate = EmptyOperator(task_id="continueValidation")
     check_tranql = create_python_task(dag, "CheckTranql",
                                       roger.check_tranql)
     validate = create_python_task(dag, "Validate", roger.validate)
-    finish = EmptyOperator(task_id='Finish')
+
 
     """ Build the DAG. """
     merge_nodes.set_upstream(intro)

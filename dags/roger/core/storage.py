@@ -171,10 +171,12 @@ def merged_objects():
     merged_pattern = merge_path("**.json")
     return sorted(glob.glob (merged_pattern))
 
-def schema_path(name):
+def schema_path(name, path=None):
     """ Path to a schema object.
     :param name: Name of the object to get a path for. """
-    return str(ROGER_DATA_DIR / 'schema' / name)
+    if not path:
+        return str(ROGER_DATA_DIR / 'schema' / name)
+    return str (path / 'schema' / name)
 
 def bulk_path(name):
     """ Path to a bulk load object.

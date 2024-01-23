@@ -77,7 +77,10 @@ def create_edges_schema(to_string=False, config=None, input_data_path=None, outp
     "Create edges schema on KGX object"
     output = None
     with Roger(to_string, config=config) as roger:
-        roger.kgx.create_edges_schema()
+        roger.kgx.create_edges_schema(
+            input_data_path=input_data_path,
+            output_data_path=output_data_path
+        )
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
@@ -85,7 +88,8 @@ def create_nodes_schema(to_string=False, config=None, input_data_path=None, outp
     "Create nodes schema on KGX object"
     output = None
     with Roger(to_string, config=config) as roger:
-        roger.kgx.create_nodes_schema()
+        roger.kgx.create_nodes_schema(input_data_path=input_data_path,
+                                      output_data_path=output_data_path)
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
