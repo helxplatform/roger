@@ -435,9 +435,8 @@ class KGXModel:
                             if "node" in file}
         jsonl_edge_files = {file for file in jsonl_format_files
                             if "edge" in file}
-
-        log.info(f"JsonL files: {jsonl_format_files}")
-        log.info(f"Json files: {json_format_files}")
+        log.info(f"Jsonl edge files : {jsonl_edge_files}")
+        log.info(f"Jsonl node files : {jsonl_node_files}")
 
         # Create all the needed iterators and sets thereof
         jsonl_node_iterators = [storage.jsonl_iter(file_name)
@@ -458,14 +457,6 @@ class KGXModel:
         # now do the merge
         self.merger.merge_nodes(node_iterators)
         merged_nodes = self.merger.get_merged_nodes_jsonl()
-
-        # ## test code
-        #
-        # for edge in edge_iterators:
-        #     if 'subject' not in edge:
-        #         log.info("error on edge")
-        #
-        # ## end test code
 
 
         self.merger.merge_edges(edge_iterators)
