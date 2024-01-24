@@ -33,36 +33,24 @@ class BulkLoad:
         self.separator =(chr(separator) if isinstance(separator, int)
                          else separator)
 
-    def tables_up_to_date (self):
-        return storage.is_up_to_date (
-            source=[
-                storage.schema_path (f"{SchemaType.PREDICATE.value}-schema.json"),
-                storage.schema_path (f"{SchemaType.PREDICATE.value}-schema.json")
-            ] + storage.merged_objects (),
-            targets=glob.glob (storage.bulk_path ("nodes/**.csv")) + \
-            glob.glob (storage.bulk_path ("edges/**.csv")))
-
     def create (self):
         """Used in the CLI on args.create_bulk"""
         self.create_nodes_csv_file()
         self.create_edges_csv_file()
 
     def create_nodes_csv_file(self, input_data_path=None, output_data_path=None):
-        if self.tables_up_to_date ():
-            log.info ("up to date.")
-            return
         # clear out previous data
-        bulk_path = storage.bulk_path("nodes")
+        bulk_path = storage.bulk_path("nodes", output_data_path)
         if os.path.exists(bulk_path):
             shutil.rmtree(bulk_path)
-        categories_schema = storage.read_schema (SchemaType.CATEGORY)
+        categories_schema = storage.read_schema (SchemaType.CATEGORY, input_data_path)
         state = defaultdict(lambda: None)
         log.info(f"processing nodes")
         """ Write node data for bulk load. """
 
         categories = defaultdict(lambda: [])
         category_error_nodes = set()
-        merged_nodes_file = storage.merge_path("nodes.jsonl")
+        merged_nodes_file = storage.merged_objects('nodes', input_data_path)
         counter = 1
         for node in storage.json_line_iter(merged_nodes_file):
             if not node['category']:
@@ -79,7 +67,7 @@ class BulkLoad:
                     f"Showing first 10: {list(category_error_nodes)[:10]}.")
             # flush every 100K
             if counter % 100_000 == 0:
-                self.write_bulk(storage.bulk_path("nodes"),
+                self.write_bulk(storage.bulk_path("nodes", output_data_path),
                                 categories, categories_schema,
                                 state=state, is_relation=False)
                 # reset variables.
@@ -88,7 +76,7 @@ class BulkLoad:
             counter += 1
         # write back if any thing left.
         if len(categories):
-            self.write_bulk(storage.bulk_path("nodes"),
+            self.write_bulk(storage.bulk_path("nodes", output_data_path),
                             categories, categories_schema,
                             state=state, is_relation=False)
 
