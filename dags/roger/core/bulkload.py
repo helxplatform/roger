@@ -336,7 +336,7 @@ class BulkLoad:
                 nodes_with_type.append(f"{all_labels} {x}")
             args.extend(("-N " + " -N ".join(nodes_with_type)).split())
         if len(edges) > 0:
-            bulk_path_root = glob.glob(storage.bulk_path('**/edges', path=input_data_path), recursive=True) + os.path.sep
+            bulk_path_root = glob.glob(storage.bulk_path('**/edges', path=input_data_path), recursive=True)[0] + os.path.sep
             edges_with_type = [f"biolink.{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0].split('~')[1]} {x}"
                                for x in edges]
             # Edge label now no longer has 'biolink:'
