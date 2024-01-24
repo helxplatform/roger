@@ -83,7 +83,7 @@ class BulkLoad:
     def create_edges_csv_file(self, input_data_path=None, output_data_path=None):
         """ Write predicate data for bulk load. """
         # Clear out previous data
-        bulk_path = storage.bulk_path("edges")
+        bulk_path = storage.bulk_path("edges", output_data_path)
         if os.path.exists(bulk_path):
             shutil.rmtree(bulk_path)
         predicates_schema = storage.read_schema(SchemaType.PREDICATE, input_data_path)
