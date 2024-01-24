@@ -364,7 +364,7 @@ class KGXModel:
         :return:
         """
         predicate_schemas = defaultdict(lambda: None)
-        merged_edges_file = storage.merge_path("edges.jsonl", input_data_path)
+        merged_edges_file = storage.merged_objects("edges", input_data_path)
         """ Infer predicate schemas. """
         for edge in storage.json_line_iter(merged_edges_file):
             predicate = edge['predicate']
