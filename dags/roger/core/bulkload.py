@@ -306,17 +306,10 @@ class BulkLoad:
         state['processed_id'] = processed_objects_id
         state['called_times'] = called_x_times
 
-    def insert (self):
-
-        redisgraph = {
-            'host': os.getenv('REDIS_HOST'),
-            'port': os.getenv('REDIS_PORT', '6379'),
-            'password': os.getenv('REDIS_PASSWORD'),
-            'graph': os.getenv('REDIS_GRAPH'),
-        }
+    def insert (self, input_data_path=None):
         redisgraph = self.config.redisgraph
-        nodes = sorted(glob.glob (storage.bulk_path ("nodes/**.csv*")))
-        edges = sorted(glob.glob (storage.bulk_path ("edges/**.csv*")))
+        nodes = sorted(glob.glob (storage.bulk_path ("**/nodes/**.csv*", input_data_path)))
+        edges = sorted(glob.glob (storage.bulk_path ("**/edges/**.csv*", input_data_path)))
         graph = redisgraph['graph']
         log.info(f"bulk loading \n  nodes: {nodes} \n  edges: {edges}")
 

@@ -128,7 +128,7 @@ def bulk_load(to_string=False, config=None, input_data_path=None, output_data_pa
     "Run bulk load insert process"
     output = None
     with Roger (to_string, config=config) as roger:
-        roger.bulk.insert()
+        roger.bulk.insert(input_data_path=input_data_path)
         output = roger.log_stream.getvalue () if to_string else None
     return output
 
