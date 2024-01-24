@@ -8,7 +8,7 @@ An Airflow workflow for the Roger Translator KGX data pipeline.
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
 import roger
-from roger.tasks import get_executor_config, default_args, create_python_task
+from roger.tasks import default_args, create_python_task
 from roger.config import config
 
 """ Build the workflow's tasks and DAG. """
@@ -49,17 +49,28 @@ with DAG(
                                             name="CreateNodesSchema",
                                             a_callable=roger.create_nodes_schema
                                             )
-    create_edges_schema = create_python_task(dag, "CreateEdgesSchema",
-                                             roger.create_edges_schema)
+    create_edges_schema = create_python_task(dag,
+                                             name="CreateEdgesSchema",
+                                             a_callable=roger.create_edges_schema)
 
-    create_bulk_load_nodes = create_python_task(dag, "CreateBulkLoadNodes",
-                                                roger.create_bulk_nodes)
-    create_bulk_load_edges = create_python_task(dag, "CreateBulkLoadEdges",
-                                                roger.create_bulk_edges)
-    bulk_load = create_python_task(dag, "BulkLoad", roger.bulk_load)
-    check_tranql = create_python_task(dag, "CheckTranql",
-                                      roger.check_tranql)
-    validate = create_python_task(dag, "Validate", roger.validate)
+    create_bulk_load_nodes = create_python_task(dag,
+                                                name="CreateBulkLoadNodes",
+                                                a_callable=roger.create_bulk_nodes)
+    create_bulk_load_edges = create_python_task(dag,
+                                                name="CreateBulkLoadEdges",
+                                                a_callable=roger.create_bulk_edges)
+    bulk_load = create_python_task(dag,
+                                   name="BulkLoad",
+                                   a_callable=roger.bulk_load,
+                                   no_output_files=True)
+    check_tranql = create_python_task(dag,
+                                      name="CheckTranql",
+                                      a_callable=roger.check_tranql,
+                                      no_output_files=True)
+    validate = create_python_task(dag,
+                                  name="Validate",
+                                  a_callable=roger.validate,
+                                  no_output_files=True)
 
 
     """ Build the DAG. """
