@@ -308,8 +308,8 @@ class BulkLoad:
 
     def insert (self, input_data_path=None):
         redisgraph = self.config.redisgraph
-        nodes = sorted(glob.glob (storage.bulk_path ("**/nodes/**.csv*", input_data_path)))
-        edges = sorted(glob.glob (storage.bulk_path ("**/edges/**.csv*", input_data_path)))
+        nodes = sorted(glob.glob (storage.bulk_path ("**/nodes/**.csv*", input_data_path), recursive=True))
+        edges = sorted(glob.glob (storage.bulk_path ("**/edges/**.csv*", input_data_path), recursive=True))
         graph = redisgraph['graph']
         log.info(f"bulk loading \n  nodes: {nodes} \n  edges: {edges}")
 
@@ -342,7 +342,6 @@ class BulkLoad:
             # Edge label now no longer has 'biolink:'
             args.extend(("-R " + " -R ".join(edges_with_type)).split())
         args.extend([f"--separator={self.separator}"])
-        log.debug(f"--redis-url=redis://:{redisgraph['password']}@{redisgraph['host']}:{redisgraph['port']}")
         args.extend([f"--redis-url=redis://:{redisgraph['password']}@{redisgraph['host']}:{redisgraph['port']}"])
         args.extend(['--enforce-schema'])
         args.extend([f"{redisgraph['graph']}"])
