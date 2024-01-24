@@ -82,16 +82,13 @@ class BulkLoad:
 
     def create_edges_csv_file(self, input_data_path=None, output_data_path=None):
         """ Write predicate data for bulk load. """
-        if self.tables_up_to_date ():
-            log.info ("up to date.")
-            return
         # Clear out previous data
         bulk_path = storage.bulk_path("edges")
         if os.path.exists(bulk_path):
             shutil.rmtree(bulk_path)
-        predicates_schema = storage.read_schema(SchemaType.PREDICATE)
+        predicates_schema = storage.read_schema(SchemaType.PREDICATE, input_data_path)
         predicates = defaultdict(lambda: [])
-        edges_file = storage.merge_path('edges.jsonl')
+        edges_file = storage.merged_objects('edges', input_data_path)
         counter = 1
         state = {}
         for edge in storage.json_line_iter(edges_file):
@@ -99,14 +96,14 @@ class BulkLoad:
             # write out every 100K , to avoid large predicate dict.
             if counter % 100_000 == 0:
                 self.write_bulk(
-                    storage.bulk_path("edges"),predicates, predicates_schema,
+                    storage.bulk_path("edges", output_data_path),predicates, predicates_schema,
                     state=state, is_relation=True)
                 predicates = defaultdict(lambda : [])
             counter += 1
         # if there are some items left (if loop ended before counter reached the
         # specified value)
         if len(predicates):
-            self.write_bulk(storage.bulk_path("edges"), predicates,
+            self.write_bulk(storage.bulk_path("edges", output_data_path), predicates,
                             predicates_schema,state=state, is_relation=True)
 
     @staticmethod
