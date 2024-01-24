@@ -184,7 +184,7 @@ def schema_path(name, path=None):
     :param name: Name of the object to get a path for. """
     if not path:
         return str(ROGER_DATA_DIR / 'schema' / name)
-    return str (path / 'schema' / name)
+    return glob.glob(str (path / '**' / 'schema' / name), recursive=True)[0]
 
 def bulk_path(name, path):
     """ Path to a bulk load object.
