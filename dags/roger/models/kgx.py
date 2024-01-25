@@ -8,9 +8,8 @@ import threading
 from collections import defaultdict
 from xxhash import xxh64_hexdigest
 import orjson as json
-import redis
 import ntpath
-from kg_utils.merging import GraphMerger, MemoryGraphMerger, DiskGraphMerger
+from kg_utils.merging import DiskGraphMerger
 from kg_utils.constants import *
 
 from roger.config import get_default_config
@@ -50,11 +49,6 @@ class KGXModel:
             self.biolink = BiolinkModel(self.biolink_version)
         else:
             self.biolink = biolink
-        # self.redis_conn = redis.Redis(
-        #             host=self.config.redisgraph.host,
-        #             port=self.config.redisgraph.port,
-        #             password=self.config.redisgraph.password,
-        #             db=self.merge_db_id)
         self.enable_metrics = self.config.get('enable_metrics', False)
 
     def get_kgx_json_format(self, files: list, dataset_version: str):
@@ -505,10 +499,3 @@ class KGXModel:
             metricsfile_path = storage.metrics_path('merge_metrics.yaml')
             storage.write_object(metrics, metricsfile_path)
 
-
-
-if __name__ == '__main__':
-    kg_merger = KGXModel()
-    import pathlib
-    kg_merger.merge(input_path=pathlib.Path("/home/kebedey/projects/helx/roger/kgx_dir"),
-                    output_path=pathlib.Path("/home/kebedey/projects/helx/roger/kgx_dir_out"))
