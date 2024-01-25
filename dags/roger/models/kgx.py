@@ -42,8 +42,6 @@ class KGXModel:
         self.merger = DiskGraphMerger(temp_directory=self.temp_directory,
                                       chunk_size=5_000_000)
         self.biolink_version = self.config.kgx.biolink_model_version
-        self.merge_db_id = self.config.kgx.merge_db_id
-        self.merge_db_name = f'db{self.merge_db_id}'
         log.debug(f"Trying to get biolink version : {self.biolink_version}")
         if biolink is None:
             self.biolink = BiolinkModel(self.biolink_version)
