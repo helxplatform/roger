@@ -31,7 +31,7 @@ with DAG(
     branch = config.lakefs_config.branch
     kgx_repos = config.kgx.data_sets
     input_repos = [{
-        'name': repo.split(':')[0]
+        'name': repo.split(':')[0],
         'branch': repo.split(':')[1],
         'path': '*'
     } for repo in kgx_repos]
