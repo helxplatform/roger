@@ -277,8 +277,8 @@ def setup_input_data(context, exec_conf):
         get_files(
             local_path=input_dir + f'/{r["repo"]}',
             remote_path=r['path'],
-            branch=r['repo'],
-            repo=r['branch'],
+            branch=r['branch'],
+            repo=r['repo'],
             changes_only=False,
             lake_fs_client=client
         )
