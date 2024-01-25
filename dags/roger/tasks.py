@@ -243,36 +243,45 @@ def setup_input_data(context, exec_conf):
 
     # Download files from lakefs and store them in this new input_path
     client = init_lakefs_client(config=config)
-    input_repo = exec_conf['input_repo']
-    input_branch = exec_conf['input_branch']
-    # If input repo is provided use that as source of files
-    if exec_conf.get('path') and exec_conf.get('path') == '*':
-        remote_paths =  ['*'] # root path to get all sub dirs
-    # else figure out what to pull from the repo based on task name etc...
-    else:
+    repos = exec_conf['repos']
+    # if no external repo is provided we assume to get the upstream task dataset.
+    if not repos or len(repos) == 0:
+        # merge destination branch
+        branch = config.lakefs_config.branch
+        repo = config.lakefs_config.repo
         task_instance: TaskInstance = context['ti']
         # get upstream ids
         upstream_ids = task_instance.task.upstream_task_ids
         dag_id = task_instance.dag_id
         # calculate remote dirs using dag_id + upstreams
+        repos = [{
+            'repo': repo,
+            'branch': branch,
+            'path': f'{dag_id}/{upstream_id}'
+        } for upstream_id in upstream_ids]
 
-        remote_paths = [f'{dag_id}/{upstream_id}'
-                        for upstream_id in upstream_ids]
-    for remote_path in remote_paths:
+    # input_repo = exec_conf['input_repo']
+    # input_branch = exec_conf['input_branch']
+    # If input repo is provided use that as source of files
+    for repo in repos:
+        if not repo.get('path'):
+            # get all if path is not specified
+            repo['path'] = '*'
+    logger.info(f"repos : {repos}")
+    for r in repos:
         logger.info("downloading %s from %s@%s to %s",
-                    remote_path, input_repo, input_branch, input_dir)
+                    r['path'], r['repo'], r['branch'], input_dir)
         get_files(
-            local_path=input_dir,
-            remote_path=remote_path,
-            branch=input_branch,
-            repo=input_repo,
+            local_path=input_dir + f'/{r["repo"]}',
+            remote_path=r['path'],
+            branch=r['repo'],
+            repo=r['branch'],
             changes_only=False,
             lake_fs_client=client
         )
 
 
-def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
-                       input_branch=None, pass_conf=True, no_output_files=False):
+def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos = {}, pass_conf=True, no_output_files=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -305,19 +314,17 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, input_repo=None,
 
         # repo and branch for pre-execution , to download input objects
         pre_exec_conf = {
-            'input_repo': config.lakefs_config.repo,
-            'input_branch': config.lakefs_config.branch
+            'repos': []
         }
-
-        if input_repo and input_branch:
+        if external_repos:
             # if the task is a root task , beginning of the dag...
             # and we want to pull data from a different repo.
             pre_exec_conf = {
-                'input_repo': input_repo,
-                'input_branch': input_branch, 
-                # if path is not defined , we can use the context (dag context) to
-                # resolve the previous task dir in lakefs.
-                'path': '*'
+                'repos': [{
+                    'repo': r['name'],
+                    'branch': r['branch'],
+                    'path': r.get('path', '*')
+                } for r in external_repos]
             }
             
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)

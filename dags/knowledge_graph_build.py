@@ -30,17 +30,31 @@ with DAG(
     working_repo = config.lakefs_config.repo
     branch = config.lakefs_config.branch
     kgx_repos = config.kgx.data_sets
-    get_path_on_lakefs = lambda d: f"{working_repo}/{branch}/annotate_and_index/{d}_dataset_pipeline_task_group.make_kgx_{d}/"
-    kgx_files_to_grab = []
+    input_repos = [{
+        'name': repo.split(':')[0]
+        'branch': repo.split(':')[1],
+        'path': '*'
+    } for repo in kgx_repos]
+
+    # Figure out a way to extract paths
+    get_path_on_lakefs = lambda d: f"/annotate_and_index/{d}_dataset_pipeline_task_group.make_kgx_{d}/"
+
+
     for dataset in config.dug_inputs.data_sets:
         dataset_name = dataset.split(":")[0]
-        kgx_files_to_grab.append(get_path_on_lakefs(dataset_name))
-
+        # add datasets from the other pipeline
+        input_repos.append(
+            {
+                'name': working_repo,
+                'branch': branch,
+                'path': get_path_on_lakefs(dataset_name)
+            }
+        )
 
     merge_nodes = create_python_task (dag, name="MergeNodes",
                                       a_callable=roger.merge_nodes,
-                                      input_repo="cde-graph",
-                                      input_branch="v5.0")
+                                      external_repos=input_repos
+                                      )
 
     # The rest of these  guys can just operate on the local lakefs repo/branch
     # we need to add input dir and output dir similar to what we did for dug tasks
