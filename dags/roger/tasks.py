@@ -271,6 +271,9 @@ def setup_input_data(context, exec_conf):
     for r in repos:
         logger.info("downloading %s from %s@%s to %s",
                     r['path'], r['repo'], r['branch'], input_dir)
+        # create path to download to ...
+        if not os.path.exists(input_dir + f'/{r["repo"]}'):
+            os.mkdir(input_dir + f'/{r["repo"]}')
         get_files(
             local_path=input_dir + f'/{r["repo"]}',
             remote_path=r['path'],
