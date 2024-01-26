@@ -37,7 +37,7 @@ with DAG(
     } for repo in kgx_repos]
 
     # Figure out a way to extract paths
-    get_path_on_lakefs = lambda d: f"/annotate_and_index/{d}_dataset_pipeline_task_group.make_kgx_{d}/"
+    get_path_on_lakefs = lambda d: f"annotate_and_index/{d}_dataset_pipeline_task_group.make_kgx_{d}/"
 
 
     for dataset in config.dug_inputs.data_sets:

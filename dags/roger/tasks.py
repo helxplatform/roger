@@ -203,11 +203,20 @@ def avalon_commit_callback(context: DagContext, **kwargs):
         logger.info(f"deleted temp branch {temp_branch_name}")
         logger.info(f"deleting local dir {local_path}")
         files_to_clean = glob.glob(local_path + '**', recursive=True) + [local_path]
+    clean_up(context, **kwargs)
+
+def clean_up(context: DagContext, **kwargs):
+    input_dir = str(generate_dir_name_from_task_instance(context['ti'],
+                                                          roger_config=config,
+                                                          suffix='output')).rstrip('/') + '/'
+    output_dir = str(generate_dir_name_from_task_instance(context['ti'],
+                                                          roger_config=config,
+                                                          suffix='input')).rstrip('/') + '/'
+    files_to_clean = glob.glob(input_dir + '**', recursive=True) + [input_dir]
+    files_to_clean += glob.glob(output_dir + '**', recursive=True) + [output_dir]
     for f in files_to_clean:
-        shutil.rmtree(f)
-
-
-
+        if os.path.exists(f):
+            shutil.rmtree(f)
 
 def generate_dir_name_from_task_instance(task_instance: TaskInstance,
                                          roger_config: RogerConfig, suffix:str):
@@ -333,7 +342,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
         # add pre_exec partial function as an argument to python executor conf 
         python_operator_args['pre_execute'] = pre_exec
-
+        python_operator_args['on_failure_callback'] = partial(clean_up, kwargs=op_kwargs)
         # if the task has  output files, we will add a commit callback  
         if not no_output_files:
             python_operator_args['on_success_callback'] = partial(avalon_commit_callback, kwargs=op_kwargs)
