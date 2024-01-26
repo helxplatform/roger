@@ -1,4 +1,4 @@
-""" utils for roger
+"""utils for roger
 
 This is home to the utilities that were formerly in dags/roger/core.py:Util
 """
