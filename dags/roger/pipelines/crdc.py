@@ -1,10 +1,10 @@
-"Pipeline for BACPAC data"
+"Pipeline for Cancer Commons data"
 
 from roger.pipelines import DugPipeline
 from roger.core import storage
 
 class CRDCPipeline(DugPipeline):
-    "Pipeline for BACPAC data set"
+    "Pipeline for Cancer Commons data set"
     pipeline_name = "crdc"
     parser_name = "crdc"
 

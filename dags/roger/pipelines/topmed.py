@@ -1,10 +1,10 @@
-"Pipeline for BACPAC data"
+"Pipeline for Topmed data"
 
 from roger.pipelines import DugPipeline
 from roger.core import storage
 
 class TopmedPipeline(DugPipeline):
-    "Pipeline for BACPAC data set"
+    "Pipeline for Topmed data set"
     pipeline_name = "topmed"
     parser_name = "TOPMedTag"
 

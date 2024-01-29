@@ -1,10 +1,10 @@
-"Pipeline for BACPAC data"
+"Pipeline for BDC-dbGap data"
 
 from roger.pipelines import DugPipeline
 from roger.core import storage
 
 class bdcPipeline(DugPipeline):
-    "Pipeline for BACPAC data set"
+    "Pipeline for BDC-dbGap data set"
     pipeline_name = "bdc"
     parser_name = "dbgap"
 
