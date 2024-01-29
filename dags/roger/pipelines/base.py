@@ -15,12 +15,12 @@ import jsonpickle
 
 import requests
 
-from dug.core import get_parser, get_plugin_manager, DugConcept
-from dug.core.annotate import DugAnnotator, ConceptExpander
+from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept
+from dug.core.concept_expander import ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
-from dug.core.parsers import Parser, DugElement, DugConcept
-from dug.core.annotate import Identifier
+from dug.core.parsers import Parser, DugElement
+from dug.core.annotators import Annotator
 from dug.core.async_search import Search
 from dug.core.index import Index
 
@@ -129,8 +129,6 @@ class DugPipeline():
             log.addHandler(self.string_handler)
         self.s3_utils = S3Utils(self.config.s3_config)
 
-        self.annotator: DugAnnotator = self.factory.build_annotator()
-
         self.tranqlizer: ConceptExpander = self.factory.build_tranqlizer()
 
         graph_name = self.config["redisgraph"]["graph"]
@@ -195,11 +193,28 @@ class DugPipeline():
         """
         return getattr(self, 'parser_name', self.pipeline_name)
     
+    def get_annotator_name(self):
+        """
+        Access method for annotator_name
+        Defaults to annotator_monarch unless specified using annotation.annotator_type in the configuration file.
+        """
+        return self.config.annotation.annotator_type
+    
+
     def get_parser(self):
         dug_plugin_manager = get_plugin_manager()
         parser: Parser = get_parser(dug_plugin_manager.hook,
                                          self.get_parser_name())
         return parser
+    
+    def get_annotator(self):
+        dug_plugin_manager = get_plugin_manager()
+        annotator: Annotator = get_annotator(
+            dug_plugin_manager.hook,
+            self.get_annotator_name(),
+            self.config.to_dug_conf()
+        )
+        return annotator
 
     def annotate_files(self, parsable_files, output_data_path=None):
         """
@@ -215,10 +230,11 @@ class DugPipeline():
             log.debug("Creating Dug Crawler object on parse_file %s at %d of %d",
                       parse_file, _ , len(parsable_files))
             parser = self.get_parser()
+            annotator = self.get_annotator() 
             crawler = Crawler(
                 crawl_file=parse_file,
                 parser=parser,
-                annotator=self.annotator,
+                annotator=annotator,
                 tranqlizer='',
                 tranql_queries=[],
                 http_session=self.cached_session

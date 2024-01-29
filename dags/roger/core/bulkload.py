@@ -33,31 +33,24 @@ class BulkLoad:
         self.separator =(chr(separator) if isinstance(separator, int)
                          else separator)
 
-    def tables_up_to_date (self):
-        return storage.is_up_to_date (
-            source=[
-                storage.schema_path (f"{SchemaType.PREDICATE.value}-schema.json"),
-                storage.schema_path (f"{SchemaType.PREDICATE.value}-schema.json")
-            ] + storage.merged_objects (),
-            targets=glob.glob (storage.bulk_path ("nodes/**.csv")) + \
-            glob.glob (storage.bulk_path ("edges/**.csv")))
+    def create (self):
+        """Used in the CLI on args.create_bulk"""
+        self.create_nodes_csv_file()
+        self.create_edges_csv_file()
 
-    def create_nodes_csv_file(self):
-        if self.tables_up_to_date ():
-            log.info ("up to date.")
-            return
+    def create_nodes_csv_file(self, input_data_path=None, output_data_path=None):
         # clear out previous data
-        bulk_path = storage.bulk_path("nodes")
+        bulk_path = storage.bulk_path("nodes", output_data_path)
         if os.path.exists(bulk_path):
             shutil.rmtree(bulk_path)
-        categories_schema = storage.read_schema (SchemaType.CATEGORY)
+        categories_schema = storage.read_schema (SchemaType.CATEGORY, input_data_path)
         state = defaultdict(lambda: None)
         log.info(f"processing nodes")
         """ Write node data for bulk load. """
 
         categories = defaultdict(lambda: [])
         category_error_nodes = set()
-        merged_nodes_file = storage.merge_path("nodes.jsonl")
+        merged_nodes_file = storage.merged_objects('nodes', input_data_path)
         counter = 1
         for node in storage.json_line_iter(merged_nodes_file):
             if not node['category']:
@@ -74,7 +67,7 @@ class BulkLoad:
                     f"Showing first 10: {list(category_error_nodes)[:10]}.")
             # flush every 100K
             if counter % 100_000 == 0:
-                self.write_bulk(storage.bulk_path("nodes"),
+                self.write_bulk(storage.bulk_path("nodes", output_data_path),
                                 categories, categories_schema,
                                 state=state, is_relation=False)
                 # reset variables.
@@ -83,22 +76,19 @@ class BulkLoad:
             counter += 1
         # write back if any thing left.
         if len(categories):
-            self.write_bulk(storage.bulk_path("nodes"),
+            self.write_bulk(storage.bulk_path("nodes", output_data_path),
                             categories, categories_schema,
                             state=state, is_relation=False)
 
-    def create_edges_csv_file(self):
+    def create_edges_csv_file(self, input_data_path=None, output_data_path=None):
         """ Write predicate data for bulk load. """
-        if self.tables_up_to_date ():
-            log.info ("up to date.")
-            return
         # Clear out previous data
-        bulk_path = storage.bulk_path("edges")
+        bulk_path = storage.bulk_path("edges", output_data_path)
         if os.path.exists(bulk_path):
             shutil.rmtree(bulk_path)
-        predicates_schema = storage.read_schema(SchemaType.PREDICATE)
+        predicates_schema = storage.read_schema(SchemaType.PREDICATE, input_data_path)
         predicates = defaultdict(lambda: [])
-        edges_file = storage.merge_path('edges.jsonl')
+        edges_file = storage.merged_objects('edges', input_data_path)
         counter = 1
         state = {}
         for edge in storage.json_line_iter(edges_file):
@@ -106,14 +96,14 @@ class BulkLoad:
             # write out every 100K , to avoid large predicate dict.
             if counter % 100_000 == 0:
                 self.write_bulk(
-                    storage.bulk_path("edges"),predicates, predicates_schema,
+                    storage.bulk_path("edges", output_data_path),predicates, predicates_schema,
                     state=state, is_relation=True)
                 predicates = defaultdict(lambda : [])
             counter += 1
         # if there are some items left (if loop ended before counter reached the
         # specified value)
         if len(predicates):
-            self.write_bulk(storage.bulk_path("edges"), predicates,
+            self.write_bulk(storage.bulk_path("edges", output_data_path), predicates,
                             predicates_schema,state=state, is_relation=True)
 
     @staticmethod
@@ -316,17 +306,10 @@ class BulkLoad:
         state['processed_id'] = processed_objects_id
         state['called_times'] = called_x_times
 
-    def insert (self):
-
-        redisgraph = {
-            'host': os.getenv('REDIS_HOST'),
-            'port': os.getenv('REDIS_PORT', '6379'),
-            'password': os.getenv('REDIS_PASSWORD'),
-            'graph': os.getenv('REDIS_GRAPH'),
-        }
+    def insert (self, input_data_path=None):
         redisgraph = self.config.redisgraph
-        nodes = sorted(glob.glob (storage.bulk_path ("nodes/**.csv*")))
-        edges = sorted(glob.glob (storage.bulk_path ("edges/**.csv*")))
+        nodes = sorted(glob.glob (storage.bulk_path ("**/nodes/**.csv*", input_data_path), recursive=True))
+        edges = sorted(glob.glob (storage.bulk_path ("**/edges/**.csv*", input_data_path), recursive=True))
         graph = redisgraph['graph']
         log.info(f"bulk loading \n  nodes: {nodes} \n  edges: {edges}")
 
@@ -340,7 +323,7 @@ class BulkLoad:
         log.info ("bulk loading graph: %s", str(graph))
         args = []
         if len(nodes) > 0:
-            bulk_path_root = storage.bulk_path('nodes') + os.path.sep
+            bulk_path_root = glob.glob(storage.bulk_path('**/nodes', path=input_data_path), recursive=True)[0] + os.path.sep
             nodes_with_type = []
             for x in nodes:
                 """ 
@@ -353,13 +336,12 @@ class BulkLoad:
                 nodes_with_type.append(f"{all_labels} {x}")
             args.extend(("-N " + " -N ".join(nodes_with_type)).split())
         if len(edges) > 0:
-            bulk_path_root = storage.bulk_path('edges') + os.path.sep
+            bulk_path_root = glob.glob(storage.bulk_path('**/edges', path=input_data_path), recursive=True)[0] + os.path.sep
             edges_with_type = [f"biolink.{x.replace(bulk_path_root, '').strip(os.path.sep).split('.')[0].split('~')[1]} {x}"
                                for x in edges]
             # Edge label now no longer has 'biolink:'
             args.extend(("-R " + " -R ".join(edges_with_type)).split())
         args.extend([f"--separator={self.separator}"])
-        log.debug(f"--redis-url=redis://:{redisgraph['password']}@{redisgraph['host']}:{redisgraph['port']}")
         args.extend([f"--redis-url=redis://:{redisgraph['password']}@{redisgraph['host']}:{redisgraph['port']}"])
         args.extend(['--enforce-schema'])
         args.extend([f"{redisgraph['graph']}"])

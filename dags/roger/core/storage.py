@@ -152,30 +152,47 @@ def kgx_path(name):
     :path name: Name of the KGX object. """
     return str(ROGER_DATA_DIR / "kgx" / name)
 
-def kgx_objects(format_="json"):
+def kgx_objects(format_="json", path=None):
     """ A list of KGX objects. """
     kgx_pattern = kgx_path(f"**.{format_}")
-    return sorted(glob.glob (kgx_pattern))
+    if path:
+        kgx_pattern = f"{path}/**/*.{format_}"
+    return sorted(glob.glob (kgx_pattern, recursive=True))
 
-def merge_path(name):
+def merge_path(name, path: Path=None):
     """ Form a merged KGX object path.
     :path name: Name of the merged KGX object. """
-    return str(ROGER_DATA_DIR / 'merge' / name)
+    if path is None:
+        return str(ROGER_DATA_DIR / 'merge' / name)
+    return str(path.joinpath(name))
 
-def merged_objects():
+def merged_objects(file_type, path=None):
     """ A list of merged KGX objects. """
-    merged_pattern = merge_path("**.json")
-    return sorted(glob.glob (merged_pattern))
+    if not path:
+        merged_pattern = merge_path(f"**/{file_type}.jsonl")
+    else:
+        merged_pattern =  merge_path(f"**/{file_type}.jsonl", path=path)
+    # this thing should always return one edges or nodes file (based on file_type)
+    try:
+        return sorted(glob.glob(merged_pattern, recursive=True))[0]
+    except IndexError:
+        raise ValueError(f"Could not find merged KGX of type {file_type} in {merged_pattern}")
 
-def schema_path(name):
+
+def schema_path(name, path=None):
     """ Path to a schema object.
     :param name: Name of the object to get a path for. """
-    return str(ROGER_DATA_DIR / 'schema' / name)
+    if not path:
+        return str(ROGER_DATA_DIR / 'schema' / name)
+    return glob.glob(str (path / '**' / 'schema' / name), recursive=True)[0]
 
-def bulk_path(name):
+def bulk_path(name, path=None):
     """ Path to a bulk load object.
     :param name: Name of the object. """
-    return str(ROGER_DATA_DIR / 'bulk' / name)
+    if not path:
+        return str(ROGER_DATA_DIR / 'bulk' / name)
+    else:
+        return str(path / name)
 
 def metrics_path(name):
     """
@@ -388,11 +405,11 @@ def dug_dd_xml_objects(input_data_path=None):
 def copy_file_to_dir(file_location, dir_name):
     return shutil.copy(file_location, dir_name)
 
-def read_schema (schema_type: SchemaType):
+def read_schema (schema_type: SchemaType, path=None):
     """ Read a schema object.
     :param schema_type: Schema type of the object to read. """
-    path = schema_path (f"{schema_type.value}-schema.json")
-    return read_object (path)
+    location = schema_path (f"{schema_type.value}-schema.json", path=path)
+    return read_object (location)
 
 def get_uri (path, key):
     """ Build a URI.
@@ -412,17 +429,7 @@ def read_relative_object (path):
 def trunc(text, limit):
     return ('..' + text[-limit-2:]) if len(text) > limit else text
 
-def is_up_to_date (source, targets):
-    target_time_list = [
-        os.stat (f).st_mtime for f in targets if os.path.exists(f)]
-    if len(target_time_list) == 0:
-        log.debug (f"no targets found")
-        return False
-    source = [ os.stat (f).st_mtime for f in source if os.path.exists (f) ]
-    if len(source) == 0:
-        log.debug ("no source found. up to date")
-        return True
-    return max(source) < min(target_time_list)
+
 
 def json_line_iter(jsonl_file_path):
     f = open(file=jsonl_file_path, mode='r', encoding='utf-8')

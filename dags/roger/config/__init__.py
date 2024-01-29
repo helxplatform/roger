@@ -35,6 +35,10 @@ class LakefsConfig(DictLike):
     repo: str
     enabled: bool = False
 
+    def __post_init__(self):
+        if isinstance(self.enabled, str):
+            self.enabled = self.enabled.lower() == "true"
+
 
 
 @dataclass
@@ -46,10 +50,8 @@ class LoggingConfig(DictLike):
 @dataclass
 class KgxConfig(DictLike):
     biolink_model_version: str = "1.5.0"
-    dataset_version: str = "v1.0"
-    merge_db_id: int = 1
     merge_db_temp_dir: str = "workspace"
-    data_sets: List = field(default_factory=lambda: ['baseline-graph'])
+    data_sets: List = field(default_factory=lambda: ['baseline-graph:v5.0'])
 
     def __post_init__(self):
         # Convert strings to list. In cases where this is passed as env variable with a single value
@@ -88,7 +90,18 @@ class BulkLoaderConfig(DictLike):
 
 @dataclass
 class AnnotationConfig(DictLike):
-    annotator: str = "https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content="
+    annotator_type: str = "monarch"
+    annotator_args: dict = field(
+        default_factory=lambda: {
+            "monarch": {
+                "url": "https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content="
+            },
+            "sapbert": {
+                "classification_url": "https://med-nemo.apps.renci.org/annotate/",
+                "annotator_url": "https://babel-sapbert.apps.renci.org/annotate/",
+            },
+        }
+    )
     normalizer: str = "https://nodenormalization-sri.renci.org/get_normalized_nodes?curie="
     synonym_service: str = "https://onto.renci.org/synonyms/"
     ontology_metadata: str = "https://api.monarchinitiative.org/api/bioentity/"
@@ -195,9 +208,8 @@ class RogerConfig(DictLike):
             redis_port=self.redisgraph.port,
             nboost_host=self.elasticsearch.nboost_host,
             preprocessor=self.annotation.preprocessor,
-            annotator={
-                'url': self.annotation.annotator,
-            },
+            annotator_type=self.annotation.annotator_type,
+            annotator_args=self.annotation.annotator_args,
             normalizer={
                 'url': self.annotation.normalizer,
             },
