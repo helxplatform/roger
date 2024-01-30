@@ -25,7 +25,7 @@ with DAG(
 
     from roger import pipelines
     from roger.config import config
-    envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed")
+    envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed:v2.0")
     data_sets = envspec.split(",")
     pipeline_names = {x.split(':')[0]: x.split(':')[1] for x in data_sets}
     for pipeline_class in pipelines.get_pipeline_classes(pipeline_names):
