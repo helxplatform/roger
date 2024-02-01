@@ -187,8 +187,8 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     
     try:
         # merging temp branch to working branch
-        # the current working branch wins incase of conflicts 
-        merge = Merge({"strategy": "source-wins"})
+        # the current working branch wins incase of conflicts
+        merge = Merge(**{"strategy": "source-wins"})
         client._client.refs_api.merge_into_branch(repository=repo,
                                                 source_ref=temp_branch_name,
                                                 destination_branch=branch,
