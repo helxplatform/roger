@@ -12,6 +12,6 @@ class TopmedPipeline(DugPipeline):
         if not input_data_path:
             input_data_path = str(storage.dug_input_files_path('topmed'))
         files =storage.get_files_recursive(
-                lambda file_name: file_name.endswith('topmed_*.csv'),
+                lambda file_name: file_name.endswith('.csv'),
                 input_data_path)
         return sorted(files)
