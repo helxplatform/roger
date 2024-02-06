@@ -14,4 +14,4 @@ class TopmedPipeline(DugPipeline):
         files =storage.get_files_recursive(
                 lambda file_name: file_name.endswith('.csv'),
                 input_data_path)
-        return sorted(files)
+        return sorted([str(x) for x in files])
