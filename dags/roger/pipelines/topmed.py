@@ -21,6 +21,7 @@ class TopmedPipeline(DugPipeline):
     def make_kg_tagged(self, to_string=False, elements_files=None,
                        input_data_path=None, output_data_path=None):
         "Create tagged knowledge graphs from elements"
+        log.info("Override base.make_kg_tagged called")
         if not output_data_path:
             output_data_path = storage.dug_kgx_path("")
         storage.clear_dir(output_data_path)
