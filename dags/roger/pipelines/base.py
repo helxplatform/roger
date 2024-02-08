@@ -304,7 +304,9 @@ class DugPipeline():
         nodes = graph['nodes']
 
         for _, element in enumerate(elements):
-            # DugElement means a variable (Study variable...)            
+            # DugElement means a variable (Study variable...)
+            if not isinstance(element, DugElement):
+                continue
             study_id = element.collection_id
             if study_id not in written_nodes:
                 nodes.append({

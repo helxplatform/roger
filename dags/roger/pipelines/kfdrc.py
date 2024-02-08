@@ -1,10 +1,10 @@
-"Pipeline for BACPAC data"
+"Pipeline for KDFRC data"
 
 from roger.pipelines import DugPipeline
 from roger.core import storage
 
 class kfdrcPipeline(DugPipeline):
-    "Pipeline for BACPAC data set"
+    "Pipeline for KDFRC data set"
     pipeline_name = "kfdrc"
     parser_name = "kfdrc"
 

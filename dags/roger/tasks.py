@@ -19,6 +19,7 @@ from roger.logger import get_logger
 from roger.pipelines.base import DugPipeline
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 from lakefs_sdk.configuration import Configuration
+from lakefs_sdk.models.merge import Merge
 from functools import partial
 
 logger = get_logger()
@@ -186,9 +187,13 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     
     try:
         # merging temp branch to working branch
+        # the current working branch wins incase of conflicts
+        merge = Merge(**{"strategy": "source-wins"})
         client._client.refs_api.merge_into_branch(repository=repo,
                                                 source_ref=temp_branch_name,
-                                                destination_branch=branch)
+                                                destination_branch=branch,
+                                                merge=merge
+                                                )
 
         logger.info(f"merged branch {temp_branch_name} into {branch}")
     except Exception as e:
@@ -203,6 +208,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
         logger.info(f"deleted temp branch {temp_branch_name}")
         logger.info(f"deleting local dir {local_path}")
         files_to_clean = glob.glob(local_path + '**', recursive=True) + [local_path]
+
     clean_up(context, **kwargs)
 
 def clean_up(context: DagContext, **kwargs):
