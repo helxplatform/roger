@@ -209,7 +209,7 @@ def avalon_commit_callback(context: DagContext, **kwargs):
         logger.info(f"deleting local dir {local_path}")
         files_to_clean = glob.glob(local_path + '**', recursive=True) + [local_path]
 
-    # clean_up(context, **kwargs)
+    clean_up(context, **kwargs)
 
 def clean_up(context: DagContext, **kwargs):
     input_dir = str(generate_dir_name_from_task_instance(context['ti'],
