@@ -410,7 +410,7 @@ def read_schema (schema_type: SchemaType, path=None):
     :param schema_type: Schema type of the object to read. """
     if path is not None:
         path = path / '**'
-    location = glob.glob(schema_path (f"{schema_type.value}-schema.json", path=path), recursive=True)
+    location = glob.glob(schema_path (f"{schema_type.value}-schema.json", path=path), recursive=True)[0]
     return read_object (location)
 
 def get_uri (path, key):
