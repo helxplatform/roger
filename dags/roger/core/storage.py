@@ -408,7 +408,9 @@ def copy_file_to_dir(file_location, dir_name):
 def read_schema (schema_type: SchemaType, path=None):
     """ Read a schema object.
     :param schema_type: Schema type of the object to read. """
-    location = schema_path (f"{schema_type.value}-schema.json", path=path)
+    if path is not None:
+        path = path / '**'
+    location = glob.glob(schema_path (f"{schema_type.value}-schema.json", path=path), recursive=True)
     return read_object (location)
 
 def get_uri (path, key):
