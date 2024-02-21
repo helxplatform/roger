@@ -212,17 +212,18 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     clean_up(context, **kwargs)
 
 def clean_up(context: DagContext, **kwargs):
-    input_dir = str(generate_dir_name_from_task_instance(context['ti'],
-                                                          roger_config=config,
-                                                          suffix='output')).rstrip('/') + '/'
-    output_dir = str(generate_dir_name_from_task_instance(context['ti'],
-                                                          roger_config=config,
-                                                          suffix='input')).rstrip('/') + '/'
-    files_to_clean = glob.glob(input_dir + '**', recursive=True) + [input_dir]
-    files_to_clean += glob.glob(output_dir + '**', recursive=True) + [output_dir]
-    for f in files_to_clean:
-        if os.path.exists(f):
-            shutil.rmtree(f)
+    pass
+    # input_dir = str(generate_dir_name_from_task_instance(context['ti'],
+    #                                                       roger_config=config,
+    #                                                       suffix='output')).rstrip('/') + '/'
+    # output_dir = str(generate_dir_name_from_task_instance(context['ti'],
+    #                                                       roger_config=config,
+    #                                                       suffix='input')).rstrip('/') + '/'
+    # files_to_clean = glob.glob(input_dir + '**', recursive=True) + [input_dir]
+    # files_to_clean += glob.glob(output_dir + '**', recursive=True) + [output_dir]
+    # for f in files_to_clean:
+    #     if os.path.exists(f):
+    #         shutil.rmtree(f)
 
 def generate_dir_name_from_task_instance(task_instance: TaskInstance,
                                          roger_config: RogerConfig, suffix:str):
