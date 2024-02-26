@@ -212,18 +212,17 @@ def avalon_commit_callback(context: DagContext, **kwargs):
     clean_up(context, **kwargs)
 
 def clean_up(context: DagContext, **kwargs):
-    pass
-    # input_dir = str(generate_dir_name_from_task_instance(context['ti'],
-    #                                                       roger_config=config,
-    #                                                       suffix='output')).rstrip('/') + '/'
-    # output_dir = str(generate_dir_name_from_task_instance(context['ti'],
-    #                                                       roger_config=config,
-    #                                                       suffix='input')).rstrip('/') + '/'
-    # files_to_clean = glob.glob(input_dir + '**', recursive=True) + [input_dir]
-    # files_to_clean += glob.glob(output_dir + '**', recursive=True) + [output_dir]
-    # for f in files_to_clean:
-    #     if os.path.exists(f):
-    #         shutil.rmtree(f)
+    input_dir = str(generate_dir_name_from_task_instance(context['ti'],
+                                                          roger_config=config,
+                                                          suffix='output')).rstrip('/') + '/'
+    output_dir = str(generate_dir_name_from_task_instance(context['ti'],
+                                                          roger_config=config,
+                                                          suffix='input')).rstrip('/') + '/'
+    files_to_clean = glob.glob(input_dir + '**', recursive=True) + [input_dir]
+    files_to_clean += glob.glob(output_dir + '**', recursive=True) + [output_dir]
+    for f in files_to_clean:
+        if os.path.exists(f):
+            shutil.rmtree(f)
 
 def generate_dir_name_from_task_instance(task_instance: TaskInstance,
                                          roger_config: RogerConfig, suffix:str):
@@ -240,65 +239,64 @@ def generate_dir_name_from_task_instance(task_instance: TaskInstance,
         f"{root_data_dir}/{dag_id}_{task_id}_{run_id}_{try_number}_{suffix}")
 
 def setup_input_data(context, exec_conf):
-    pass
-    # logger.info("""
-    #     - Figures out the task name and id,
-    #     - find its data dependencies
-    #     - clean up and create in and out dir
-    #     - put dependency data in input dir
-    #     - if for some reason data was not found raise an exception
-    #       """)
-    # # Serves as a location where files the task will work on are placed.
-    # # computed as ROGER_DATA_DIR + /current task instance name_input_dir
-    #
-    # input_dir = str(generate_dir_name_from_task_instance(
-    #     context['ti'], roger_config=config, suffix="input"))
-    # # Clear up files from previous run etc...
-    #
-    # # create input dir
-    # os.makedirs(input_dir, exist_ok=True)
-    #
-    # # Download files from lakefs and store them in this new input_path
-    # client = init_lakefs_client(config=config)
-    # repos = exec_conf['repos']
-    # # if no external repo is provided we assume to get the upstream task dataset.
-    # if not repos or len(repos) == 0:
-    #     # merge destination branch
-    #     branch = config.lakefs_config.branch
-    #     repo = config.lakefs_config.repo
-    #     task_instance: TaskInstance = context['ti']
-    #     # get upstream ids
-    #     upstream_ids = task_instance.task.upstream_task_ids
-    #     dag_id = task_instance.dag_id
-    #     # calculate remote dirs using dag_id + upstreams
-    #     repos = [{
-    #         'repo': repo,
-    #         'branch': branch,
-    #         'path': f'{dag_id}/{upstream_id}'
-    #     } for upstream_id in upstream_ids]
-    #
-    # # input_repo = exec_conf['input_repo']
-    # # input_branch = exec_conf['input_branch']
-    # # If input repo is provided use that as source of files
-    # for repo in repos:
-    #     if not repo.get('path'):
-    #         # get all if path is not specified
-    #         repo['path'] = '*'
-    # logger.info(f"repos : {repos}")
-    # for r in repos:
-    #     logger.info("downloading %s from %s@%s to %s",
-    #                 r['path'], r['repo'], r['branch'], input_dir)
-    #     # create path to download to ...
-    #     if not os.path.exists(input_dir + f'/{r["repo"]}'):
-    #         os.mkdir(input_dir + f'/{r["repo"]}')
-    #     get_files(
-    #         local_path=input_dir + f'/{r["repo"]}',
-    #         remote_path=r['path'],
-    #         branch=r['branch'],
-    #         repo=r['repo'],
-    #         changes_only=False,
-    #         lake_fs_client=client
-    #     )
+    logger.info("""
+        - Figures out the task name and id,
+        - find its data dependencies
+        - clean up and create in and out dir
+        - put dependency data in input dir
+        - if for some reason data was not found raise an exception
+          """)
+    # Serves as a location where files the task will work on are placed.
+    # computed as ROGER_DATA_DIR + /current task instance name_input_dir
+
+    input_dir = str(generate_dir_name_from_task_instance(
+        context['ti'], roger_config=config, suffix="input"))
+    # Clear up files from previous run etc...
+
+    # create input dir
+    os.makedirs(input_dir, exist_ok=True)
+
+    # Download files from lakefs and store them in this new input_path
+    client = init_lakefs_client(config=config)
+    repos = exec_conf['repos']
+    # if no external repo is provided we assume to get the upstream task dataset.
+    if not repos or len(repos) == 0:
+        # merge destination branch
+        branch = config.lakefs_config.branch
+        repo = config.lakefs_config.repo
+        task_instance: TaskInstance = context['ti']
+        # get upstream ids
+        upstream_ids = task_instance.task.upstream_task_ids
+        dag_id = task_instance.dag_id
+        # calculate remote dirs using dag_id + upstreams
+        repos = [{
+            'repo': repo,
+            'branch': branch,
+            'path': f'{dag_id}/{upstream_id}'
+        } for upstream_id in upstream_ids]
+
+    # input_repo = exec_conf['input_repo']
+    # input_branch = exec_conf['input_branch']
+    # If input repo is provided use that as source of files
+    for repo in repos:
+        if not repo.get('path'):
+            # get all if path is not specified
+            repo['path'] = '*'
+    logger.info(f"repos : {repos}")
+    for r in repos:
+        logger.info("downloading %s from %s@%s to %s",
+                    r['path'], r['repo'], r['branch'], input_dir)
+        # create path to download to ...
+        if not os.path.exists(input_dir + f'/{r["repo"]}'):
+            os.mkdir(input_dir + f'/{r["repo"]}')
+        get_files(
+            local_path=input_dir + f'/{r["repo"]}',
+            remote_path=r['path'],
+            branch=r['branch'],
+            repo=r['repo'],
+            changes_only=False,
+            lake_fs_client=client
+        )
 
 
 def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos = {}, pass_conf=True, no_output_files=False):
