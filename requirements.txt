@@ -6,7 +6,8 @@ jsonpickle
 redisgraph-bulk-loader
 pytest
 PyYAML
-git+https://github.com/helxplatform/dug@sort_pickle_lists
+# git+https://github.com/helxplatform/dug@dug-merge # Version used by mbacon for dev
+git+https://github.com/helxplatform/dug@329-annotator-modules # Version used for annotator modules
 orjson
 kg-utils==0.0.6
 bmt==1.1.0

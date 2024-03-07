@@ -88,6 +88,7 @@ class BulkLoaderConfig(DictLike):
 
 @dataclass
 class AnnotationConfig(DictLike):
+    annotator_type: str = "annotator_monarch"
     annotator: str = "https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content="
     normalizer: str = "https://nodenormalization-sri.renci.org/get_normalized_nodes?curie="
     synonym_service: str = "https://onto.renci.org/synonyms/"
@@ -195,6 +196,7 @@ class RogerConfig(DictLike):
             redis_port=self.redisgraph.port,
             nboost_host=self.elasticsearch.nboost_host,
             preprocessor=self.annotation.preprocessor,
+            annotator_type=self.annotation.annotator_type,
             annotator={
                 'url': self.annotation.annotator,
             },
