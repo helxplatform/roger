@@ -184,7 +184,7 @@ def schema_path(name, path=None):
     :param name: Name of the object to get a path for. """
     if not path:
         return str(ROGER_DATA_DIR / 'schema' / name)
-    return glob.glob(str (path / '**' / 'schema' / name), recursive=True)[0]
+    return str (path / 'schema' / name)
 
 def bulk_path(name, path=None):
     """ Path to a bulk load object.
@@ -408,7 +408,9 @@ def copy_file_to_dir(file_location, dir_name):
 def read_schema (schema_type: SchemaType, path=None):
     """ Read a schema object.
     :param schema_type: Schema type of the object to read. """
-    location = schema_path (f"{schema_type.value}-schema.json", path=path)
+    if path is not None:
+        path = path / '**'
+    location = glob.glob(schema_path (f"{schema_type.value}-schema.json", path=path), recursive=True)[0]
     return read_object (location)
 
 def get_uri (path, key):

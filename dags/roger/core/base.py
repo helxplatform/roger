@@ -112,6 +112,8 @@ def create_bulk_nodes(to_string=False, config=None, input_data_path=None, output
     "Generate bulk node CSV file"
     output = None
     with Roger(to_string, config=config) as roger:
+        log.info("input path: %s", input_data_path)
+        log.info("output path: %s", output_data_path)
         roger.bulk.create_nodes_csv_file(input_data_path, output_data_path)
         output = roger.log_stream.getvalue() if to_string else None
     return output

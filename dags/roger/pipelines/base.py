@@ -466,7 +466,9 @@ class DugPipeline():
                 # override data-type with mapping values
                 if element.type.lower() in self.element_mapping:
                     element.type = self.element_mapping[element.type.lower()]
-
+                if not element.id:
+                    # no id no indexing
+                    continue
                 # Use the Dug Index object to submit the element to ES
                 self.index_obj.index_element(
                     element, index=self.variables_index)
