@@ -325,6 +325,7 @@ class BulkLoad:
         if len(nodes) > 0:
             bulk_path_root = glob.glob(storage.bulk_path('**/nodes', path=input_data_path), recursive=True)[0] + os.path.sep
             nodes_with_type = []
+            collect_labels = set()
             for x in nodes:
                 """ 
                     These lines prep nodes bulk load by:
@@ -333,6 +334,10 @@ class BulkLoad:
                 """
                 file_name_type_part = x.replace(bulk_path_root, '').split('.')[0].split('~')[1]
                 all_labels = "biolink." + file_name_type_part + ":" + ":".join([f'biolink.{v.lstrip("biolink:")}' for v in self.biolink.toolkit.get_ancestors("biolink:" + file_name_type_part, reflexive=False, formatted=True )] )
+                collect_labels.add("biolink." + file_name_type_part)
+                for v in self.biolink.toolkit.get_ancestors("biolink:" + file_name_type_part, reflexive=False,
+                                                            formatted=True):
+                    collect_labels.add(f'biolink.{v.lstrip("biolink:")}')
                 nodes_with_type.append(f"{all_labels} {x}")
             args.extend(("-N " + " -N ".join(nodes_with_type)).split())
         if len(edges) > 0:
@@ -344,12 +349,14 @@ class BulkLoad:
         args.extend([f"--separator={self.separator}"])
         args.extend([f"--redis-url=redis://:{redisgraph['password']}@{redisgraph['host']}:{redisgraph['port']}"])
         args.extend(['--enforce-schema'])
+        for lbl in collect_labels:
+            args.extend([f'-i {lbl}:id', f'-f {lbl}:name', f'-f {lbl}:synonyms'])
         args.extend([f"{redisgraph['graph']}"])
         """ standalone_mode=False tells click not to sys.exit() """
         log.debug(f"Calling bulk_insert with extended args: {args}")
         try:
             bulk_insert(args, standalone_mode=False)
-            self.add_indexes()
+            # self.add_indexes()
         except Exception as e:
             log.error(f"Unexpected {e.__class__.__name__}: {e}")
             raise
