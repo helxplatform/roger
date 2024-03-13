@@ -350,7 +350,7 @@ class BulkLoad:
         args.extend([f"--redis-url=redis://:{redisgraph['password']}@{redisgraph['host']}:{redisgraph['port']}"])
         args.extend(['--enforce-schema'])
         for lbl in collect_labels:
-            args.extend([f'-i {lbl}:id', f'-f {lbl}:name', f'-f {lbl}:synonyms'])
+            args.extend([f'-i `{lbl}`:id', f'-f {lbl}:name', f'-f {lbl}:synonyms'])
         args.extend([f"{redisgraph['graph']}"])
         """ standalone_mode=False tells click not to sys.exit() """
         log.debug(f"Calling bulk_insert with extended args: {args}")
