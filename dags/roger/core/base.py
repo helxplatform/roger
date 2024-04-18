@@ -73,62 +73,68 @@ def create_schema(to_string=False, config=None):
     output = (o1 + o2 ) if to_string else None
     return output
 
-def create_edges_schema(to_string=False, config=None):
+def create_edges_schema(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Create edges schema on KGX object"
     output = None
     with Roger(to_string, config=config) as roger:
-        roger.kgx.create_edges_schema()
+        roger.kgx.create_edges_schema(
+            input_data_path=input_data_path,
+            output_data_path=output_data_path
+        )
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
-def create_nodes_schema(to_string=False, config=None):
+def create_nodes_schema(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Create nodes schema on KGX object"
     output = None
     with Roger(to_string, config=config) as roger:
-        roger.kgx.create_nodes_schema()
+        roger.kgx.create_nodes_schema(input_data_path=input_data_path,
+                                      output_data_path=output_data_path)
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
-def merge_nodes(to_string=False, config=None):
+def merge_nodes(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Run KGX merge"
     output = None
     with Roger (to_string, config=config) as roger:
-        roger.kgx.merge()
+        roger.kgx.merge(input_path=input_data_path, output_path=output_data_path)
         output = roger.log_stream.getvalue () if to_string else None
     return output
 
-def create_bulk_load(to_string=False, config=None):
+def create_bulk_load(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Generate bulk load files"
     o1 = create_bulk_nodes(to_string=to_string, config=config)
     o2 = create_bulk_edges(to_string=to_string, config=config)
     output = (o1 + o2) if to_string else None
     return output
 
-def create_bulk_nodes(to_string=False, config=None):
+def create_bulk_nodes(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Generate bulk node CSV file"
     output = None
     with Roger(to_string, config=config) as roger:
-        roger.bulk.create_nodes_csv_file()
+        log.info("input path: %s", input_data_path)
+        log.info("output path: %s", output_data_path)
+        roger.bulk.create_nodes_csv_file(input_data_path, output_data_path)
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
-def create_bulk_edges(to_string=False, config=None):
+def create_bulk_edges(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Create bulk edges CSV file"
     output = None
     with Roger(to_string, config=config) as roger:
-        roger.bulk.create_edges_csv_file()
+        roger.bulk.create_edges_csv_file(input_data_path, output_data_path)
         output = roger.log_stream.getvalue() if to_string else None
     return output
 
-def bulk_load(to_string=False, config=None):
+def bulk_load(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Run bulk load insert process"
     output = None
     with Roger (to_string, config=config) as roger:
-        roger.bulk.insert()
+        roger.bulk.insert(input_data_path=input_data_path)
         output = roger.log_stream.getvalue () if to_string else None
     return output
 
-def validate (to_string=False, config=None):
+def validate (to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Run bulk validate process"
     output = None
     with Roger (to_string, config=config) as roger:
@@ -136,7 +142,7 @@ def validate (to_string=False, config=None):
         output = roger.log_stream.getvalue () if to_string else None
     return output
 
-def check_tranql(to_string=False, config=None):
+def check_tranql(to_string=False, config=None, input_data_path=None, output_data_path=None):
     "Tranql server smoke check"
     output = None
     with Roger(to_string, config=config) as roger:

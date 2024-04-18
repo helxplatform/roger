@@ -1,13 +1,14 @@
 boto3==1.18.23
 botocore==1.21.23
-#black==21.10b0
 elasticsearch==8.5.2
 flatten-dict
+jsonpickle
 redisgraph-bulk-loader==0.12.3
 pytest
 PyYAML
-git+https://github.com/helxplatform/dug@2.12.0
+git+https://github.com/helxplatform/dug@2.13.1
 orjson
 kg-utils==0.0.6
 bmt==1.1.0
+git+https://github.com/helxplatform/avalon.git@VG3
 linkml-runtime==1.6.0

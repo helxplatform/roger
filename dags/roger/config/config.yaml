@@ -16,11 +16,9 @@ annotation_base_data_uri: https://stars.renci.org/var/dug/
 
 kgx:
   biolink_model_version: v3.1.2
-  dataset_version: v5.0
-  merge_db_id: 1
   merge_db_temp_dir: workspace
   data_sets:
-    - baseline-graph
+    - baseline-graph:v5.0
 
 dug_inputs:
   data_source: s3
@@ -44,10 +42,17 @@ bulk_loader:
 
 annotation:
   clear_http_cache: false
-  annotator: "https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content="
+  annotator_type: monarch
+  annotator_args:
+    monarch:
+      url: "https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content="
+    sapbert: 
+      classification_url: "https://med-nemo.apps.renci.org/annotate/"
+      annotator_url: "https://babel-sapbert.apps.renci.org/annotate/"
   normalizer: "https://nodenormalization-dev.apps.renci.org/get_normalized_nodes?conflate=false&description=true&curie="
   synonym_service: "https://name-resolution-sri.renci.org/reverse_lookup"
   ontology_metadata: "https://api.monarchinitiative.org/api/bioentity/"
+
   preprocessor:
     debreviator:
       BMI: "body mass index"
@@ -72,7 +77,7 @@ indexing:
     "small_molecule_to_disease": ["small_molecule", "disease"]
     "chemical_mixture_to_disease": ["chemical_mixture", "disease"]
     "phen_to_anat": ["phenotypic_feature", "anatomical_entity"]
-  tranql_endpoint: "http://tranql:8081/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+  tranql_endpoint: "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
   node_to_element_queries:
     enabled: false
     cde:
@@ -157,3 +162,5 @@ lakefs_config:
   access_key_id: ""
   secret_access_key: ""
   host: ""
+  branch: ""
+  repo: ""

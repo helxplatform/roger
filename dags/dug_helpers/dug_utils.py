@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Union, List
 
 import requests
-from dug.core import get_parser, get_plugin_manager, DugConcept
-from dug.core.annotate import DugAnnotator, ConceptExpander
+from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept
+from dug.core.annotators._base import Annotator
+from dug.core.concept_expander import ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement
@@ -44,7 +45,7 @@ class Dug:
             self.string_handler = logging.StreamHandler(self.log_stream)
             log.addHandler(self.string_handler)
 
-        self.annotator: DugAnnotator = self.factory.build_annotator()
+        self.annotator_name: str = config.annotation.annotator_type
 
         self.tranqlizer: ConceptExpander = self.factory.build_tranqlizer()
 
@@ -85,7 +86,8 @@ class Dug:
             log.error(f"{exc_val} {exc_val} {exc_tb}")
             log.exception("Got an exception")
 
-    def annotate_files(self, parser_name, parsable_files):
+    def annotate_files(self, parser_name, parsable_files,
+                       output_data_path=None):
         """
         Annotates a Data element file using a Dug parser.
         :param parser_name: Name of Dug parser to use.
@@ -94,14 +96,16 @@ class Dug:
         """
         dug_plugin_manager = get_plugin_manager()
         parser: Parser = get_parser(dug_plugin_manager.hook, parser_name)
-        output_base_path = storage.dug_annotation_path('')
+        annotator: Annotator = get_annotator(dug_plugin_manager.hook, annotator_name=self.annotator_name, config=self.config.to_dug_conf())
+        if not output_data_path:
+            output_data_path = storage.dug_annotation_path('')
         log.info("Parsing files")
         for parse_file in parsable_files:
             log.debug("Creating Dug Crawler object")
             crawler = Crawler(
                 crawl_file=parse_file,
                 parser=parser,
-                annotator=self.annotator,
+                annotator=annotator,
                 tranqlizer='',
                 tranql_queries=[],
                 http_session=self.cached_session
@@ -109,7 +113,7 @@ class Dug:
 
             # configure output space.
             current_file_name = '.'.join(os.path.basename(parse_file).split('.')[:-1])
-            elements_file_path = os.path.join(output_base_path, current_file_name)
+            elements_file_path = os.path.join(output_data_path, current_file_name)
             elements_file_name = 'elements.pickle'
             concepts_file_name = 'concepts.pickle'
 
@@ -566,141 +570,224 @@ class DugUtil():
                 dug.cached_session.cache.clear()
 
     @staticmethod
-    def annotate_db_gap_files(config=None, to_string=False, files=None):
+    def annotate_db_gap_files(config=None, to_string=False, input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_dd_xml_objects()
+            if not input_data_path:
+                files = storage.dug_dd_xml_objects(
+                    input_data_path=input_data_path)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
             parser_name = "DbGaP"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_anvil_files(config=None, to_string=False, files=None):
+    def annotate_anvil_files(config=None, to_string=False,
+                             input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_anvil_objects()
+            if not input_data_path:
+                files = storage.dug_anvil_objects(
+                    input_data_path=input_data_path)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
             parser_name = "Anvil"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_cancer_commons_files(config=None, to_string=False, files=None):
+    def annotate_cancer_commons_files(config=None, to_string=False,
+                                      input_data_path=None,
+                                      output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_crdc_objects()
+            if not input_data_path:
+                files = storage.dug_crdc_objects(
+                    input_data_path=input_data_path)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
             parser_name = "crdc"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_kids_first_files(config=None, to_string=False, files=None):
+    def annotate_kids_first_files(config=None, to_string=False,
+                                  input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_kfdrc_objects()
+            if not input_data_path:
+                files = storage.dug_kfdrc_objects(
+                    input_data_path=input_data_path)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
             parser_name = "kfdrc"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_nida_files(config=None, to_string=False, files=None):
+    def annotate_nida_files(config=None, to_string=False,
+                            input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_nida_objects()
+            if not input_data_path:
+                files = storage.dug_nida_objects(
+                    input_data_path=input_data_path)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
             parser_name = "NIDA"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_sparc_files(config=None, to_string=False, files=None):
+    def annotate_sparc_files(config=None, to_string=False, 
+                             input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_sparc_objects()
+            if not input_data_path:
+                files = storage.dug_sparc_objects(
+                    input_data_path=input_data_path)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
             parser_name = "SciCrunch"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_sprint_files(config=None, to_string=False, files=None):
+    def annotate_sprint_files(config=None, to_string=False,
+                              input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_sprint_objects()
+            if not input_data_path:
+                files = storage.dug_sprint_objects(
+                    input_data_path=input_data_path)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
             parser_name = "SPRINT"
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_topmed_files(config=None, to_string=False, files=None):
+    def annotate_topmed_files(config=None, to_string=False,
+                              input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_topmed_objects()
+            if not input_data_path:
+                files = storage.dug_topmed_objects(
+                    input_data_path=None)
+            else:
+                files = storage.get_files_recursive(
+                        lambda x: True, input_data_path
+                    )
             parser_name = "TOPMedTag"
             log.info(files)
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def annotate_bacpac_files(config=None, to_string=False, files=None):
+    def annotate_bacpac_files(config=None, to_string=False, 
+                              input_data_path=None, output_data_path=None):
+        
+        log.info(f"Input data path is: {input_data_path}")
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_bacpac_objects()
+            files = storage.dug_bacpac_objects(
+                input_data_path=input_data_path)
+               
             parser_name = "BACPAC"
             log.info(files)
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
  
     
     @staticmethod
-    def annotate_heal_study_files(config=None, to_string=False, files=None):
+    def annotate_heal_study_files(config=None, to_string=False,
+                                  input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_heal_study_objects()
+            if not input_data_path:
+                files = storage.dug_heal_study_objects(
+                    input_data_path=None)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
 
             parser_name = "heal-studies"
             log.info(files)
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     
     @staticmethod
-    def annotate_heal_research_program_files(config=None, to_string=False, files=None):
+    def annotate_heal_research_program_files(config=None, to_string=False,
+                                             input_data_path=None,
+                                             output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            if files is None:
-                files = storage.dug_heal_research_program_objects()
-
+            if not input_data_path:
+                files = storage.dug_heal_research_program_objects(
+                    input_data_path=None)
+            else:
+                files = storage.get_files_recursive(
+                    lambda x: True, input_data_path
+                )
             parser_name = "heal-research"
             log.info(files)
             dug.annotate_files(parser_name=parser_name,
-                               parsable_files=files)
+                               parsable_files=files,
+                               output_data_path=output_data_path)
             output_log = dug.log_stream.getvalue() if to_string else ''
         return output_log
 
     @staticmethod
-    def make_kg_tagged(config=None, to_string=False):
+    def make_kg_tagged(config=None, to_string=False, input_data_path=None, output_data_path=None):
         with Dug(config, to_string=to_string) as dug:
-            output_base_path = storage.dug_kgx_path("")
-            storage.clear_dir(output_base_path)
+            output_base_path = output_data_path
+            if not output_data_path:
+                output_base_path = storage.dug_kgx_path("")            
+            storage.clear_dir(output_base_path)            
             log.info("Starting building KGX files")
-            elements_files = storage.dug_elements_objects()
+            if not input_data_path:
+                elements_files = storage.dug_elements_objects()
+            else:
+                import glob
+                glob_pattern = str(input_data_path / "**" /  'elements.pickle')
+                elements_files = glob.glob(glob_pattern, recursive=True)
+            log.info(f"making kgx files for the following pickles: {elements_files}")
             for file in elements_files:
                 elements = storage.read_object(file)
                 if "topmed_" in file:
@@ -930,5 +1017,3 @@ def get_heal_study_files(config: RogerConfig, to_string=False) -> List[str]:
 
 def get_heal_research_program_files(config: RogerConfig, to_string=False) -> List[str]:
     return get_versioned_files(config, "heal-research", "heal-research-programs", data_store=config.dug_inputs.data_source, unzip=True)
-
-
