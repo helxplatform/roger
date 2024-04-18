@@ -458,9 +458,6 @@ class KGXModel:
         t = time.time()
         start_nodes_jsonl = time.time()
 
-        # create output dir
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
 
         nodes_file_path = storage.merge_path("nodes.jsonl", output_path)
 

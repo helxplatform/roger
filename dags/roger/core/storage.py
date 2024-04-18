@@ -163,6 +163,9 @@ def merge_path(name, path: Path=None):
     """ Form a merged KGX object path.
     :path name: Name of the merged KGX object. """
     if path is None:
+        # create output dir
+        if not os.path.exists(ROGER_DATA_DIR / 'merge'):
+            os.makedirs(ROGER_DATA_DIR / 'merge')
         return str(ROGER_DATA_DIR / 'merge' / name)
     return str(path.joinpath(name))
 
