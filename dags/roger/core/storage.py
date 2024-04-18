@@ -85,7 +85,7 @@ def read_object(path, key=None):
     elif path.endswith(".pickle"):
         with open(file=path, mode="rb") as stream:
             obj = pickle.load(stream)
-    elif path.endswith(".jsonl"):
+    elif path.endswith(".jsonl") or path.endswith('.txt'):
         obj = read_data(path)
     return obj
 
@@ -117,11 +117,11 @@ def write_object (obj, path, key=None):
             yaml.dump (obj, outfile)
     elif path.endswith (".json"):
         with open (path, "w", encoding='utf-8') as stream:
-            stream.write(str(json.dumps (obj).decode('utf-8')))
+            stream.write(str(json.dumps (obj, option=json.OPT_INDENT_2).decode('utf-8')))
     elif path.endswith(".pickle"):
         with open (path, "wb") as stream:
             pickle.dump(obj, file=stream)
-    elif path.endswith(".jsonl"):
+    elif path.endswith(".jsonl") or path.endswith('.txt'):
         with open (path, "w", encoding="utf-8") as stream:
             stream.write(obj)
     else:
@@ -152,30 +152,50 @@ def kgx_path(name):
     :path name: Name of the KGX object. """
     return str(ROGER_DATA_DIR / "kgx" / name)
 
-def kgx_objects(format_="json"):
+def kgx_objects(format_="json", path=None):
     """ A list of KGX objects. """
     kgx_pattern = kgx_path(f"**.{format_}")
-    return sorted(glob.glob (kgx_pattern))
+    if path:
+        kgx_pattern = f"{path}/**/*.{format_}"
+    return sorted(glob.glob (kgx_pattern, recursive=True))
 
-def merge_path(name):
+def merge_path(name, path: Path=None):
     """ Form a merged KGX object path.
     :path name: Name of the merged KGX object. """
-    return str(ROGER_DATA_DIR / 'merge' / name)
+    if path is None:
+        # create output dir
+        if not os.path.exists(ROGER_DATA_DIR / 'merge'):
+            os.makedirs(ROGER_DATA_DIR / 'merge')
+        return str(ROGER_DATA_DIR / 'merge' / name)
+    return str(path.joinpath(name))
 
-def merged_objects():
+def merged_objects(file_type, path=None):
     """ A list of merged KGX objects. """
-    merged_pattern = merge_path("**.json")
-    return sorted(glob.glob (merged_pattern))
+    if not path:
+        merged_pattern = merge_path(f"**/{file_type}.jsonl")
+    else:
+        merged_pattern =  merge_path(f"**/{file_type}.jsonl", path=path)
+    # this thing should always return one edges or nodes file (based on file_type)
+    try:
+        return sorted(glob.glob(merged_pattern, recursive=True))[0]
+    except IndexError:
+        raise ValueError(f"Could not find merged KGX of type {file_type} in {merged_pattern}")
 
-def schema_path(name):
+
+def schema_path(name, path=None):
     """ Path to a schema object.
     :param name: Name of the object to get a path for. """
-    return str(ROGER_DATA_DIR / 'schema' / name)
+    if not path:
+        return str(ROGER_DATA_DIR / 'schema' / name)
+    return str (path / 'schema' / name)
 
-def bulk_path(name):
+def bulk_path(name, path=None):
     """ Path to a bulk load object.
     :param name: Name of the object. """
-    return str(ROGER_DATA_DIR / 'bulk' / name)
+    if not path:
+        return str(ROGER_DATA_DIR / 'bulk' / name)
+    else:
+        return str(path / name)
 
 def metrics_path(name):
     """
@@ -194,10 +214,14 @@ def dug_annotation_path(name):
 def dug_expanded_concepts_path(name):
     return str(ROGER_DATA_DIR / 'dug' / 'expanded_concepts' / name)
 
-def dug_expanded_concept_objects():
-    file_pattern = dug_expanded_concepts_path(
-        os.path.join('*','expanded_concepts.pickle'))
-    return sorted(glob.glob(file_pattern))
+def dug_expanded_concept_objects(data_path=None, format="pickle"):
+    "Return a list of files containing expaneded concept objects"
+    if data_path:
+        file_pattern = os.path.join(data_path, '**', f'expanded_concepts.{format}')
+    else:
+        file_pattern = dug_expanded_concepts_path(
+            os.path.join('*',f'expanded_concepts.{format}'))
+    return sorted(glob.glob(file_pattern, recursive=True))
 
 def dug_extracted_elements_objects():
     file_pattern = dug_expanded_concepts_path(
@@ -212,17 +236,25 @@ def dug_kgx_objects():
     dug_kgx_pattern = dug_kgx_path("**.json")
     return sorted(glob.glob(dug_kgx_pattern))
 
-def dug_concepts_objects():
+def dug_concepts_objects(data_path, format="pickle"):
     """ A list of dug annotation Objects. """
-    concepts_file_path = dug_annotation_path(
-        os.path.join('*','concepts.pickle'))
-    return sorted(glob.glob(concepts_file_path))
+    if not data_path:
+        concepts_file_path = dug_annotation_path(
+            os.path.join('*',f'concepts.{format}'))
+    else:
+        concepts_file_path = os.path.join(
+            data_path, '**', f'concepts.{format}')
+    return sorted(glob.glob(concepts_file_path, recursive=True))
 
-def dug_elements_objects():
+def dug_elements_objects(data_path=None, format='pickle'):
     """ A list of dug annotation Objects. """
-    concepts_file_path = dug_annotation_path(
-        os.path.join('*', 'elements.pickle'))
-    return sorted(glob.glob(concepts_file_path))
+    if not data_path:
+        concepts_file_pattern = dug_annotation_path(
+            os.path.join('*', f'elements.{format}'))
+    else:
+        concepts_file_pattern = os.path.join(
+            data_path, '**', f'elements.{format}')
+    return sorted(glob.glob(concepts_file_pattern, recursive=True))
 
 def dug_input_files_path(name) -> pathlib.Path:
     path = ROGER_DATA_DIR / "dug" / "input_files" / name
@@ -233,21 +265,12 @@ def dug_input_files_path(name) -> pathlib.Path:
         log.info(f"Input file path: {path} already exists")
     return path
 
-def dug_topmed_path(name):
-    """ Topmed source files"""
-    return dug_input_files_path('topmed') / name
-
-def dug_topmed_objects():
-    topmed_file_pattern = str(dug_topmed_path("topmed_*.csv"))
+def dug_topmed_objects(input_data_path=None):
+    "Return list of TOPMed source files"
+    if not input_data_path:
+        input_data_path = str(dug_input_files_path('topmed'))
+    topmed_file_pattern = os.path.join(input_data_path, "topmed_*.csv")
     return sorted(glob.glob(topmed_file_pattern))
-
-def dug_nida_path(name):
-    """ NIDA source files"""
-    return dug_input_files_path('nida') / name
-
-def dug_sparc_path(name):
-    """ NIDA source files"""
-    return dug_input_files_path('sparc') / name
 
 def dug_anvil_path():
     """Anvil source files"""
@@ -281,62 +304,78 @@ def dug_kfdrc_path():
     """Anvil source files"""
     return dug_input_files_path('kfdrc')
 
-def dug_nida_objects():
-    nida_file_pattern = str(dug_nida_path("NIDA-*.xml"))
+def dug_nida_objects(input_data_path=None):
+    "Return list of NIDA source files"
+    if not input_data_path:
+        input_data_path = str(dug_input_files_path('nida'))
+    nida_file_pattern = os.path.join(input_data_path, "NIDA-*.xml")
     return sorted(glob.glob(nida_file_pattern))
 
-def dug_sparc_objects():
-    file_pattern = str(dug_sparc_path("scicrunch/*.xml"))
+def dug_sparc_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = str(dug_input_files_path('sparc'))
+    file_pattern = os.path.join(input_data_path, "scicrunch/*.xml")
     return sorted(glob.glob(file_pattern))
 
-def dug_anvil_objects():
-    file_path = dug_anvil_path()
+def dug_anvil_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_anvil_path()
     files = get_files_recursive(
         lambda file_name: (
             not file_name.startswith('GapExchange_')
             and file_name.endswith('.xml')),
-        file_path)
+        input_data_path)
     return sorted([str(f) for f in files])
 
-def dug_sprint_objects():
-    file_path = dug_sprint_path()
+def dug_sprint_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_sprint_path()
     files = get_files_recursive(
-        lambda file_name: file_name.endswith('.xml'), file_path)
+        lambda file_name: file_name.endswith('.xml'), input_data_path)
     return sorted([str(f) for f in files])
 
-def dug_bacpac_objects():
-    file_path = dug_bacpac_path()
+def dug_bacpac_objects(input_data_path=None):
+    "Return list of BACPAC source files"
+    if not input_data_path:
+        input_data_path = dug_bacpac_path()
     files = get_files_recursive(
-        lambda file_name: file_name.endswith('.xml'), file_path)
+        lambda file_name: file_name.endswith('.xml'), input_data_path)
     return sorted([str(f) for f in files])
 
-def dug_crdc_objects():
-    file_path = dug_crdc_path()
-    files = get_files_recursive(
-        lambda file_name: (
-            not file_name.startswith('GapExchange_')
-            and file_name.endswith('.xml')),
-        file_path)
-    return sorted([str(f) for f in files])
-
-def dug_heal_study_objects():
-    file_path = dug_heal_study_path()
-    files = get_files_recursive(lambda file_name : file_name.endswith('.xml'), file_path)
-    return sorted([str(f) for f in files])
-
-def dug_heal_research_program_objects():
-    file_path = dug_heal_research_program_path()
-    files = get_files_recursive(lambda file_name : file_name.endswith('.xml'), file_path)
-    return sorted([str(f) for f in files])
-
-
-def dug_kfdrc_objects():
-    file_path = dug_kfdrc_path()
+def dug_crdc_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_crdc_path()
     files = get_files_recursive(
         lambda file_name: (
             not file_name.startswith('GapExchange_')
             and file_name.endswith('.xml')),
-        file_path)
+        input_data_path)
+    return sorted([str(f) for f in files])
+
+def dug_heal_study_objects(input_data_path=None):
+    "Return list of HEAL study source files"
+    if not input_data_path:
+        input_data_path = dug_heal_study_path()
+    files = get_files_recursive(lambda file_name : file_name.endswith('.xml'),
+                                input_data_path)
+    return sorted([str(f) for f in files])
+
+def dug_heal_research_program_objects(input_data_path=None):
+    "Return list of HEAL research program source files"
+    if not input_data_path:
+        input_data_path = dug_heal_research_program_path()
+    files = get_files_recursive(lambda file_name : file_name.endswith('.xml'),
+                                input_data_path)
+    return sorted([str(f) for f in files])
+
+def dug_kfdrc_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_kfdrc_path()
+    files = get_files_recursive(
+        lambda file_name: (
+            not file_name.startswith('GapExchange_')
+            and file_name.endswith('.xml')),
+        input_data_path)
     return sorted([str(f) for f in files])
 
 
@@ -356,23 +395,26 @@ def get_files_recursive(file_name_filter, current_dir):
             file_paths += [child]
     return file_paths
 
-def dug_dd_xml_objects():
-    file_path = dug_dd_xml_path()
+def dug_dd_xml_objects(input_data_path=None):
+    if not input_data_path:
+        input_data_path = dug_dd_xml_path()
     files = get_files_recursive(
         lambda file_name: (
             not file_name.startswith('._')
             and file_name.endswith('.xml')),
-        file_path)
+        input_data_path)
     return sorted([str(f) for f in files])
 
 def copy_file_to_dir(file_location, dir_name):
     return shutil.copy(file_location, dir_name)
 
-def read_schema (schema_type: SchemaType):
+def read_schema (schema_type: SchemaType, path=None):
     """ Read a schema object.
     :param schema_type: Schema type of the object to read. """
-    path = schema_path (f"{schema_type.value}-schema.json")
-    return read_object (path)
+    if path is not None:
+        path = path / '**'
+    location = glob.glob(schema_path (f"{schema_type.value}-schema.json", path=path), recursive=True)[0]
+    return read_object (location)
 
 def get_uri (path, key):
     """ Build a URI.
@@ -392,17 +434,7 @@ def read_relative_object (path):
 def trunc(text, limit):
     return ('..' + text[-limit-2:]) if len(text) > limit else text
 
-def is_up_to_date (source, targets):
-    target_time_list = [
-        os.stat (f).st_mtime for f in targets if os.path.exists(f)]
-    if len(target_time_list) == 0:
-        log.debug (f"no targets found")
-        return False
-    source = [ os.stat (f).st_mtime for f in source if os.path.exists (f) ]
-    if len(source) == 0:
-        log.debug ("no source found. up to date")
-        return True
-    return max(source) < min(target_time_list)
+
 
 def json_line_iter(jsonl_file_path):
     f = open(file=jsonl_file_path, mode='r', encoding='utf-8')

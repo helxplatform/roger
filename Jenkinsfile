@@ -70,31 +70,15 @@ spec:
             steps {
                 script {
                     container(name: 'kaniko', shell: '/busybox/sh') {
-                        kaniko.buildAndPush("./Dockerfile", ["$IMAGE_NAME:$TAG1", "$IMAGE_NAME:$TAG2", "$IMAGE_NAME:$TAG3", "$IMAGE_NAME:$TAG4"])
+                        if (env.BRANCH_NAME == "main") {
+                          // Tag with latest and version iff when pushed to master
+                          kaniko.buildAndPush("./Dockerfile", ["$IMAGE_NAME:$TAG1", "$IMAGE_NAME:$TAG2", "$IMAGE_NAME:$TAG3", "$IMAGE_NAME:$TAG4"])
+                        } else {
+                          kaniko.buildAndPush("./Dockerfile", ["$IMAGE_NAME:$TAG1", "$IMAGE_NAME:$TAG2"])
+                        }
                     }
                 }
-            }
-            // post {
-            //     always {
-            //         archiveArtifacts artifacts: 'image.tar', onlyIfSuccessful: true
-            //     }
-            // }
-        }
-        // stage('Publish') {
-        //     steps {
-        //         script {
-        //             container(name: 'crane', shell: '/busybox/sh') {
-        //                 def imageTagsPushAlways = ["$IMAGE_NAME:$TAG1", "$IMAGE_NAME:$TAG2"]
-        //                 def imageTagsPushForDevelopBranch = ["$IMAGE_NAME:$TAG3"]
-        //                 def imageTagsPushForMasterBranch = ["$IMAGE_NAME:$TAG3", "$IMAGE_NAME:$TAG4"]
-        //                 image.publish(
-        //                     imageTagsPushAlways,
-        //                     imageTagsPushForDevelopBranch,
-        //                     imageTagsPushForMasterBranch
-        //                 )
-        //             }
-        //         }
-        //     }
-        // }
+            }          
+        }        
     }
 }

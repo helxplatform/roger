@@ -8,9 +8,8 @@ import threading
 from collections import defaultdict
 from xxhash import xxh64_hexdigest
 import orjson as json
-import redis
 import ntpath
-from kg_utils.merging import GraphMerger, MemoryGraphMerger, DiskGraphMerger
+from kg_utils.merging import DiskGraphMerger
 from kg_utils.constants import *
 
 from roger.config import get_default_config
@@ -43,18 +42,11 @@ class KGXModel:
         self.merger = DiskGraphMerger(temp_directory=self.temp_directory,
                                       chunk_size=5_000_000)
         self.biolink_version = self.config.kgx.biolink_model_version
-        self.merge_db_id = self.config.kgx.merge_db_id
-        self.merge_db_name = f'db{self.merge_db_id}'
         log.debug(f"Trying to get biolink version : {self.biolink_version}")
         if biolink is None:
             self.biolink = BiolinkModel(self.biolink_version)
         else:
             self.biolink = biolink
-        self.redis_conn = redis.Redis(
-                    host=self.config.redisgraph.host,
-                    port=self.config.redisgraph.port,
-                    password=self.config.redisgraph.password,
-                    db=self.merge_db_id)
         self.enable_metrics = self.config.get('enable_metrics', False)
 
     def get_kgx_json_format(self, files: list, dataset_version: str):
@@ -301,7 +293,7 @@ class KGXModel:
         log.info("Done copying dug KGX files.")
         return all_kgx_files
 
-    def create_nodes_schema(self):
+    def create_nodes_schema(self, input_data_path=None, output_data_path=None):
         """
         Extracts schema for nodes based on biolink leaf types
         :return:
@@ -309,7 +301,7 @@ class KGXModel:
 
         category_schemas = defaultdict(lambda: None)
         category_error_nodes = set()
-        merged_nodes_file = storage.merge_path("nodes.jsonl")
+        merged_nodes_file = storage.merged_objects("nodes", input_data_path)
         log.info(f"Processing : {merged_nodes_file}")
         counter = 0
         for node in storage.json_line_iter(merged_nodes_file):
@@ -356,15 +348,15 @@ class KGXModel:
                      f"These will be treated as {BiolinkModel.root_type}.")
 
         # Write node schemas.
-        self.write_schema(category_schemas, SchemaType.CATEGORY)
+        self.write_schema(category_schemas, SchemaType.CATEGORY, output_path=output_data_path)
 
-    def create_edges_schema(self):
+    def create_edges_schema(self, input_data_path=None, output_data_path=None):
         """
         Create unified schema for all edges in an edges jsonl file.
         :return:
         """
         predicate_schemas = defaultdict(lambda: None)
-        merged_edges_file = storage.merge_path("edges.jsonl")
+        merged_edges_file = storage.merged_objects("edges", input_data_path)
         """ Infer predicate schemas. """
         for edge in storage.json_line_iter(merged_edges_file):
             predicate = edge['predicate']
@@ -378,7 +370,7 @@ class KGXModel:
                     previous_type = predicate_schemas[predicate][k]
                     predicate_schemas[predicate][k] = compare_types(
                         previous_type, current_type)
-        self.write_schema(predicate_schemas, SchemaType.PREDICATE)
+        self.write_schema(predicate_schemas, SchemaType.PREDICATE, output_path=output_data_path)
 
     def create_schema (self):
         """Determine the schema of each type of object.
@@ -403,31 +395,40 @@ class KGXModel:
                     f"{SchemaType.PREDICATE.value}-schema.json")
             ])
 
-    def write_schema(self, schema, schema_type: SchemaType):
+    def write_schema(self, schema, schema_type: SchemaType ,output_path=None):
         """ Output the schema file.
  
         :param schema: Schema to get keys from.
         :param schema_type: Type of schema to write.
         """
-        file_name = storage.schema_path (f"{schema_type.value}-schema.json")
+        file_name = storage.schema_path (f"{schema_type.value}-schema.json", output_path)
         log.info("writing schema: %s", file_name)
         dictionary = { k : v for k, v in schema.items () }
         storage.write_object (dictionary, file_name)
 
-    def merge(self):
+    def merge(self, input_path=None, output_path=None):
         """ This version uses the disk merging from the kg_utils module """
-        data_set_version = self.config.get('kgx', {}).get('dataset_version')
+
         metrics = {}
         start = time.time()
-        json_format_files = storage.kgx_objects("json")
-        jsonl_format_files = storage.kgx_objects("jsonl")
+
+        log.info(f"Input path = {input_path}, Output path = {output_path}")
+
+        if input_path:
+            json_format_files = storage.kgx_objects("json", input_path)
+            jsonl_format_files = storage.kgx_objects("jsonl", input_path)
+        else:
+            json_format_files = storage.kgx_objects("json")
+            jsonl_format_files = storage.kgx_objects("jsonl")
 
         # Create lists of the nodes and edges files in both json and jsonl
         # formats
         jsonl_node_files = {file for file in jsonl_format_files
-                            if "node" in file}
+                            if "node" in file.split('/')[-1]}
         jsonl_edge_files = {file for file in jsonl_format_files
-                            if "edge" in file}
+                            if "edge" in file.split('/')[-1]}
+        log.info(f"Jsonl edge files : {jsonl_edge_files}")
+        log.info(f"Jsonl node files : {jsonl_node_files}")
 
         # Create all the needed iterators and sets thereof
         jsonl_node_iterators = [storage.jsonl_iter(file_name)
@@ -449,13 +450,16 @@ class KGXModel:
         self.merger.merge_nodes(node_iterators)
         merged_nodes = self.merger.get_merged_nodes_jsonl()
 
+
         self.merger.merge_edges(edge_iterators)
         merged_edges = self.merger.get_merged_edges_jsonl()
 
         write_merge_metric = {}
         t = time.time()
         start_nodes_jsonl = time.time()
-        nodes_file_path = storage.merge_path("nodes.jsonl")
+
+
+        nodes_file_path = storage.merge_path("nodes.jsonl", output_path)
 
         # stream out nodes to nodes.jsonl file
         with open(nodes_file_path, 'w') as stream:
@@ -468,7 +472,7 @@ class KGXModel:
         start_edge_jsonl = time.time()
 
         # stream out edges to edges.jsonl file
-        edges_file_path = storage.merge_path("edges.jsonl")
+        edges_file_path = storage.merge_path("edges.jsonl", output_path)
         with open(edges_file_path, 'w') as stream:
             for edges in merged_edges:
                 edges = json.loads(edges)
@@ -496,3 +500,4 @@ class KGXModel:
         if self.enable_metrics:
             metricsfile_path = storage.metrics_path('merge_metrics.yaml')
             storage.write_object(metrics, metricsfile_path)
+
