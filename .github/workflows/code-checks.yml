@@ -1,0 +1,38 @@
+# Workflow responsible for core acceptance testing.
+# Tests Currently Run:
+#     - flake8-linter
+#     - PYTest
+#     - Bandit
+# For PR Vulnerability Scanning a separate workflow will run.
+# The build-push-dev-image and build-push-release workflows 
+# handle the develop and release image storage respectively.
+#
+#
+
+name: Code-Checks
+on:
+  # push:
+  #   branches-ignore:
+  #     - master
+  #     - main
+  #     - develop
+  pull_request:
+    branches:
+      - develop
+      - master
+      - main 
+    types: [ opened, synchronize ]
+    paths-ignore:
+      - README.md
+      - .old_cicd/*
+      # - .github/*
+      # - .github/workflows/*
+      - LICENSE
+      - .gitignore
+      - .dockerignore
+      - .githooks
+
+jobs:
+ build-push-release:
+    uses: helxplatform/helx-github-actions/.github/workflows/code-checks.yml@main
+    secrets: inherit

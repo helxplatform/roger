@@ -1,0 +1,25 @@
+# Workflow responsible for the 
+# major release processes.
+#
+
+name: Build-Push-Release
+on:
+  push:
+    branches:
+      - master 
+      - main
+    paths-ignore:
+      - README.md
+      - .old_cicd/*
+      - .github/*
+      - .github/workflows/*
+      - LICENSE
+      - .gitignore
+      - .dockerignore
+      - .githooks
+    tags-ignore:
+      - '*'
+jobs:
+  build-push-release:
+    uses: helxplatform/helx-github-actions/.github/workflows/build-push-release.yml@main
+    secrets: inherit

@@ -1,0 +1,27 @@
+# Workflow responsible for the 
+# development release processes.
+#
+name: Build-Push-Dev-Image
+on:
+  push:
+    branches:
+      - develop
+    paths-ignore:
+      - README.md
+      - .old_cicd/*
+      - .github/*
+      - .github/workflows/*
+      - LICENSE
+      - .gitignore
+      - .dockerignore
+      - .githooks
+  # Do not build another image on a pull request.
+  # Any push to develop will trigger a new build however.
+  pull_request:
+    branches-ignore:
+      - '*'
+
+jobs:
+  build-push-dev-image:
+    uses: helxplatform/helx-github-actions/.github/workflows/build-push-dev-image.yml@main
+    secrets: inherit
