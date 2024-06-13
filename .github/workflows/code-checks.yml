@@ -100,7 +100,7 @@ jobs:
       run: |
         pip install -r requirements.txt
         pip install bandit
-        pip install ./dags
+        pip install /dags
 
     # Only report high security issues
     - name: Test with Bandit
