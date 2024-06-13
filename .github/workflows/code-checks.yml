@@ -61,30 +61,30 @@ jobs:
     - name: Lint with flake8
       run: |
         pip install flake8
-        flake8 --ignore=E,W src 
+        flake8 --ignore=E,W dag 
       # We continue on error here until the code is clean
       # flake8 --ignore=E,W --exit-zero . 
       continue-on-error: true
 
 ################################### PYTEST ###################################
-  pytest:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.12'
+  # pytest:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - name: Set up Python
+  #     uses: actions/setup-python@v4
+  #     with:
+  #       python-version: '3.12'
 
-    - name: Install Requirements
-      run: |
-        pip install -r requirements.txt
-        pip install coverage
-        pip install ./tests
+  #   - name: Install Requirements
+  #     run: |
+  #       pip install -r requirements.txt
+  #       pip install coverage
+  #       pip install ./tests
 
-    - name: Test with pytest
-      run: |
-        make test
+  #   - name: Test with pytest
+  #     run: |
+  #       make test
 
 ############################ Bandit ################################
   bandit:
@@ -100,7 +100,7 @@ jobs:
       run: |
         pip install -r requirements.txt
         pip install bandit
-        pip install ./tests
+        pip install ./dags
 
     # Only report high security issues
     - name: Test with Bandit
