@@ -44,3 +44,7 @@ class TopmedDBGaPPipeline(DugPipeline):
 class CureSCPipeline(DugPipeline):
     pipeline_name = "curesc-dbgap"
     parser_name = "curesc"
+
+class SmallDataDbGap(DugPipeline):
+    pipeline_name = "small-data-dbgap"
+    parser_name = "topmeddbgap"
