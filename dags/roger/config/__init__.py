@@ -99,6 +99,7 @@ class AnnotationConfig(DictLike):
             "sapbert": {
                 "classification_url": "https://med-nemo.apps.renci.org/annotate/",
                 "annotator_url": "https://babel-sapbert.apps.renci.org/annotate/",
+                "score_threshold": 0.8,
                 "bagel": {
                     "enabled": False,
                     "url": "https://bagel.apps.renci.org/group_synonyms_openai",
