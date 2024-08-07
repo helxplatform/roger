@@ -46,5 +46,5 @@ class CureSCPipeline(DugPipeline):
     parser_name = "curesc"
 
 class BdcTest4Pipeline(DugPipeline):
-    pipeline_name = "bdc-test-4"
+    pipeline_name = "bdc-test4"
     parser_name = "newstudy"
