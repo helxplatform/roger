@@ -133,6 +133,8 @@ class AnnotationConfig(DictLike):
     ontology_greenlist: List[str] = field(default_factory=lambda: [
         "PATO", "CHEBI", "MONDO", "UBERON", "HP", "MESH", "UMLS"
     ])
+    def __post_init__(self):
+        self.annotator_args["sapbert"]["bagel"]["enabled"] = self.annotator_args["sapbert"]["bagel"]["enabled"].lower() == "true"
 
 
 
