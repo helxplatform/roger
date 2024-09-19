@@ -1,4 +1,4 @@
-FROM apache/airflow:2.7.2-python3.11
+FROM apache/airflow:slim-2.10.2rc1-python3.12
 
 USER root
 RUN apt-get update && \
