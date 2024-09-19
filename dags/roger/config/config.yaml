@@ -49,7 +49,7 @@ annotation:
     sapbert: 
       classification_url: "https://med-nemo.apps.renci.org/annotate/"
       annotator_url: "https://sap-qdrant.apps.renci.org/annotate/"
-      score_threshold: 0.5
+      score_threshold: 0.8
       bagel:
         enabled: false
         url: "http://localhost:9099/group_synonyms_openai"
