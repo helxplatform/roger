@@ -134,6 +134,9 @@ class AnnotationConfig(DictLike):
         "PATO", "CHEBI", "MONDO", "UBERON", "HP", "MESH", "UMLS"
     ])
 
+    def __post_init__(self):
+        self.annotator_args["sapbert"]["bagel"]["enabled"] = self.annotator_args["sapbert"]["bagel"][
+                                                                 "enabled"].lower() == "true"
 
 
 @dataclass
