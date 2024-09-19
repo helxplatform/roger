@@ -1,6 +1,6 @@
 redisgraph:
   username: ""
-  password: "12345"
+  password: "weak"
   host: localhost
   graph: test
   port: 6379
@@ -42,13 +42,25 @@ bulk_loader:
 
 annotation:
   clear_http_cache: false
-  annotator_type: monarch
+  annotator_type: sapbert
   annotator_args:
     monarch:
       url: "https://api.monarchinitiative.org/api/nlp/annotate/entities?min_length=4&longest_only=false&include_abbreviation=false&include_acronym=false&include_numbers=false&content="
     sapbert: 
       classification_url: "https://med-nemo.apps.renci.org/annotate/"
-      annotator_url: "https://babel-sapbert.apps.renci.org/annotate/"
+      annotator_url: "https://sap-qdrant.apps.renci.org/annotate/"
+      score_threshold: 0.8
+      bagel:
+        enabled: false
+        url: "http://localhost:9099/group_synonyms_openai"
+        prompt: "bagel/ask_classes"
+        llm_args:
+          llm_model_name: "gpt-4o-2024-05-13"
+          organization:
+          access_key:
+          llm_model_args:
+            top_p: 0
+            temperature: 0.1
   normalizer: "https://nodenormalization-dev.apps.renci.org/get_normalized_nodes?conflate=false&description=true&curie="
   synonym_service: "https://name-resolution-sri.renci.org/reverse_lookup"
   ontology_metadata: "https://api.monarchinitiative.org/api/bioentity/"
@@ -93,9 +105,9 @@ indexing:
         action: "files"
 
 elasticsearch:
-  host: elasticsearch
+  host: localhost
   username: elastic
-  password: ""
+  password: "12345"
   nboost_host: ""
   scheme: "http"
   ca_path: ""

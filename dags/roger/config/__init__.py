@@ -99,6 +99,21 @@ class AnnotationConfig(DictLike):
             "sapbert": {
                 "classification_url": "https://med-nemo.apps.renci.org/annotate/",
                 "annotator_url": "https://babel-sapbert.apps.renci.org/annotate/",
+                "score_threshold": 0.8,
+                "bagel": {
+                    "enabled": False,
+                    "url": "https://bagel.apps.renci.org/group_synonyms_openai",
+                    "prompt": "bagel/ask_classes",
+                    "llm_args": {
+                        "llm_model_name": "gpt-4o-2024-05-13",
+                        "organization": "",
+                        "access_key": "",
+                        "llm_model_args": {
+                            "top_p": 0,
+                            "temperature": 0.1
+                        }
+                    }
+                }
             },
         }
     )
@@ -119,6 +134,9 @@ class AnnotationConfig(DictLike):
         "PATO", "CHEBI", "MONDO", "UBERON", "HP", "MESH", "UMLS"
     ])
 
+    def __post_init__(self):
+        self.annotator_args["sapbert"]["bagel"]["enabled"] = self.annotator_args["sapbert"]["bagel"][
+                                                                 "enabled"].lower() == "true"
 
 
 @dataclass
