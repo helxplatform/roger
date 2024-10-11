@@ -4,6 +4,7 @@ elasticsearch==8.5.2
 flatten-dict
 jsonpickle
 redisgraph-bulk-loader==0.12.3
+setuptools>=66
 pytest
 PyYAML
 git+https://github.com/helxplatform/dug@2.13.2
