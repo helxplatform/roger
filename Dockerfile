@@ -2,8 +2,6 @@ FROM apache/airflow:2.7.2-python3.11
 
 USER root
 RUN apt-get update && \
-    apt-get upgrade -y && \
-    apt-get remove libaom3 -y && \
     apt-get install -y git nano vim gcc
 COPY requirements.txt requirements.txt
 USER airflow
