@@ -1,4 +1,4 @@
-FROM apache/airflow:2.10.2-python3.11
+FROM bitnami/airflow:2.10.2
 
 USER root
 RUN apt-get update && \
