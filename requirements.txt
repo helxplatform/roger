@@ -11,5 +11,5 @@ git+https://github.com/helxplatform/dug@patch-1-nemo-error
 orjson
 kg-utils==0.0.6
 bmt==1.1.0
-git+https://github.com/helxplatform/avalon.git@v1.0.1
+git+https://github.com/helxplatform/avalon.git@develop
 linkml-runtime==1.6.0

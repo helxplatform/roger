@@ -176,7 +176,8 @@ def avalon_commit_callback(context: DagContext, **kwargs):
         branch=temp_branch_name,
         repo=repo,
         # @TODO figure out how to pass real commit id here
-        commit_id=branch
+        commit_id=branch,
+        source_branch_name=branch
     )
 
     # see what changes are going to be pushed from this branch to main branch
