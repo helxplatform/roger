@@ -4,11 +4,12 @@ elasticsearch==8.5.2
 flatten-dict
 jsonpickle
 redisgraph-bulk-loader==0.12.3
+setuptools>=66
 pytest
 PyYAML
-git+https://github.com/helxplatform/dug@2.13.2
+git+https://github.com/helxplatform/dug@2.13.4
 orjson
 kg-utils==0.0.6
 bmt==1.1.0
-git+https://github.com/helxplatform/avalon.git@v1.0.1
+git+https://github.com/helxplatform/avalon.git@v1.1.0
 linkml-runtime==1.6.0
