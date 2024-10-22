@@ -7,9 +7,9 @@ redisgraph-bulk-loader==0.12.3
 setuptools>=66
 pytest
 PyYAML
-git+https://github.com/helxplatform/dug@patch-1-nemo-error
+git+https://github.com/helxplatform/dug@2.13.4
 orjson
 kg-utils==0.0.6
 bmt==1.1.0
-git+https://github.com/helxplatform/avalon.git@develop
+git+https://github.com/helxplatform/avalon.git@v1.1.0
 linkml-runtime==1.6.0

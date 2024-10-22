@@ -169,6 +169,7 @@ def merge_path(name, path: Path=None):
         return str(ROGER_DATA_DIR / 'merge' / name)
     if not os.path.exists(path):
         os.makedirs(path)
+
     return str(path.joinpath(name))
 
 def merged_objects(file_type, path=None):
