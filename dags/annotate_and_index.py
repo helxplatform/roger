@@ -18,6 +18,13 @@ env_enabled_datasets = os.getenv(
 with DAG(
         dag_id='annotate_and_index',
         default_args=default_args,
+        params=
+            {
+                'repository_id': "def_repository_id",
+                'branch_name': 'def_branch_name',
+                'commitid_from': 'commit_id_from',
+                'commitid_to': 'commit_id_to'
+            },
         schedule_interval=None
 ) as dag:
     init = EmptyOperator(task_id="init", dag=dag)
