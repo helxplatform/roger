@@ -20,10 +20,10 @@ with DAG(
         default_args=default_args,
         params=
             {
-                'repository_id': "def_repository_id",
-                'branch_name': 'def_branch_name',
-                'commitid_from': 'commit_id_from',
-                'commitid_to': 'commit_id_to'
+                "repository_id": None,
+                "branch_name": None,
+                "commitid_from": None,
+                "commitid_to": None
             },
         schedule_interval=None
 ) as dag:
@@ -49,3 +49,6 @@ with DAG(
         # . . .
 
         init >> create_pipeline_taskgroup(dag, pipeline_class, config) >> finish
+
+
+
