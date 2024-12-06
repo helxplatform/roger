@@ -285,12 +285,16 @@ def setup_input_data(context, exec_conf):
             # get all if path is not specified
             repo['path'] = '*'
     logger.info(f"repos : {repos}")
+
+    dag_params = exec_conf['get_dag_params']()
+    logger.info(f">>> dag params: {dag_params}")
+
     for r in repos:
         # create path to download to ...
         if not os.path.exists(input_dir + f'/{r["repo"]}'):
             os.mkdir(input_dir + f'/{r["repo"]}')
 
-        if not r["param_repo"]["repository_id"]:
+        if not dag_params.get("repository_id"):
             logger.info("downloading %s from %s@%s to %s", r['path'], r['repo'], r['branch'], input_dir)
             get_files(
                 local_path=input_dir + f'/{r["repo"]}',
@@ -301,15 +305,14 @@ def setup_input_data(context, exec_conf):
                 lake_fs_client=client
             )
         else:
-            logger.info("downloading %s from %s@%s to %s", r['path'], r["param_repo"]["repository_id"], r["param_repo"]["branch_name"], input_dir)
-            logger.info("from commit %s to commit %s", r["param_repo"]["commitid_from"], r["param_repo"]["commitid_to"])
+            logger.info("downloading %s from %s@%s to %s", r['path'], dag_params.get("repository_id"), dag_params.get("branch_name"), input_dir)
             get_files(
                 local_path=input_dir + f'/{r["repo"]}',
                 remote_path=r['path'],
-                branch=r["param_repo"]["branch_name"],
-                repo=r["param_repo"]["repository_id"],
-                commit_from=r["param_repo"]["commitid_from"],
-                commit_to=r["param_repo"]["commitid_to"],
+                branch=dag_params.get("branch_name"),
+                repo=dag_params.get("repository_id"),
+                commit_from=dag_params.get("commitid_from"),
+                commit_to=dag_params.get("commitid_to"),
                 changes_only=True,
                 lake_fs_client=client
             )
@@ -357,11 +360,11 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
                 'repos': [{
                     'repo': r['name'],
                     'branch': r['branch'],
-                    'path': r.get('path', '*'),
-                    'param_repo' : r['param_repo']
-                } for r in external_repos]
+                    'path': r.get('path', '*')
+                } for r in external_repos],
+                'get_dag_params': lambda: dag.params
             }
-            
+
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
         # add pre_exec partial function as an argument to python executor conf 
         python_operator_args['pre_execute'] = pre_exec
@@ -398,13 +401,7 @@ def create_pipeline_taskgroup(
                 external_repos=[{
                     'name': getattr(pipeline_class, 'pipeline_name'),
                     'branch': input_dataset_version,
-                    'param_repo':
-                        {
-                            "repository_id": dag.params.get("repository_id") or None,
-                            "branch_name": dag.params.get("branch_name") or None,
-                            "commitid_from": dag.params.get("commitid_from") or None,
-                            "commitid_to": dag.params.get("commitid_to") or None,
-                        }
+
                 }],
                 pass_conf=False)
 
