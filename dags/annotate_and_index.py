@@ -10,6 +10,7 @@ import os
 
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
+from airflow.operators.python import PythonOperator
 from roger.tasks import default_args, create_pipeline_taskgroup, logger
 
 env_enabled_datasets = os.getenv(
@@ -30,8 +31,7 @@ with DAG(
     init = EmptyOperator(task_id="init", dag=dag)
     finish = EmptyOperator(task_id="finish", dag=dag)
 
-    logger.info(f"annotate_and_index params >>> {dag.params}")
-    logger.info(f"annotate_and_index default_args >>> {dag.default_args}")
+
     from roger import pipelines
     from roger.config import config
     envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed:v2.0")
@@ -54,3 +54,26 @@ with DAG(
 
 
 
+
+with DAG(
+        dag_id='dag_test',
+        default_args=default_args,
+        params=
+            {
+                "repository_id": None,
+                "branch_name": None,
+                "commitid_from": None,
+                "commitid_to": None
+            },
+        schedule_interval=None
+) as dag:
+
+    def print_context(ds=None, **kwargs):
+        print(">>>All kwargs")
+        print(kwargs)
+        print(">>>All ds")
+        print(ds)
+
+
+
+    run_this = PythonOperator(task_id="print_the_context", python_callable=print_context)
