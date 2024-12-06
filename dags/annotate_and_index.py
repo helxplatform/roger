@@ -10,7 +10,7 @@ import os
 
 from airflow.models import DAG
 from airflow.operators.empty import EmptyOperator
-from roger.tasks import default_args, create_pipeline_taskgroup
+from roger.tasks import default_args, create_pipeline_taskgroup, logger
 
 env_enabled_datasets = os.getenv(
     "ROGER_DUG__INPUTS_DATA__SETS", "topmed,anvil").split(",")
@@ -30,6 +30,8 @@ with DAG(
     init = EmptyOperator(task_id="init", dag=dag)
     finish = EmptyOperator(task_id="finish", dag=dag)
 
+    logger.info(f"annotate_and_index params >>> {dag.params}")
+    logger.info(f"annotate_and_index default_args >>> {dag.default_args}")
     from roger import pipelines
     from roger.config import config
     envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed:v2.0")
