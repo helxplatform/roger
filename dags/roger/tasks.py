@@ -390,6 +390,14 @@ def create_pipeline_taskgroup(
     name = pipeline_class.pipeline_name
     input_dataset_version = pipeline_class.input_version
 
+    def print_context(ds=None, **kwargs):
+        print(">>>All kwargs")
+        print(kwargs)
+        print(">>>All ds")
+        print(ds)
+
+    # run_this = PythonOperator(task_id="print_the_context", python_callable=print_context)
+
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
         do_nothing = lambda *args: None
         with pipeline_class(config=configparam, **kwargs) as pipeline:
@@ -397,7 +405,7 @@ def create_pipeline_taskgroup(
             annotate_task = create_python_task(
                 dag,
                 f"annotate_{name}_files",
-                do_nothing,
+                print_context,
                 external_repos=[{
                     'name': getattr(pipeline_class, 'pipeline_name'),
                     'branch': input_dataset_version,
