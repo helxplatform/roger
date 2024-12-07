@@ -325,6 +325,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
     """
+    return PythonOperator(task_id="print_the_context", python_callable=a_callable)
     # these are actual arguments passed down to the task function
     op_kwargs = {
         "python_callable": a_callable,
