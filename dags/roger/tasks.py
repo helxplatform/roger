@@ -248,6 +248,11 @@ def setup_input_data(context, exec_conf):
         - put dependency data in input dir
         - if for some reason data was not found raise an exception
           """)
+    logger.info(">>> context")
+    logger.info(context)
+    logger.info(">>> exec_conf")
+    logger.info(context)
+    return None
     # Serves as a location where files the task will work on are placed.
     # computed as ROGER_DATA_DIR + /current task instance name_input_dir
 
@@ -325,7 +330,6 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
     """
-    return PythonOperator(task_id=name, python_callable=a_callable)
     # these are actual arguments passed down to the task function
     op_kwargs = {
         "python_callable": a_callable,
