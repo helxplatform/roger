@@ -264,7 +264,7 @@ def setup_input_data(context, exec_conf):
     # Download files from lakefs and store them in this new input_path
     client = init_lakefs_client(config=config)
     repos = exec_conf['repos']
-    dag_params = context["dag"].params
+    dag_params = context["params"]
 
     if dag_params.get("repository_id"):
         logger.info(">>> repository_id supplied. Overriding repo.")
