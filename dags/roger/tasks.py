@@ -250,9 +250,7 @@ def setup_input_data(context, exec_conf):
           """)
     logger.info(">>> context")
     logger.info(context)
-    logger.info(">>> exec_conf")
-    logger.info(context)
-    return None
+
     # Serves as a location where files the task will work on are placed.
     # computed as ROGER_DATA_DIR + /current task instance name_input_dir
 
@@ -303,9 +301,7 @@ def setup_input_data(context, exec_conf):
             repo['path'] = '*'
     logger.info(f"repos : {repos}")
 
-    dag_params = exec_conf['get_dag_params']()
-    logger.info(f">>> dag params: {dag_params}")
-
+    logger.info(">>> start of downloading data")
     for r in repos:
         # create path to download to ...
         if not os.path.exists(input_dir + f'/{r["repo"]}'):
@@ -323,18 +319,8 @@ def setup_input_data(context, exec_conf):
                 commit_to=r.get("commitid_to"),
                 lake_fs_client=client
             )
-        else:
-            logger.info("downloading %s from %s@%s to %s", r['path'], dag_params.get("repository_id"), dag_params.get("branch_name"), input_dir)
-            get_files(
-                local_path=input_dir + f'/{r["repo"]}',
-                remote_path=r['path'],
-                branch=dag_params.get("branch_name"),
-                repo=dag_params.get("repository_id"),
-                commit_from=dag_params.get("commitid_from"),
-                commit_to=dag_params.get("commitid_to"),
-                changes_only=True,
-                lake_fs_client=client
-            )
+    logger.info(">>> end of downloading data")
+
 
 
 def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos = {}, pass_conf=True, no_output_files=False):
@@ -381,7 +367,6 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
                     'branch': r['branch'],
                     'path': r.get('path', '*')
                 } for r in external_repos],
-                'get_dag_params': lambda: dag.params
             }
 
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
