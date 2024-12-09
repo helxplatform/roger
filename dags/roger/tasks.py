@@ -267,11 +267,12 @@ def setup_input_data(context, exec_conf):
     dag_params = context["dag"].params
 
     if dag_params.get("repository_id"):
+        logger.info(">>> repository_id supplied. Overriding repo.")
         repos=[{
             'repo': dag_params.get("repository_id"),
             'branch': dag_params.get("branch_name"),
-            'commit_from': dag_params.get("commitid_from"),
-            'commit_to': dag_params.get("commitid_to")
+            'commitid_from': dag_params.get("commitid_from"),
+            'commitid_to': dag_params.get("commitid_to")
         }]
 
     # if no external repo is provided we assume to get the upstream task dataset.
@@ -288,8 +289,8 @@ def setup_input_data(context, exec_conf):
             'repo': repo,
             'branch': branch,
             'path': f'{dag_id}/{upstream_id}',
-            'commit_from': None,
-            'commit_to': None
+            'commitid_from': None,
+            'commitid_to': None
         } for upstream_id in upstream_ids]
 
     # input_repo = exec_conf['input_repo']
@@ -315,8 +316,8 @@ def setup_input_data(context, exec_conf):
                 branch=r['branch'],
                 repo=r['repo'],
                 changes_only=r.get("commitid_from") is None,
-                commit_from=r.get("commitid_from"),
-                commit_to=r.get("commitid_to"),
+                changes_from=r.get("commitid_from"),
+                changes_to=r.get("commitid_to"),
                 lake_fs_client=client
             )
     logger.info(">>> end of downloading data")
