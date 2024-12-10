@@ -315,7 +315,7 @@ def setup_input_data(context, exec_conf):
                 remote_path=r['path'],
                 branch=r['branch'],
                 repo=r['repo'],
-                changes_only=r.get("commitid_from") is None,
+                changes_only=r.get("commitid_from") is not None,
                 changes_from=r.get("commitid_from"),
                 changes_to=r.get("commitid_to"),
                 lake_fs_client=client
@@ -367,7 +367,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
                     'repo': r['name'],
                     'branch': r['branch'],
                     'path': r.get('path', '*')
-                } for r in external_repos],
+                } for r in external_repos]
             }
 
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
@@ -395,33 +395,23 @@ def create_pipeline_taskgroup(
     name = pipeline_class.pipeline_name
     input_dataset_version = pipeline_class.input_version
 
-    def print_context(ds=None, **kwargs):
-        print(">>>All kwargs")
-        print(kwargs)
-        print(">>>All ds")
-        print(ds)
-
-    # run_this = PythonOperator(task_id="print_the_context", python_callable=print_context)
-
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
-        do_nothing = lambda *args: None
         with pipeline_class(config=configparam, **kwargs) as pipeline:
             pipeline: DugPipeline
             annotate_task = create_python_task(
                 dag,
                 f"annotate_{name}_files",
-                print_context,
+                pipeline.annotate,
                 external_repos=[{
                     'name': getattr(pipeline_class, 'pipeline_name'),
-                    'branch': input_dataset_version,
-
+                    'branch': input_dataset_version
                 }],
                 pass_conf=False)
 
             index_variables_task = create_python_task(
                 dag,
                 f"index_{name}_variables",
-                do_nothing,
+                pipeline.index_variables,
                 pass_conf=False,
                 # declare that this task will not generate files.
                 no_output_files=True)
@@ -430,7 +420,7 @@ def create_pipeline_taskgroup(
             validate_index_variables_task = create_python_task(
                 dag,
                 f"validate_{name}_index_variables",
-                do_nothing,
+                pipeline.validate_indexed_variables,
                 pass_conf=False,
                  # declare that this task will not generate files.
                 no_output_files=True
@@ -440,21 +430,21 @@ def create_pipeline_taskgroup(
             make_kgx_task = create_python_task(
                 dag,
                 f"make_kgx_{name}",
-                do_nothing,
+                pipeline.make_kg_tagged,
                 pass_conf=False)
             make_kgx_task.set_upstream(annotate_task)
 
             crawl_task = create_python_task(
                 dag,
                 f"crawl_{name}",
-                do_nothing,
+                pipeline.crawl_tranql,
                 pass_conf=False) 
             crawl_task.set_upstream(annotate_task)
 
             index_concepts_task = create_python_task(
                 dag,
                 f"index_{name}_concepts",
-                do_nothing,
+                pipeline.index_concepts,
                 pass_conf=False,
                  # declare that this task will not generate files.
                 no_output_files=True)
@@ -463,7 +453,7 @@ def create_pipeline_taskgroup(
             validate_index_concepts_task = create_python_task(
                 dag,
                 f"validate_{name}_index_concepts",
-                do_nothing,
+                pipeline.validate_indexed_concepts,
                 pass_conf=False,
                  # declare that this task will not generate files.
                 no_output_files=True
