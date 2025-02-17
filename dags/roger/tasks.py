@@ -313,16 +313,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     return BashOperator(
         task_id=name,
         bash_command="""
-            echo "DEBUG: Showing environment variables"
-            env
-
-            echo "DEBUG: Listing all pods in 'default' namespace"
-            kubectl get pods -n default
-
-            echo "DEBUG: Describing the first pod in 'default'"
-            POD=$(kubectl get pods -n default --no-headers | head -n 1 | awk '{print $1}')
-            echo "Pod name: $POD"
-            kubectl describe pod $POD -n default
+            echo "Something"            
         """
     )
     
