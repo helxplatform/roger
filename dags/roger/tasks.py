@@ -311,7 +311,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     :param a_callable: The code to run in this task.
     """
     return BashOperator(
-        task_id="debug_task",
+        task_id=name,
         bash_command="""
             echo "DEBUG: Showing environment variables"
             env
