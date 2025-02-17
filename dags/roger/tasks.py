@@ -9,10 +9,12 @@ from airflow.utils.dates import days_ago
 from airflow.models import DAG
 from airflow.models.dag import DagContext
 from airflow.models.taskinstance import TaskInstance
+from airflow.operators.bash import BashOperator
 from typing import Union
 from pathlib import Path
 import glob
 import shutil
+
 
 from roger.config import config, RogerConfig
 from roger.logger import get_logger
@@ -308,57 +310,73 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
     """
-    # these are actual arguments passed down to the task function
-    op_kwargs = {
-        "python_callable": a_callable,
-        "to_string": True,
-        "pass_conf": pass_conf
-    }
-    # update / override some of the args passed to the task function by default
-    if func_kwargs is None:
-        func_kwargs = {}
-    op_kwargs.update(func_kwargs)
+    return BashOperator(
+        task_id="debug_task",
+        bash_command="""
+            echo "DEBUG: Showing environment variables"
+            env
+
+            echo "DEBUG: Listing all pods in 'default' namespace"
+            kubectl get pods -n default
+
+            echo "DEBUG: Describing the first pod in 'default'"
+            POD=$(kubectl get pods -n default --no-headers | head -n 1 | awk '{print $1}')
+            echo "Pod name: $POD"
+            kubectl describe pod $POD -n default
+        """
+    )
+    
+    # # these are actual arguments passed down to the task function
+    # op_kwargs = {
+    #     "python_callable": a_callable,
+    #     "to_string": True,
+    #     "pass_conf": pass_conf
+    # }
+    # # update / override some of the args passed to the task function by default
+    # if func_kwargs is None:
+    #     func_kwargs = {}
+    # op_kwargs.update(func_kwargs)
 
 
-    # Python operator arguments , by default for non-lakefs config this is all we need. 
-    python_operator_args = {
-            "task_id": name,
-            "python_callable":task_wrapper,            
-            "executor_config" : get_executor_config(),
-            "dag": dag,
-            "provide_context" : True
-    }
+    # # Python operator arguments , by default for non-lakefs config this is all we need. 
+    # python_operator_args = {
+    #         "task_id": name,
+    #         "python_callable":task_wrapper,            
+    #         "executor_config" : get_executor_config(),
+    #         "dag": dag,
+    #         "provide_context" : True
+    # }
 
-    # if we have lakefs...
-    if config.lakefs_config.enabled:
+    # # if we have lakefs...
+    # if config.lakefs_config.enabled:
 
-        # repo and branch for pre-execution , to download input objects
-        pre_exec_conf = {
-            'repos': []
-        }
-        if external_repos:
-            # if the task is a root task , beginning of the dag...
-            # and we want to pull data from a different repo.
-            pre_exec_conf = {
-                'repos': [{
-                    'repo': r['name'],
-                    'branch': r['branch'],
-                    'path': r.get('path', '*')
-                } for r in external_repos]
-            }
+    #     # repo and branch for pre-execution , to download input objects
+    #     pre_exec_conf = {
+    #         'repos': []
+    #     }
+    #     if external_repos:
+    #         # if the task is a root task , beginning of the dag...
+    #         # and we want to pull data from a different repo.
+    #         pre_exec_conf = {
+    #             'repos': [{
+    #                 'repo': r['name'],
+    #                 'branch': r['branch'],
+    #                 'path': r.get('path', '*')
+    #             } for r in external_repos]
+    #         }
             
-        pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
-        # add pre_exec partial function as an argument to python executor conf 
-        python_operator_args['pre_execute'] = pre_exec
-        python_operator_args['on_failure_callback'] = partial(clean_up, kwargs=op_kwargs)
-        # if the task has  output files, we will add a commit callback  
-        if not no_output_files:
-            python_operator_args['on_success_callback'] = partial(avalon_commit_callback, kwargs=op_kwargs)
+    #     pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
+    #     # add pre_exec partial function as an argument to python executor conf 
+    #     python_operator_args['pre_execute'] = pre_exec
+    #     python_operator_args['on_failure_callback'] = partial(clean_up, kwargs=op_kwargs)
+    #     # if the task has  output files, we will add a commit callback  
+    #     if not no_output_files:
+    #         python_operator_args['on_success_callback'] = partial(avalon_commit_callback, kwargs=op_kwargs)
         
-    # add kwargs
-    python_operator_args["op_kwargs"] = op_kwargs
+    # # add kwargs
+    # python_operator_args["op_kwargs"] = op_kwargs
 
-    return PythonOperator(**python_operator_args)
+    # return PythonOperator(**python_operator_args)
 
 def create_pipeline_taskgroup(
         dag,
