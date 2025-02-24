@@ -964,7 +964,7 @@ class DugPipeline():
         if self.config.indexing.node_to_element_queries:
             log.info("*******************")
 
-            extracted_elements_files = storage.dug_extracted_elements_objects()
+            extracted_elements_files = storage.dug_extracted_elements_objects(data_path=input_data_path)
             log.info(f"{extracted_elements_files}")
             for file_ in extracted_elements_files:
                 log.info(f"reading file {file_}")
