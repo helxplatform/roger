@@ -963,8 +963,11 @@ class DugPipeline():
 
         if self.config.indexing.node_to_element_queries:
             log.info("*******************")
+
             extracted_elements_files = storage.dug_extracted_elements_objects()
+            log.info(f"{extracted_elements_files}")
             for file_ in extracted_elements_files:
+                log.info(f"reading file {file_}")
                 self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
