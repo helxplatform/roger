@@ -955,10 +955,14 @@ class DugPipeline():
         # clear out concepts and kg indicies from previous runs
         # self.clear_concepts_index()
         # self.clear_kg_index()
-        expanded_concepts_files = storage.dug_expanded_concept_objects(
-            input_data_path, format="txt")
-        for file_ in expanded_concepts_files:
-            concepts = jsonpickle.decode(storage.read_object(file_))            
-            self._index_concepts(concepts=concepts)
+        # expanded_concepts_files = storage.dug_expanded_concept_objects(
+        #     input_data_path, format="txt")
+        # for file_ in expanded_concepts_files:
+        #     concepts = jsonpickle.decode(storage.read_object(file_))
+        #     self._index_concepts(concepts=concepts)
+        if self.config.indexing.node_to_element_queries:
+            extracted_elements_files = storage.dug_extracted_elements_objects()
+            for file_ in extracted_elements_files:
+                self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
