@@ -960,7 +960,9 @@ class DugPipeline():
         # for file_ in expanded_concepts_files:
         #     concepts = jsonpickle.decode(storage.read_object(file_))
         #     self._index_concepts(concepts=concepts)
+
         if self.config.indexing.node_to_element_queries:
+            log.info("*******************")
             extracted_elements_files = storage.dug_extracted_elements_objects()
             for file_ in extracted_elements_files:
                 self.index_elements(file_)
