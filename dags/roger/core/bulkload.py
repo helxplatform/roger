@@ -10,7 +10,7 @@ import time
 
 import requests
 import redis
-from redisgraph_bulk_loader.bulk_insert import bulk_insert
+from falkordb_bulk_loader.bulk_insert import bulk_insert
 
 from roger.config import get_default_config as get_config
 from roger.logger import get_logger
@@ -347,8 +347,9 @@ class BulkLoad:
             # Edge label now no longer has 'biolink:'
             args.extend(("-R " + " -R ".join(edges_with_type)).split())
         args.extend([f"--separator={self.separator}"])
-        args.extend([f"--redis-url=redis://:{redisgraph['password']}@{redisgraph['host']}:{redisgraph['port']}"])
+        args.extend([f"--server-url=redis://:{redisgraph['password']}@{redisgraph['host']}:{redisgraph['port']}"])
         args.extend(['--enforce-schema'])
+        args.extend(['-e'])
         for lbl in collect_labels:
             args.extend([f'-i `{lbl}`:id', f'-f {lbl}:name', f'-f {lbl}:synonyms'])
         args.extend([f"{redisgraph['graph']}"])
