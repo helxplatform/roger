@@ -5,7 +5,7 @@ from roger.logger import logger
 
 class PicSure(DugPipeline):
     "Pipeline for BACPAC data set"
-    pipeline_name = "bdc-test5"  #lakefs 
+    pipeline_name = "bdc-test6"  #lakefs 
     parser_name = "dbgap"
 
     def get_objects(self, input_data_path=None):
