@@ -310,7 +310,7 @@ class KGXModel:
                 log.info(f"Processing node : {node} counter : {counter}")
             counter += 1
 
-            if not node['category']:
+            if not node.get('category'):
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
 
@@ -341,7 +341,7 @@ class KGXModel:
 
 
         if len(category_error_nodes):
-            log.warn(f"some nodes didn't have category assigned. "
+            log.warning(f"some nodes didn't have category assigned. "
                      f"KGX file has errors."
                      f"Nodes {len(category_error_nodes)}."
                      f"Showing first 10: {list(category_error_nodes)[:10]}."
