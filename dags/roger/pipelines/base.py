@@ -308,11 +308,16 @@ class DugPipeline():
             if not isinstance(element, DugElement):
                 continue
             study_id = element.collection_id
+            study_link = element.collection_action
+            study_desc = element.collection_desc
+
             if study_id not in written_nodes:
                 nodes.append({
                     "id": study_id,
                     "category": ["biolink:Study"],
-                    "name": study_id
+                    "name": study_id,
+                    "url": study_link,
+                    "description": study_desc
                 })
                 written_nodes.add(study_id)
 
@@ -953,12 +958,21 @@ class DugPipeline():
         "Index concepts from expanded concept files"
         # These are concepts that have knowledge graphs  from tranql
         # clear out concepts and kg indicies from previous runs
-        # self.clear_concepts_index()
-        # self.clear_kg_index()
+        self.clear_concepts_index()
+        self.clear_kg_index()
         expanded_concepts_files = storage.dug_expanded_concept_objects(
             input_data_path, format="txt")
         for file_ in expanded_concepts_files:
-            concepts = jsonpickle.decode(storage.read_object(file_))            
+            concepts = jsonpickle.decode(storage.read_object(file_))
             self._index_concepts(concepts=concepts)
+
+        if self.config.indexing.node_to_element_queries:
+            log.info("*******************")
+
+            extracted_elements_files = storage.dug_extracted_elements_objects(data_path=input_data_path)
+            log.info(f"{extracted_elements_files}")
+            for file_ in extracted_elements_files:
+                log.info(f"reading file {file_}")
+                self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log

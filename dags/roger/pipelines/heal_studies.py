@@ -5,7 +5,7 @@ from roger.core import storage
 
 class HealStudiesPipeline(DugPipeline):
     "Pipeline for Heal-studies  data set"
-    pipeline_name = "heal-studies"
+    pipeline_name = "heal-mds-studies"
     parser_name = "heal-studies"
 
     def get_objects(self, input_data_path=None):

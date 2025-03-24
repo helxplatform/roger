@@ -226,10 +226,13 @@ def dug_expanded_concept_objects(data_path=None, format="pickle"):
             os.path.join('*',f'expanded_concepts.{format}'))
     return sorted(glob.glob(file_pattern, recursive=True))
 
-def dug_extracted_elements_objects():
-    file_pattern = dug_expanded_concepts_path(
-        os.path.join('*', 'extracted_graph_elements.pickle'))
-    return sorted(glob.glob(file_pattern))
+def dug_extracted_elements_objects(data_path=None, format="txt"):
+    if data_path:
+        file_pattern = os.path.join(data_path, '**', f'extracted_graph_elements.{format}')
+    else:
+        file_pattern = dug_expanded_concepts_path(
+            os.path.join('*', f'extracted_graph_elements.{format}'))
+    return sorted(glob.glob(file_pattern, recursive=True))
 
 def dug_crawl_path(name):
     return str(ROGER_DATA_DIR / 'dug' / 'crawl' / name)
