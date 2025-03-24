@@ -308,11 +308,16 @@ class DugPipeline():
             if not isinstance(element, DugElement):
                 continue
             study_id = element.collection_id
+            study_link = element.collection_action
+            study_desc = element.collection_desc
+
             if study_id not in written_nodes:
                 nodes.append({
                     "id": study_id,
                     "category": ["biolink:Study"],
-                    "name": study_id
+                    "name": study_id,
+                    "url": study_link,
+                    "description": study_desc
                 })
                 written_nodes.add(study_id)
 
