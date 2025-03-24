@@ -9,10 +9,12 @@ from airflow.utils.dates import days_ago
 from airflow.models import DAG
 from airflow.models.dag import DagContext
 from airflow.models.taskinstance import TaskInstance
+from airflow.operators.bash import BashOperator
 from typing import Union
 from pathlib import Path
 import glob
 import shutil
+
 
 from roger.config import config, RogerConfig
 from roger.logger import get_logger
@@ -307,7 +309,8 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     :param dag: dag to add task to.
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
-    """
+    """    
+    
     # these are actual arguments passed down to the task function
     op_kwargs = {
         "python_callable": a_callable,
@@ -324,7 +327,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     python_operator_args = {
             "task_id": name,
             "python_callable":task_wrapper,            
-            "executor_config" : get_executor_config(),
+            # "executor_config" : get_executor_config(),
             "dag": dag,
             "provide_context" : True
     }
