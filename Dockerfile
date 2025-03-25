@@ -30,6 +30,4 @@ RUN apt-get autoremove  -y vim
 RUN apt-get autoremove  -y binutils
 RUN apt-get autoremove  -y linux-libc-dev
 
-
-
-#USER 1001
+USER airflow
