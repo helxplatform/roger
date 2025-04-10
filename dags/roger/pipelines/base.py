@@ -220,17 +220,17 @@ class DugPipeline():
         attempt = 0
         while attempt < max_retries:
             try:                                
-                logger.info("Initializing annotator")
+                log.info("Initializing annotator")
                 annotator = self.get_annotator()                
                 return annotator  # success
             except Exception as e:
                 attempt += 1
                 if attempt == max_retries:
-                    logger.error("Max retries reached when creating annotator. Failing with error: %s", e)
+                    log.error("Max retries reached when creating annotator. Failing with error: %s", e)
                     raise
                 delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
                 delay += random.uniform(0, 1)  # add jitter
-                logger.warning("Error occurred: %s. Retrying in %.2f seconds...", e, delay)
+                log.warning("Error occurred: %s. Retrying in %.2f seconds...", e, delay)
                 time.sleep(delay)
 
 
@@ -244,11 +244,11 @@ class DugPipeline():
         if not output_data_path:
             output_data_path = storage.dug_annotation_path('')
         log.info("Parsing files")
-        logger.info("Intializing parser")
+        log.info("Intializing parser")
         parser = self.get_parser()
-        logger.info("Done intializing parser")
+        log.info("Done intializing parser")
         annotator = self.init_annotator()
-        logger.info("Done intializing annotator")
+        log.info("Done intializing annotator")
         for _, parse_file in enumerate(parsable_files):
             log.debug("Creating Dug Crawler object on parse_file %s at %d of %d",
                       parse_file, _ , len(parsable_files))             
