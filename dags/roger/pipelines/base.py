@@ -216,6 +216,24 @@ class DugPipeline():
         )
         return annotator
 
+    def init_annotator(self, max_retries=5, base_delay=1, max_delay=10):
+        attempt = 0
+        while attempt < max_retries:
+            try:                                
+                log.info("Initializing annotator")
+                annotator = self.get_annotator()                
+                return annotator  # success
+            except Exception as e:
+                attempt += 1
+                if attempt == max_retries:
+                    log.error("Max retries reached when creating annotator. Failing with error: %s", e)
+                    raise
+                delay = min(base_delay * (2 ** (attempt - 1)), max_delay)
+                delay += random.uniform(0, 1)  # add jitter
+                log.warning("Error occurred: %s. Retrying in %.2f seconds...", e, delay)
+                time.sleep(delay)
+
+
     def annotate_files(self, parsable_files, output_data_path=None):
         """
         Annotates a Data element file using a Dug parser.
@@ -226,11 +244,14 @@ class DugPipeline():
         if not output_data_path:
             output_data_path = storage.dug_annotation_path('')
         log.info("Parsing files")
+        log.info("Intializing parser")
+        parser = self.get_parser()
+        log.info("Done intializing parser")
+        annotator = self.init_annotator()
+        log.info("Done intializing annotator")
         for _, parse_file in enumerate(parsable_files):
             log.debug("Creating Dug Crawler object on parse_file %s at %d of %d",
-                      parse_file, _ , len(parsable_files))
-            parser = self.get_parser()
-            annotator = self.get_annotator() 
+                      parse_file, _ , len(parsable_files))             
             crawler = Crawler(
                 crawl_file=parse_file,
                 parser=parser,
@@ -247,14 +268,7 @@ class DugPipeline():
                 output_data_path, current_file_name)
             elements_file = os.path.join(elements_file_path, 'elements.txt')
             concepts_file = os.path.join(elements_file_path, 'concepts.txt')         
-            # This is a file that the crawler will later populate. We start here
-            # by creating an empty elements file.
-            # This also creates output dir if it doesn't exist.
-            # elements_json = os.path.join(elements_file_path,
-            #                              'element_file.json')
-            # log.debug("Creating empty file: %s", elements_json)
-            # storage.write_object({}, elements_json)
-
+            
             # Use the specified parser to parse the parse_file into elements.
             log.debug("Parser is %s", str(parser))
             elements = parser(parse_file)
