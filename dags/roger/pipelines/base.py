@@ -310,12 +310,14 @@ class DugPipeline():
             study_id = element.collection_id
             study_link = element.collection_action
             study_desc = element.collection_desc
+            study_name = element.collection_name or element.collection_id
+
 
             if study_id not in written_nodes:
                 nodes.append({
                     "id": study_id,
                     "category": ["biolink:Study"],
-                    "name": study_id,
+                    "name": study_name,
                     "url": study_link,
                     "description": study_desc
                 })
