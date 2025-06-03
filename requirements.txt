@@ -12,4 +12,3 @@ git+https://github.com/helxplatform/python-stringcase@1.2.1
 bmt==1.4.4
 git+https://github.com/helxplatform/avalon.git@v1.1.0
 h11>=0.16.0
-
