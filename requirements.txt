@@ -5,7 +5,7 @@ git+https://github.com/falkordb/falkordb-bulk-loader.git@v1.0.6
 setuptools>=66
 pytest
 PyYAML
-git+https://github.com/helxplatform/dug@2.13.8
+git+https://github.com/helxplatform/dug@2.13.10
 orjson==3.9.15
 git+https://github.com/helxplatform/kg_utils.git@v0.0.10
 git+https://github.com/helxplatform/python-stringcase@1.2.1
