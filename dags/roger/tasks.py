@@ -9,10 +9,12 @@ from airflow.utils.dates import days_ago
 from airflow.models import DAG
 from airflow.models.dag import DagContext
 from airflow.models.taskinstance import TaskInstance
+from airflow.operators.bash import BashOperator
 from typing import Union
 from pathlib import Path
 import glob
 import shutil
+
 
 from roger.config import config, RogerConfig
 from roger.logger import get_logger
@@ -248,6 +250,9 @@ def setup_input_data(context, exec_conf):
         - put dependency data in input dir
         - if for some reason data was not found raise an exception
           """)
+    logger.info(">>> context")
+    logger.info(context)
+
     # Serves as a location where files the task will work on are placed.
     # computed as ROGER_DATA_DIR + /current task instance name_input_dir
 
@@ -261,6 +266,17 @@ def setup_input_data(context, exec_conf):
     # Download files from lakefs and store them in this new input_path
     client = init_lakefs_client(config=config)
     repos = exec_conf['repos']
+    dag_params = context["params"]
+
+    if dag_params.get("repository_id"):
+        logger.info(">>> repository_id supplied. Overriding repo.")
+        repos=[{
+            'repo': dag_params.get("repository_id"),
+            'branch': dag_params.get("branch_name"),
+            'commitid_from': dag_params.get("commitid_from"),
+            'commitid_to': dag_params.get("commitid_to")
+        }]
+
     # if no external repo is provided we assume to get the upstream task dataset.
     if not repos or len(repos) == 0:
         # merge destination branch
@@ -274,7 +290,9 @@ def setup_input_data(context, exec_conf):
         repos = [{
             'repo': repo,
             'branch': branch,
-            'path': f'{dag_id}/{upstream_id}'
+            'path': f'{dag_id}/{upstream_id}',
+            'commitid_from': None,
+            'commitid_to': None
         } for upstream_id in upstream_ids]
 
     # input_repo = exec_conf['input_repo']
@@ -285,20 +303,27 @@ def setup_input_data(context, exec_conf):
             # get all if path is not specified
             repo['path'] = '*'
     logger.info(f"repos : {repos}")
+
+    logger.info(">>> start of downloading data")
     for r in repos:
-        logger.info("downloading %s from %s@%s to %s",
-                    r['path'], r['repo'], r['branch'], input_dir)
         # create path to download to ...
         if not os.path.exists(input_dir + f'/{r["repo"]}'):
             os.mkdir(input_dir + f'/{r["repo"]}')
-        get_files(
-            local_path=input_dir + f'/{r["repo"]}',
-            remote_path=r['path'],
-            branch=r['branch'],
-            repo=r['repo'],
-            changes_only=False,
-            lake_fs_client=client
-        )
+
+        if not dag_params.get("repository_id"):
+            logger.info("downloading %s from %s@%s to %s", r['path'], r['repo'], r['branch'], input_dir)
+            get_files(
+                local_path=input_dir + f'/{r["repo"]}',
+                remote_path=r['path'],
+                branch=r['branch'],
+                repo=r['repo'],
+                changes_only=r.get("commitid_from") is not None,
+                changes_from=r.get("commitid_from"),
+                changes_to=r.get("commitid_to"),
+                lake_fs_client=client
+            )
+    logger.info(">>> end of downloading data")
+
 
 
 def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos = {}, pass_conf=True, no_output_files=False):
@@ -307,7 +332,8 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     :param dag: dag to add task to.
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
-    """
+    """    
+    
     # these are actual arguments passed down to the task function
     op_kwargs = {
         "python_callable": a_callable,
@@ -324,7 +350,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
     python_operator_args = {
             "task_id": name,
             "python_callable":task_wrapper,            
-            "executor_config" : get_executor_config(),
+            # "executor_config" : get_executor_config(),
             "dag": dag,
             "provide_context" : True
     }
@@ -346,7 +372,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos =
                     'path': r.get('path', '*')
                 } for r in external_repos]
             }
-            
+
         pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
         # add pre_exec partial function as an argument to python executor conf 
         python_operator_args['pre_execute'] = pre_exec
@@ -397,7 +423,7 @@ def create_pipeline_taskgroup(
             validate_index_variables_task = create_python_task(
                 dag,
                 f"validate_{name}_index_variables",
-                pipeline.validate_indexed_variables,                
+                pipeline.validate_indexed_variables,
                 pass_conf=False,
                  # declare that this task will not generate files.
                 no_output_files=True
