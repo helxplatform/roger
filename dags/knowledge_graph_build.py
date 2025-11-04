@@ -15,7 +15,7 @@ from roger.config import config
 with DAG(
     dag_id='knowledge_graph_build',
     default_args=default_args,
-    schedule_interval=None
+    # schedule_interval=None
 ) as dag:
 
     """ Build the workflow tasks. """

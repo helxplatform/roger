@@ -1,4 +1,4 @@
-elasticsearch==8.5.2
+elasticsearch>=8.5.2
 flatten-dict
 jsonpickle
 git+https://github.com/falkordb/falkordb-bulk-loader.git@v1.0.6
@@ -6,9 +6,12 @@ setuptools>=66
 pytest
 PyYAML
 git+https://github.com/helxplatform/dug@2.13.11
-orjson==3.9.15
+orjson>=3.9.15
 git+https://github.com/helxplatform/kg_utils.git@v0.0.10
 git+https://github.com/helxplatform/python-stringcase@1.2.1
 bmt==1.4.4
-git+https://github.com/helxplatform/avalon.git@v1.1.0
+git+https://github.com/helxplatform/avalon.git@lakefs-1.71.0
 h11>=0.16.0
+starlette>=0.49.1
+datetime
+aiohttp

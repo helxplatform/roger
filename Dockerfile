@@ -1,33 +1,74 @@
-FROM bitnami/airflow:2.10.5-debian-12-r7
+# Use a Debian-based image for better compatibility
+FROM python:3.11.14-slim-trixie
 
-USER root
-RUN apt-get update &&  apt-get install -y git nano vim gcc rustc cargo
-#RUN useradd -u 1001 -ms /bin/bash airflow && chown -R airflow /home/airflow
-COPY requirements.txt requirements.txt
-RUN source /opt/bitnami/airflow/venv/bin/activate && CARGO_HOME=/tmp/.cargo &&  \
-    pip install setuptools wheel &&  \
-    pip install -r requirements.txt
+# Set Airflow version and home directory
+ARG AIRFLOW_VERSION=3.1.1
+ARG AIRFLOW_HOME=/opt/airflow
 
-RUN rm -f requirements.txt
+# Environment variables
+ENV AIRFLOW_HOME=${AIRFLOW_HOME}
+ENV AIRFLOW__CORE__LOAD_EXAMPLES=False
+ENV AIRFLOW__CORE__EXECUTOR=LocalExecutor
+ENV AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@postgres:5432/airflow
+ENV PYTHONUNBUFFERED=1
 
-## Vul patches
-## Python lib patches on airflow python env
-RUN source /opt/bitnami/airflow/venv/bin/activate pip install --upgrade \
-    flask-appbuilder==4.5.3 \
-    cryptography==44.0.1 \
-    werkzeug==3.0.6 \
-    urllib3==2.2.2
-RUN source /opt/bitnami/airflow/venv/bin/activate pip uninstall -y  \
-    apache-airflow-providers-mysql==6.2.0
+# Create airflow user and directories
+RUN useradd --uid 50000 --home-dir ${AIRFLOW_HOME} --create-home airflow && \
+    mkdir -p ${AIRFLOW_HOME}/dags ${AIRFLOW_HOME}/logs ${AIRFLOW_HOME}/plugins ${AIRFLOW_HOME}/config
 
-# Uninstall these from non airflow python env
-RUN pip install --upgrade  \
-    flask-appbuilder==4.5.3 \
-    cryptography==44.0.1 \
-    werkzeug==3.0.6 \
-    urllib3==2.2.2
-RUN apt-get autoremove  -y vim
-RUN apt-get autoremove  -y binutils
-RUN apt-get autoremove  -y linux-libc-dev
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    libffi-dev \
+    libssl-dev \
+    curl \
+    tini \
+    tzdata \
+    git \
+    && rm -rf /var/lib/apt/lists/*
 
+# Upgrade pip tools
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Install Airflow (with PostgreSQL, Celery, Redis support)
+RUN pip install --no-cache-dir \
+    "apache-airflow[postgres,celery,redis,kubernetes]==${AIRFLOW_VERSION}" \
+    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.11.txt"
+
+# Optional: install extra packages
+RUN pip install --no-cache-dir psycopg2-binary redis
+
+COPY ./requirements.txt /tmp/requirements.txt
+
+RUN pip install -r /tmp/requirements.txt
+
+RUN rm /tmp/requirements.txt
+
+RUN pip install --no-cache-dir "apache-airflow[pydantic]==${AIRFLOW_VERSION}"
+
+
+RUN apt-get purge -y --auto-remove \
+    build-essential \
+    libpq-dev \
+    libffi-dev \
+    libssl-dev \
+    curl \
+    git && \
+    apt-get clean
+
+# Set ownership
+RUN chown -R airflow:airflow ${AIRFLOW_HOME}
+
+# Switch to airflow user
 USER airflow
+WORKDIR ${AIRFLOW_HOME}
+
+# Expose Airflow webserver port
+EXPOSE 8080
+
+# Use tini for signal handling
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# Default command
+CMD ["airflow", "webserver"]

@@ -26,7 +26,7 @@ with DAG(
                 "commitid_from": None,
                 "commitid_to": None
             },
-        schedule_interval=None
+        # schedule_interval=None
 ) as dag:
     init = EmptyOperator(task_id="init", dag=dag)
     finish = EmptyOperator(task_id="finish", dag=dag)
@@ -65,7 +65,7 @@ with DAG(
                 "commitid_from": None,
                 "commitid_to": None
             },
-        schedule_interval=None
+        # schedule_interval=None
 ) as dag:
 
     init = EmptyOperator(task_id="init", dag=dag)
@@ -81,3 +81,6 @@ with DAG(
     init >> create_python_task(dag, "get_from_lakefs", print_context) >> finish
 
     #run_this = PythonOperator(task_id="print_the_context", python_callable=print_context)
+
+if __name__ == "__main__":
+    dag.test()
