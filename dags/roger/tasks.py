@@ -223,7 +223,7 @@ def generate_dir_name_from_task_instance(task_instance: TaskInstance,
     task_id = task_instance.task_id
     dag_id = task_instance.dag_id
     run_id = task_instance.run_id
-    try_number = task_instance._try_number
+    try_number = task_instance.try_number
     return Path(
         f"{root_data_dir}/{dag_id}_{task_id}_{run_id}_{try_number}_{suffix}")
 
