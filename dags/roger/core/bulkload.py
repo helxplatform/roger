@@ -53,6 +53,9 @@ class BulkLoad:
         merged_nodes_file = storage.merged_objects('nodes', input_data_path)
         counter = 1
         for node in storage.json_line_iter(merged_nodes_file):
+            if node.get('description'):
+                node['description'] = node['description'].replace('\n',
+                                                                  ' ')
             if not node.get('category'):
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
