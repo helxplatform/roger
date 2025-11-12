@@ -33,7 +33,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Install Airflow (with PostgreSQL, Celery, Redis support)
 RUN pip install --no-cache-dir \
-    "apache-airflow[postgres,celery,redis,kubernetes]==${AIRFLOW_VERSION}" \
+    "apache-airflow[postgres,celery,redis,fab]==${AIRFLOW_VERSION}" \
+    "apache-airflow-providers-cncf-kubernetes" \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.11.txt"
 
 # Optional: install extra packages
@@ -45,7 +46,6 @@ RUN pip install -r /tmp/requirements.txt
 
 RUN rm /tmp/requirements.txt
 
-RUN pip install --no-cache-dir "apache-airflow[pydantic]==${AIRFLOW_VERSION}"
 
 
 RUN apt-get purge -y --auto-remove \
