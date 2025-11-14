@@ -840,8 +840,7 @@ class DugPipeline():
         "Annotate files with the appropriate parsers and crawlers"
         if files is None:
             files = self.get_objects(input_data_path=input_data_path)
-        self.annotate_files(parsable_files=files,
-                            output_data_path=output_data_path)
+        self.annotate_files(parsable_files=files, output_data_path=output_data_path)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
