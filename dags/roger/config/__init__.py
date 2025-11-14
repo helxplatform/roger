@@ -3,7 +3,7 @@ import os
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Union
 
 import yaml
 from dug.config import Config as DugConfig
@@ -33,7 +33,7 @@ class LakefsConfig(DictLike):
     secret_access_key: str
     branch: str
     repo: str
-    enabled: bool = False
+    enabled: Union[bool, str] = False
 
     def __post_init__(self):
         if isinstance(self.enabled, str):
@@ -135,8 +135,8 @@ class AnnotationConfig(DictLike):
     ])
 
     def __post_init__(self):
-        self.annotator_args["sapbert"]["bagel"]["enabled"] = self.annotator_args["sapbert"]["bagel"][
-                                                                 "enabled"].lower() == "true"
+        self.annotator_args["sapbert"]["bagel"]["enabled"] = str(self.annotator_args["sapbert"]["bagel"][
+                                                                 "enabled"]).lower() == "true"
 
 
 @dataclass
