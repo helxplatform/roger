@@ -11,6 +11,26 @@ x-airflow-common: &airflow-common
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth,airflow.api.auth.backend.session'
     AIRFLOW__SCHEDULER__ENABLE_HEALTH_CHECK: 'true'
     AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: 'admin:Admin'
+    ROGER_ELASTICSEARCH_HOST: "elasticsearch"
+    ROGER_ELASTICSEARCH_PASSWORD: ""
+    ROGER_ELASTICSEARCH_SCHEME: "http"
+    ROGER_ELASTICSEARCH_USERNAME: "elastic"
+    ROGER_REDISGRAPH_GRAPH: "test"
+    ROGER_REDISGRAPH_HOST: "redis-stack"
+    ROGER_REDISGRAPH_PASSWORD: ""
+    ROGER_REDISGRAPH_PORT: "6379"
+    ROGER_KGX_DATA__SETS: ${KGX_DATA_SETS}
+    ROGER_LAKEFS__CONFIG_ACCESS__KEY__ID: ${LAKEFS_ACCESS_KEY}
+    ROGER_LAKEFS__CONFIG_BRANCH: ${LAKEFS_BRANCH}
+    ROGER_LAKEFS__CONFIG_ENABLED: "true"
+    ROGER_LAKEFS__CONFIG_HOST: ${LAKEFS_URL}
+    ROGER_LAKEFS__CONFIG_REPO: ${LAKEFS_REPO}
+    ROGER_LAKEFS__CONFIG_SECRET__ACCESS__KEY: ${LAKEFS_SECRET_KEY}
+    ROGER_DUG__INPUTS_DATA__SETS: ${INPUT_DATA_SETS}
+    ROGER_ANNOTATION_ANNOTATOR__ARGS_SAPBERT_CLASSIFICATION__URL: ${BIOMEGATRON_URL}
+    ROGER_ANNOTATION_ANNOTATOR__ARGS_SAPBERT_ANNOTATOR__URL : ${SAPBERT_URL}
+    ROGER_ANNOTATION_NORMALIZER : ${NODE_NORM_URL}
+    ROGER_ANNOTATION_SYNONYM__SERVICE : ${NAME_RES_URL}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
@@ -38,6 +58,37 @@ services:
       start_period: 5s
     ports:
       - "5432:5432"
+    networks:
+      - airflow-network
+
+  # --- NEW: Elasticsearch Service ---
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m # Limit RAM usage for dev
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200" # REST API
+      - "9300:9300" # Internal transport
+    networks:
+      - airflow-network
+
+  # --- NEW: Redis Stack (includes RedisGraph/FalkorDB) ---
+  redis-stack:
+    image: redis/redis-stack:latest
+    volumes:
+      - redis-stack-data:/data
+    ports:
+      - "6379:6379" # Redis port
+      - "8001:8001" # RedisInsight UI
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 10s
+      retries: 5
+      start_period: 5s
     networks:
       - airflow-network
 
@@ -109,6 +160,8 @@ services:
 
 volumes:
   postgres-db-volume:
+  elasticsearch-data: # <-- New volume for Elasticsearch
+  redis-stack-data:
 networks:
   airflow-network:
     driver: bridge
