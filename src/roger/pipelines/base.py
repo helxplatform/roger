@@ -29,7 +29,7 @@ from roger.core import storage
 from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
 
-from utils.s3_utils import S3Utils
+from roger.utils.s3_utils import S3Utils
 
 log = get_logger()
 
@@ -142,17 +142,8 @@ class DugPipeline():
         self.concepts_index = indexing_config.get('concepts_index')
         self.kg_index = indexing_config.get('kg_index')
 
-        self.search_obj: Search = self.factory.build_search_obj([
-            self.variables_index,
-            self.concepts_index,
-            self.kg_index,
-        ])
-        self.index_obj: Index = self.factory.build_indexer_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-
-        ])
+        self.search_obj: Search = self.factory.build_search_obj()
+        self.index_obj: Index = self.factory.build_indexer_obj()
 
     def __enter__(self):
         self.event_loop = asyncio.new_event_loop()
@@ -909,7 +900,9 @@ class DugPipeline():
                                          format='txt')
         }
         try:
-            assert (len(expanded_concepts_files_dict) == len(annotated_elements_files_dict)) except:
+            assert (len(expanded_concepts_files_dict) ==
+                    len(annotated_elements_files_dict))
+        except:
             log.error("Files Annotated Elements files and "
                       "expanded concepts files, should be pairs")
             if len(expanded_concepts_files_dict) > len(annotated_elements_files_dict):

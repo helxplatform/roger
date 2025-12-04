@@ -1,4 +1,3 @@
-version: '3.8'
 
 x-airflow-common: &airflow-common
   build: .
@@ -36,7 +35,7 @@ x-airflow-common: &airflow-common
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./config:/opt/airflow/config
-    - ./tests:/opt/airflow/tests
+    - .:/opt/roger
   depends_on:
     postgres:
       condition: service_healthy
