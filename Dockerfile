@@ -46,7 +46,8 @@ RUN pip install -r /tmp/requirements.txt
 
 RUN rm /tmp/requirements.txt
 
-
+COPY . /opt/roger
+RUN pip install -e /opt/roger
 
 RUN apt-get purge -y --auto-remove \
     build-essential \
@@ -56,6 +57,8 @@ RUN apt-get purge -y --auto-remove \
     curl \
     git && \
     apt-get clean
+
+RUN if [ -n "$ROGER_SOURCE" ]; then pip install -e $ROGER_SOURCE; fi
 
 # Set ownership
 RUN chown -R airflow:airflow ${AIRFLOW_HOME}

@@ -24,7 +24,7 @@ from roger.config import RogerConfig
 from roger.core import storage
 from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
-from utils.s3_utils import S3Utils
+from roger.utils.s3_utils import S3Utils
 
 log = get_logger()
 

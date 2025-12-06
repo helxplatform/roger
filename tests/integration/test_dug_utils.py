@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from dug_helpers.dug_utils import FileFetcher, get_topmed_files, get_dbgap_files
+from roger.dug_helpers.dug_utils import (FileFetcher, get_topmed_files,
+                                         get_dbgap_files)
 from roger.config import config
 
 

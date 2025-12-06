@@ -144,6 +144,8 @@ class IndexingConfig(DictLike):
     variables_index: str = "variables_index"
     concepts_index: str = "concepts_index"
     kg_index: str = "kg_index"
+    studies_index: str = "studies_index"
+    sections_index: str = "sections_index"
     tranql_min_score: float = 0.2
     excluded_identifiers: List[str] = field(default_factory=lambda: [
         "CHEBI:17336"
@@ -228,6 +230,11 @@ class RogerConfig(DictLike):
             preprocessor=self.annotation.preprocessor,
             annotator_type=self.annotation.annotator_type,
             annotator_args=self.annotation.annotator_args,
+            concepts_index_name=self.indexing.get('concepts_index'),
+            variables_index_name=self.indexing.get('variables_index'),
+            studies_index_name=self.indexing.get('studies_index'),
+            sections_index_name=self.indexing.get('sections_index'),
+            kg_index_name=self.indexing.get('kg_index'),
             normalizer={
                 'url': self.annotation.normalizer,
             },

@@ -9,8 +9,8 @@ has a subdag for all tasks.
 import os
 
 from airflow.models import DAG
-from airflow.operators.empty import EmptyOperator
-from airflow.operators.python import PythonOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.python import PythonOperator
 from roger.tasks import default_args, create_pipeline_taskgroup, logger, create_python_task
 
 env_enabled_datasets = os.getenv(
@@ -66,10 +66,10 @@ with DAG(
                 "commitid_to": None
             },
         # schedule_interval=None
-) as dag:
+) as test_dag:
 
-    init = EmptyOperator(task_id="init", dag=dag)
-    finish = EmptyOperator(task_id="finish", dag=dag)
+    init = EmptyOperator(task_id="init", dag=test_dag)
+    finish = EmptyOperator(task_id="finish", dag=test_dag)
 
     def print_context(ds=None, **kwargs):
         print(">>>All kwargs")
@@ -78,7 +78,9 @@ with DAG(
         print(ds)
 
 
-    init >> create_python_task(dag, "get_from_lakefs", print_context) >> finish
+    (init >>
+     create_python_task(test_dag, "get_from_lakefs", print_context) >>
+     finish)
 
     #run_this = PythonOperator(task_id="print_the_context", python_callable=print_context)
 

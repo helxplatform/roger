@@ -10,8 +10,8 @@ import shutil
 
 # Airflow 3.x - prefer provider imports and new public types
 from airflow.providers.standard.operators.python import PythonOperator
-from airflow.operators.empty import EmptyOperator
-from airflow.utils.task_group import TaskGroup
+from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.sdk import TaskGroup
 from airflow.models import DAG
 from airflow.models.taskinstance import TaskInstance
 from airflow.providers.standard.operators.bash import BashOperator
@@ -219,7 +219,7 @@ def generate_dir_name_from_task_instance(task_instance: TaskInstance,
     # local dir structure.
     if not roger_config.lakefs_config.enabled:
         return None
-    root_data_dir = os.getenv("ROGER_DATA_DIR").rstrip('/')
+    root_data_dir = os.getenv("ROGER_DATA_DIR", "/tmp/roger/data").rstrip('/')
     task_id = task_instance.task_id
     dag_id = task_instance.dag_id
     run_id = task_instance.run_id
@@ -295,7 +295,9 @@ def setup_input_data(context: Context, exec_conf):
     logger.info(">>> end of downloading data")
 
 
-def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos=None, pass_conf=True, no_output_files=False):
+def create_python_task(dag, name, a_callable, func_kwargs=None,
+                       external_repos=None, pass_conf=True,
+                       no_output_files=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -348,7 +350,6 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos=N
     python_operator_args["op_kwargs"] = op_kwargs
 
     return PythonOperator(**python_operator_args)
-
 
 def create_pipeline_taskgroup(
         dag,
