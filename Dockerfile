@@ -2,7 +2,7 @@
 FROM python:3.11.14-slim-trixie
 
 # Set Airflow version and home directory
-ARG AIRFLOW_VERSION=3.1.1
+ARG AIRFLOW_VERSION=3.1.5
 ARG AIRFLOW_HOME=/opt/airflow
 
 # Environment variables
