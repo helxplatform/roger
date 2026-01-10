@@ -7,6 +7,7 @@ class AnvilPipeline(DugPipeline):
     "Pipeline for Anvil data set"
     pipeline_name = 'anvil'
     parser_name = 'Anvil'
+    files_dir = 'anvil'
 
     def get_objects(self, input_data_path=None):
         """Retrieve anvil objects

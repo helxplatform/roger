@@ -7,6 +7,7 @@ class PicSure(DugPipeline):
     "Pipeline for BACPAC data set"
     pipeline_name = "bdc-test6"  #lakefs 
     parser_name = "dbgap"
+    files_dir = "anvil"
 
     def get_objects(self, input_data_path=None):
         """Retrieve anvil objects
