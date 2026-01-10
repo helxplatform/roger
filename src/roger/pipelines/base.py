@@ -1011,3 +1011,20 @@ class DugPipeline():
                 self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
+
+class DDM2Pipeline(DugPipeline):
+    """Base class for pipelines working on Dug Data Model v2"""
+
+    def get_objects(self, input_data_path=None):
+        """Retrieve initial source objects for parsing in .dug.json format
+
+        This ideally removes the need for specialized get_objects methods in
+        DDM2 pipelines.
+        """
+        if not input_data_path:
+            input_data_path = storage.dug_input_files_path(
+                self.get_files_dir())
+        files = storage.get_files_recursive(
+            lambda file_name: file_name.endswith('.dug.json'),
+            input_data_path)
+        return sorted([str(f) for f in files])
