@@ -1,8 +1,8 @@
-import roger.core.base as RogerUtil
+import roger
 from roger.config import config
 from roger.logger import get_logger
 from roger.pipelines import get_pipeline_classes
-# from roger.dug_helpers.dug_utils import DugUtil, get_topmed_files, get_dbgap_files, get_sparc_files, get_anvil_files, get_nida_files
+
 import sys
 import argparse
 import os
@@ -80,49 +80,50 @@ def main():
     pipeline_classes = get_pipeline_classes(pipeline_names)
     pipelines = [pipeclass(config) for pipeclass in pipeline_classes]
 
-    # Annotation comes first
-    if args.get_dug_input_files:
-        for pipe in pipelines:
+    for pipe in pipelines:
+        # Do all actions for one pipeline first, then move on to the next:
+
+        # Annotation comes first
+        if args.get_dug_input_files:
             pipe.get_versioned_files()
 
-    if args.load_and_annotate:
-        DugUtil.clear_annotation_cached(config=config)
-        DugUtil.annotate_db_gap_files(config=config)
-        DugUtil.annotate_topmed_files(config=config)
-        DugUtil.annotate_anvil_files(config=config)
-    if args.make_tagged_kg:
-        DugUtil.make_kg_tagged(config=config)
+        if args.load_and_annotate:
+            pipe.clear_annotation_cached()
+            pipe.annotate_files()
 
-    # Roger things
-    if args.get_kgx:
-        RogerUtil.get_kgx(config=config)
-    if args.merge_kgx:
-        RogerUtil.merge_nodes(config=config)
-    if args.create_schema:
-        RogerUtil.create_schema(config=config)
-    if args.create_bulk:
-        RogerUtil.create_bulk_load(config=config)
-    if args.insert:
-        RogerUtil.bulk_load(config=config)
-    if args.validate:
-        RogerUtil.validate(config=config)
-        RogerUtil.check_tranql(config=config)
+        if args.make_tagged_kg:
+            pipe.make_kg_tagged()
 
-    # Back to dug indexing
-    if args.index_variables:
-        DugUtil.index_variables(config=config)
+        # Roger things
+        if args.get_kgx:
+            roger.get_kgx(config=config)
+        if args.merge_kgx:
+            roger.merge_nodes(config=config)
+        if args.create_schema:
+            roger.create_schema(config=config)
+        if args.create_bulk:
+            roger.create_bulk_load(config=config)
+        if args.insert:
+            roger.bulk_load(config=config)
+        if args.validate:
+            roger.validate(config=config)
+            roger.check_tranql(config=config)
 
-    if args.validate_variables:
-        DugUtil.validate_indexed_variables(config=config)
+        # Back to dug indexing
+        if args.index_variables:
+            pipe.index_variables()
 
-    if args.crawl_concepts:
-        DugUtil.crawl_tranql(config=config)
+        if args.validate_variables:
+            pipe.validate_indexed_variables()
 
-    if args.index_concepts:
-        DugUtil.index_concepts(config=config)
+        if args.crawl_concepts:
+            pipe.crawl_tranql()
 
-    if args.validate_concepts:
-        DugUtil.validate_indexed_concepts(config=config)
+        if args.index_concepts:
+            pipe.index_concepts()
+
+        if args.validate_concepts:
+            pipe.validate_indexed_concepts()
 
     end = time.time()
     time_elapsed = end - start
