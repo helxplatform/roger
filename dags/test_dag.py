@@ -27,7 +27,6 @@ with DAG(
         print(">>>All ds")
         print(ds)
 
-
     (init >>
      create_python_task(dag, "print_context", print_context) >>
      finish)
