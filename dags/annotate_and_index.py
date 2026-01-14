@@ -52,37 +52,5 @@ with DAG(
 
         init >> create_pipeline_taskgroup(dag, pipeline_class, config) >> finish
 
-
-
-
-with DAG(
-        dag_id='dag_test',
-        default_args=default_args,
-        params=
-            {
-                "repository_id": None,
-                "branch_name": None,
-                "commitid_from": None,
-                "commitid_to": None
-            },
-        # schedule_interval=None
-) as test_dag:
-
-    init = EmptyOperator(task_id="init", dag=test_dag)
-    finish = EmptyOperator(task_id="finish", dag=test_dag)
-
-    def print_context(ds=None, **kwargs):
-        print(">>>All kwargs")
-        print(kwargs)
-        print(">>>All ds")
-        print(ds)
-
-
-    (init >>
-     create_python_task(test_dag, "get_from_lakefs", print_context) >>
-     finish)
-
-    #run_this = PythonOperator(task_id="print_the_context", python_callable=print_context)
-
 if __name__ == "__main__":
     dag.test()
