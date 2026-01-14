@@ -233,7 +233,6 @@ class DugPipeline():
                             e, delay)
                 time.sleep(delay)
 
-
     def annotate_files(self, parsable_files, output_data_path=None):
         """
         Annotates a Data element file using a Dug parser.
@@ -249,9 +248,9 @@ class DugPipeline():
         log.info("Done intializing parser")
         annotator = self.init_annotator()
         log.info("Done intializing annotator")
-        for _, parse_file in enumerate(parsable_files):
+        for ct, parse_file in enumerate(parsable_files):
             log.debug("Creating Dug Crawler object on parse_file %s "
-                      "at %d of %d", parse_file, _ , len(parsable_files))
+                      "at %d of %d", parse_file, ct , len(parsable_files))
             crawler = Crawler(
                 crawl_file=parse_file,
                 parser=parser,
