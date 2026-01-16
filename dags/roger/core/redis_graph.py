@@ -3,8 +3,8 @@ import copy
 import redis
 # from redisgraph import Node, Edge, Graph
 # https://redis-py.readthedocs.io/en/v4.5.1/redismodules.html#redisgraph-commands
-from redis.commands.graph.node import Node
-from redis.commands.graph.edge import Edge
+from falkordb.node import Node
+from falkordb.edge import Edge
 
 from roger.logger import get_logger
 
