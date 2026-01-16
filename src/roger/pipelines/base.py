@@ -832,6 +832,11 @@ class DugPipeline():
                                                        current_version))
         return [str(filename) for filename in pulled_files]
 
+    @staticmethod
+    def input_file_filter(file_name):
+        """Default filter for """
+        return file_name.endswith('.xml')
+
     def get_objects(self, input_data_path=None):
         """Retrieve initial source objects for parsing
 
@@ -842,13 +847,16 @@ class DugPipeline():
             input_data_path = storage.dug_input_files_path(
                 self.get_files_dir())
         files = storage.get_files_recursive(
-            lambda file_name: file_name.endswith('.xml'),
+            self.input_file_filter,
             input_data_path)
         return sorted([str(f) for f in files])
 
     def annotate(self, to_string=False, files=None, input_data_path=None,
                  output_data_path=None):
         "Annotate files with the appropriate parsers and crawlers"
+        log.debug("annotate called with files %s, input path %s, "
+                  "output path $s", files, str(input_data_path),
+                  str(output_data_path))
         if files is None:
             files = self.get_objects(input_data_path=input_data_path)
         self.annotate_files(parsable_files=files,
@@ -1021,16 +1029,11 @@ class DugPipeline():
 class DDM2Pipeline(DugPipeline):
     """Base class for pipelines working on Dug Data Model v2"""
 
-    def get_objects(self, input_data_path=None):
+    @staticmethod
+    def input_file_filter(file_name):
         """Retrieve initial source objects for parsing in .dug.json format
 
         This ideally removes the need for specialized get_objects methods in
         DDM2 pipelines.
         """
-        if not input_data_path:
-            input_data_path = storage.dug_input_files_path(
-                self.get_files_dir())
-        files = storage.get_files_recursive(
-            lambda file_name: file_name.endswith('.dug.json'),
-            input_data_path)
-        return sorted([str(f) for f in files])
+        return file_name.endswith('.dug.json'),
