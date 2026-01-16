@@ -19,7 +19,6 @@ THIS_MAKEFILE_PATH:=$(word $(words $(MAKEFILE_LIST)),$(MAKEFILE_LIST))
 THIS_DIR:=$(shell cd $(dir $(THIS_MAKEFILE_PATH));pwd)
 
 ROGER_HOME=${THIS_DIR}/../..
-CLI_WRAPPER=${ROGER_HOME}/cli.py
 
 # Override Roger data dir ENV
 INDEXING_DIR=${ROGERENV_DATA__ROOT}/dug/expanded_concepts
@@ -34,19 +33,19 @@ clean:
 	$(RM) -rf ${CRAWL_DIR}
 
 crawl_concepts:
-	$(TIME) python ${CLI_WRAPPER} -C
+	$(TIME) roger -C
 
 index_concepts: crawl_concepts
-	$(TIME) python ${CLI_WRAPPER} -ic
+	$(TIME) roger -ic
 
 index_variables:
-	$(TIME) python ${CLI_WRAPPER} -iv
+	$(TIME) roger -iv
 
 validate_indexed_concepts: index_concepts
-	$(TIME) python ${CLI_WRAPPER} -vc
+	$(TIME) roger -vc
 
 validate_indexed_variables: index_variables
-	$(TIME) python ${CLI_WRAPPER} -vv
+	$(TIME) roger -vv
 
 all: validate_indexed_concepts validate_indexed_variables
 
