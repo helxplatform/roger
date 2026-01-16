@@ -1,6 +1,6 @@
 import copy
 
-import redis
+import falkordb
 # from redisgraph import Node, Edge, Graph
 # https://redis-py.readthedocs.io/en/v4.5.1/redismodules.html#redisgraph-commands
 from falkordb.node import Node
@@ -15,8 +15,8 @@ class RedisGraph:
     
     def __init__(self, host='localhost', port=6379, graph='default', password=''):
         """ Construct a connection to Redis Graph. """
-        self.r = redis.Redis(host=host, port=port, password=password)
-        self.redis_graph = self.r.graph(graph)
+        self.r = falkordb.falkordb.FalkorDB(host=host, port=port, password=password)
+        self.redis_graph = self.r.select_graph(graph)
 
     def add_node (self, identifier=None, label=None, properties=None):
         """ Add a node with the given label and properties. """
