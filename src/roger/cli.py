@@ -1,23 +1,30 @@
-import roger
-from roger.config import config
-from roger.logger import get_logger
-from roger.pipelines import get_pipeline_classes
+"""CLI interface for roger
+"""
 
 import sys
 import argparse
 import os
 import time
+import pathlib
 
+import roger
+from roger.config import config
+from roger.logger import get_logger
+from roger.pipelines import get_pipeline_classes
 
 log = get_logger()
 
-def main():
-    start = time.time()
-    log.info(f"Start TIME:{start}")
+def get_arguments():
+    "Parse argv"
+
     parser = argparse.ArgumentParser(description='Roger common cli tool.')
     """ Common CLI. """
     parser.add_argument('-d', '--data-root', default=None,
                         help="Root of data hierarchy")
+    parser.add_argument('-ip', '--input-path', default=None, type=pathlib.Path,
+                        help="Input files path")
+    parser.add_argument('-op', '--output-path', default=None, type=pathlib.Path,
+                        help="Output files path")
 
     """ Roger CLI. """
     parser.add_argument('-v', '--dataset-version', help="Dataset version.",
@@ -39,9 +46,9 @@ def main():
                         "topmed:v2.0,dbGaP:v1.0,anvil:v1.0")
     data_sets = dataset_envspec.split(",")
     parser.add_argument('-D', '--datasets', action="append",
-                        default= data_sets,
+                        default=None,
                         help="Dataset pipelines name:vers to run. "
-                        "[-D topmed:v2.0 -D bdc:v1.0]")
+                        f"(default: f{str(data_sets)}")
 
     """ Dug Annotation CLI. """
     parser.add_argument('-gd', '--get_dug_input_files', action="store_true",
@@ -73,23 +80,36 @@ def main():
         config.data_root = data_root
         log.info (f"data root:{data_root}")
 
+    if not args.datasets:
+        args.datasets = data_sets
+
+    return args
+
+def main():
+    start = time.time()
+    log.info(f"Start TIME:{start}")
+
+    args = get_arguments()
     # When all lights are on...
 
     # Instantiate the pipeline classes
     pipeline_names = {x.split(':')[0]: x.split(':')[1] for x in args.datasets}
+    log.info("Working on dataset list %s", str(pipeline_names))
     pipeline_classes = get_pipeline_classes(pipeline_names)
     pipelines = [pipeclass(config) for pipeclass in pipeline_classes]
 
     for pipe in pipelines:
         # Do all actions for one pipeline first, then move on to the next:
+        log.info("Running pipeline %s", pipe.pipeline_name)
 
         # Annotation comes first
         if args.get_dug_input_files:
             pipe.get_versioned_files()
 
         if args.load_and_annotate:
-            pipe.clear_annotation_cached()
-            pipe.annotate_files()
+            pipe.clear_annotation_cached(output_data_path=args.output_path)
+            pipe.annotate(input_data_path=args.input_path,
+                          output_data_path=args.output_path)
 
         if args.make_tagged_kg:
             pipe.make_kg_tagged()

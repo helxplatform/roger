@@ -207,9 +207,10 @@ class DugPipeline():
         )
         return annotator
 
-    def clear_annotation_cached(self, to_string=False):
-        annotation_path = storage.dug_annotation_path("")
-        storage.clear_dir(annotation_path)
+    def clear_annotation_cached(self, to_string=False, output_data_path=None):
+        if not output_data_path:
+            output_data_path = storage.dug_annotation_path("")
+        storage.clear_dir(output_data_path)
         # Clear http session cache
         if self.config.annotation.clear_http_cache:
             self.cached_session.cache.clear()
