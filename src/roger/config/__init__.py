@@ -21,6 +21,7 @@ class RedisConfig(DictLike):
     host: str = "redis"
     graph: str = "test"
     port: int = 6379
+    use_redis_cache: bool = True
 
     def __post_init__(self):
         self.port = int(self.port)
@@ -226,6 +227,7 @@ class RogerConfig(DictLike):
             redis_host=self.redisgraph.host,
             redis_password=self.redisgraph.password,
             redis_port=self.redisgraph.port,
+            use_redis_cache=self.redisgraph.use_redis_cache,
             nboost_host=self.elasticsearch.nboost_host,
             preprocessor=self.annotation.preprocessor,
             annotator_type=self.annotation.annotator_type,
