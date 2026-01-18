@@ -12,7 +12,10 @@ from flatten_dict import flatten, unflatten
 from ._base import DictLike
 from .s3_config import S3Config
 
-CONFIG_FILENAME = Path(__file__).parent.resolve() / "config.yaml"
+if os.environ.get('ROGER_CONFIG_FILE', None):
+    CONFIG_FILENAME = Path(os.environ.get('ROGER_CONFIG_FILE'))
+else:
+    CONFIG_FILENAME = Path(__file__).parent.resolve() / "config.yaml"
 
 @dataclass
 class RedisConfig(DictLike):
