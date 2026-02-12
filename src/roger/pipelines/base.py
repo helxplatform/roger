@@ -15,7 +15,7 @@ import jsonpickle
 
 import requests
 
-from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept
+from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept, DugVariable, DugStudy, DugSection
 from dug.core.concept_expander import ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
@@ -139,7 +139,9 @@ class DugPipeline():
 
         indexing_config = config.indexing
         self.variables_index = indexing_config.get('variables_index')
+        self.studies = indexing_config.get('studies_index')
         self.concepts_index = indexing_config.get('concepts_index')
+        self.sections_index = indexing_config.get('sections_index')
         self.kg_index = indexing_config.get('kg_index')
 
         self.search_obj: Search = self.factory.build_search_obj()
@@ -494,8 +496,12 @@ class DugPipeline():
                     # no id no indexing
                     continue
                 # Use the Dug Index object to submit the element to ES
-                self.index_obj.index_element(
-                    element, index=self.variables_index)
+                if isinstance(element, DugVariable):
+                    self.index_obj.index_element(element, index=self.variables_index)
+                elif isinstance(element, DugStudy):
+                    self.index_obj.index_element(element, index=self.studies_index)
+                elif isinstance(element, DugSection):
+                    self.index_obj.index_element(element, index=self.sections_index)
             percent_complete = (count / total) * 100
             if percent_complete % 10 == 0:
                 log.info("%d %%", percent_complete)
