@@ -139,7 +139,7 @@ class DugPipeline():
 
         indexing_config = config.indexing
         self.variables_index = indexing_config.get('variables_index')
-        self.studies = indexing_config.get('studies_index')
+        self.studies_index = indexing_config.get('studies_index')
         self.concepts_index = indexing_config.get('concepts_index')
         self.sections_index = indexing_config.get('sections_index')
         self.kg_index = indexing_config.get('kg_index')
