@@ -621,17 +621,17 @@ class DugPipeline():
             except Exception as e:
                 log.error(concept)
                 raise e
-            for query in self.node_to_element_queries:
-                log.info(query)
-                casting_config = query['casting_config']
-                tranql_source = query['tranql_source']
-                dug_element_type = query['output_dug_type']
-                extracted_dug_elements += crawler.expand_to_dug_element(
-                    concept=concept,
-                    casting_config=casting_config,
-                    dug_element_type=dug_element_type,
-                    tranql_source=tranql_source
-                )
+            # for query in self.node_to_element_queries:
+            #     log.info(query)
+            #     casting_config = query['casting_config']
+            #     tranql_source = query['tranql_source']
+            #     dug_element_type = query['output_dug_type']
+            #     extracted_dug_elements += crawler.expand_to_dug_element(
+            #         concept=concept,
+            #         casting_config=casting_config,
+            #         dug_element_type=dug_element_type,
+            #         tranql_source=tranql_source
+            #     )
             concept.clean()
             percent_complete = int((counter / total) * 100)
             if percent_complete % 10 == 0:
@@ -640,10 +640,10 @@ class DugPipeline():
         storage.write_object(obj=jsonpickle.encode(concepts, indent=2),
                              path=output_file)
         log.info ("Concepts serialized to %s", output_file)
-        storage.write_object(obj=jsonpickle.encode(extracted_dug_elements,
-                                                   indent=2),
-                             path=extracted_output_file)
-        log.info("Extracted elements serialized to %s", extracted_output_file)
+        # storage.write_object(obj=jsonpickle.encode(extracted_dug_elements,
+        #                                            indent=2),
+        #                      path=extracted_output_file)
+        # log.info("Extracted elements serialized to %s", extracted_output_file)
 
     def _index_concepts(self, concepts):
         "Submit concepts to ElasticSearch for indexing"

@@ -1,9 +1,9 @@
 "Pipeline for Heal-studies data"
 
-from roger.pipelines import DugPipeline
+from roger.pipelines import DDM2Pipeline
 from roger.core import storage
 
-class HealStudiesPipeline(DugPipeline):
+class HealStudiesPipeline(DDM2Pipeline):
     "Pipeline for Heal-studies  data set"
     pipeline_name = "heal-mds-studies"
     parser_name = "heal-ddm2"
