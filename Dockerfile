@@ -2,7 +2,7 @@
 FROM python:3.12-slim-trixie
 
 # Set Airflow version and home directory
-ARG AIRFLOW_VERSION=3.1.5
+ARG AIRFLOW_VERSION=3.1.7
 ARG AIRFLOW_HOME=/opt/airflow
 
 # Environment variables
@@ -37,6 +37,10 @@ RUN pip install --no-cache-dir \
     "apache-airflow-providers-cncf-kubernetes" \
     --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.11.txt"
 
+# Fix auth rollback bug.
+RUN pip install --no-cache-dir \
+    "apache-airflow-providers-fab==3.3.0rc1"
+
 # Optional: install extra packages
 RUN pip install --no-cache-dir psycopg2-binary redis
 
@@ -46,8 +50,8 @@ RUN pip install -r /tmp/requirements.txt
 
 RUN rm /tmp/requirements.txt
 
-COPY . /opt/roger
-RUN pip install -e /opt/roger
+# COPY . /opt/roger
+# RUN pip install /opt/roger
 
 RUN apt-get purge -y --auto-remove \
     build-essential \
@@ -66,6 +70,8 @@ RUN chown -R airflow:airflow ${AIRFLOW_HOME}
 # Switch to airflow user
 USER airflow
 WORKDIR ${AIRFLOW_HOME}
+
+ENV PYTHONPATH=/opt/airflow/dags/repo/src/
 
 # Expose Airflow webserver port
 EXPOSE 8080

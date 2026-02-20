@@ -326,10 +326,10 @@ class DugPipeline():
             # DugElement means a variable (Study variable...)
             if not isinstance(element, DugElement):
                 continue
-            study_id = element.collection_id
-            study_link = element.collection_action
-            study_desc = element.collection_desc
-            study_name = element.collection_name or element.collection_id
+            study_id = element.id
+            study_link = element.action
+            study_desc = element.description
+            study_name = element.name or element.id
 
 
             if study_id not in written_nodes:
