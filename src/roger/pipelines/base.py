@@ -550,24 +550,21 @@ class DugPipeline():
 
     def _search_elements(self, curie, search_term):
         "Asynchronously call a search on the curie and search term"
-        response = self.event_loop.run_until_complete(
+        hits, total_items, _ = self.event_loop.run_until_complete(
             self.search_obj.search_elements(
                 self.variables_index,
                 concept=curie,
                 query=search_term,
                 size=1000
         ))
-        ids_dict = []
-        if 'metadata' in response:
-            if response['metadata']['total_count'] == 0:
-                log.error(f"No search elements returned for variable search: "
-                          f"{self.variables_index}.")
-                log.error(f"Concept id : {curie}, Search term: {search_term}")
-                raise Exception(f"Validation error - Did not find {curie} for"
-                                f"Search term: {search_term}")
-            else:
-                ids_dict += [e['id'] for e in response['results']]
-        return ids_dict
+        id_list = [e['_source']['id'] for e in hits]
+        if total_items == 0:
+            log.error(f"No search elements returned for variable search: "
+                        f"{self.variables_index}.")
+            log.error(f"Concept id : {curie}, Search term: {search_term}")
+            raise Exception(f"Validation error - Did not find {curie} for"
+                            f"Search term: {search_term}")
+        return id_list
 
     def crawl_concepts(self, concepts, data_set_name, output_path=None):
         """Adds tranql KG to Concepts
