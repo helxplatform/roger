@@ -550,20 +550,35 @@ class DugPipeline():
 
     def _search_elements(self, curie, search_term):
         "Asynchronously call a search on the curie and search term"
+        page_size = 1000
+        offset = 0
         hits, total_items, _ = self.event_loop.run_until_complete(
             self.search_obj.search_elements(
                 self.variables_index,
                 concept=curie,
                 query=search_term,
-                size=1000
+                size=page_size,
+                offset=offset
         ))
-        id_list = [e['_source']['id'] for e in hits]
         if total_items == 0:
             log.error(f"No search elements returned for variable search: "
                         f"{self.variables_index}.")
             log.error(f"Concept id : {curie}, Search term: {search_term}")
             raise Exception(f"Validation error - Did not find {curie} for"
                             f"Search term: {search_term}")
+        
+        while len(hits) < total_items:
+            offset += page_size
+            new_hits, _, _ = self.event_loop.run_until_complete(
+                self.search_obj.search_elements(
+                    self.variables_index,
+                    concept=curie,
+                    query=search_term,
+                    size=page_size,
+                    offset=offset
+            ))
+            hits += new_hits
+        id_list = [e['_source']['id'] for e in hits]
         return id_list
 
     def crawl_concepts(self, concepts, data_set_name, output_path=None):
