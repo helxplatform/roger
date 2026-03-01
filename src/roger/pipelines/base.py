@@ -529,6 +529,9 @@ class DugPipeline():
                 concept = concepts[0]
                 curie = concept.id
                 search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', concept.name)
+                if len(search_term) < 3:
+                    # anything less than 3 chars won't return hits
+                    continue
                 log.debug("Searching for Concept: %s and Search term: %s",
                           str(curie), search_term)
                 all_elements_ids = self._search_elements(curie, search_term)
