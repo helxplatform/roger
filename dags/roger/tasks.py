@@ -65,10 +65,11 @@ def task_wrapper(python_callable, **kwargs):
     }
     logger.info(f"Task function args: {func_args}")
     # overrides values
-    config.dag_run = dag_run
+    config.dag_run = dag_run    
+    # CHANGE HERE: Pass func_args as 'task_kwargs'
     if pass_conf:
-        return python_callable(config=config, **func_args)
-    return python_callable(**func_args)
+        return python_callable(task_kwargs=func_args, config=config)
+    return python_callable(task_kwargs=func_args)
 
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
@@ -349,83 +350,153 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos=N
 
     return PythonOperator(**python_operator_args)
 
+def execute_pipeline_method(pipeline_class, configparam, method_name, task_kwargs, **pipeline_kwargs):
+    """
+    Lazy execution wrapper. 
+    Initializes the heavy pipeline class and executes the method ONLY inside the K8s worker pod.
+    """
+    logger.info(f"Initializing {pipeline_class.__name__} for method {method_name}")
+    
+    # 1. The class initialization happens safely here, ignored by the Scheduler
+    with pipeline_class(config=configparam, **pipeline_kwargs) as pipeline:
+        
+        # 2. Grab the requested method (e.g., pipeline.annotate)
+        method_to_call = getattr(pipeline, method_name)
+        
+        # 3. Run it with the Airflow context args
+        return method_to_call(**task_kwargs)
+
+
 
 def create_pipeline_taskgroup(
         dag,
         pipeline_class: type,
         configparam: RogerConfig,
         **kwargs):
-    """Emit an Airflow dag pipeline for the specified pipeline_class
-
-    Extra kwargs are passed to the pipeline class init call.
-    """
+    """Emit an Airflow dag pipeline for the specified pipeline_class"""
     name = pipeline_class.pipeline_name
     input_dataset_version = pipeline_class.input_version
 
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
-        with pipeline_class(config=configparam, **kwargs) as pipeline:
-            pipeline: DugPipeline
-            annotate_task = create_python_task(
-                dag,
-                f"annotate_{name}_files",
-                pipeline.annotate,
-                external_repos=[{
-                    'name': getattr(pipeline_class, 'pipeline_name'),
-                    'branch': input_dataset_version
-                }],
-                pass_conf=False)
+        
+        # --- 1. Annotate Task ---
+        annotate_callable = partial(
+            execute_pipeline_method, 
+            pipeline_class=pipeline_class, 
+            configparam=configparam, 
+            method_name='annotate',
+            **kwargs
+        )
+        annotate_task = create_python_task(
+            dag,
+            f"annotate_{name}_files",
+            annotate_callable,
+            external_repos=[{
+                'name': getattr(pipeline_class, 'pipeline_name'),
+                'branch': input_dataset_version
+            }],
+            pass_conf=False)
 
-            index_variables_task = create_python_task(
-                dag,
-                f"index_{name}_variables",
-                pipeline.index_variables,
-                pass_conf=False,
-                no_output_files=True)
-            index_variables_task.set_upstream(annotate_task)
+        # --- 2. Index Variables Task ---
+        index_vars_callable = partial(
+            execute_pipeline_method, 
+            pipeline_class=pipeline_class, 
+            configparam=configparam, 
+            method_name='index_variables',
+            **kwargs
+        )
+        index_variables_task = create_python_task(
+            dag,
+            f"index_{name}_variables",
+            index_vars_callable,
+            pass_conf=False,
+            no_output_files=True)
+        index_variables_task.set_upstream(annotate_task)
 
-            validate_index_variables_task = create_python_task(
-                dag,
-                f"validate_{name}_index_variables",
-                pipeline.validate_indexed_variables,
-                pass_conf=False,
-                no_output_files=True
-            )
-            validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
+        # --- 3. Validate Indexed Variables Task ---
+        val_index_vars_callable = partial(
+            execute_pipeline_method, 
+            pipeline_class=pipeline_class, 
+            configparam=configparam, 
+            method_name='validate_indexed_variables',
+            **kwargs
+        )
+        validate_index_variables_task = create_python_task(
+            dag,
+            f"validate_{name}_index_variables",
+            val_index_vars_callable,
+            pass_conf=False,
+            no_output_files=True
+        )
+        validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
 
-            make_kgx_task = create_python_task(
-                dag,
-                f"make_kgx_{name}",
-                pipeline.make_kg_tagged,
-                pass_conf=False)
-            make_kgx_task.set_upstream(annotate_task)
+        # --- 4. Make KGX Task ---
+        make_kgx_callable = partial(
+            execute_pipeline_method, 
+            pipeline_class=pipeline_class, 
+            configparam=configparam, 
+            method_name='make_kg_tagged',
+            **kwargs
+        )
+        make_kgx_task = create_python_task(
+            dag,
+            f"make_kgx_{name}",
+            make_kgx_callable,
+            pass_conf=False)
+        make_kgx_task.set_upstream(annotate_task)
 
-            crawl_task = create_python_task(
-                dag,
-                f"crawl_{name}",
-                pipeline.crawl_tranql,
-                pass_conf=False)
-            crawl_task.set_upstream(annotate_task)
+        # --- 5. Crawl Task ---
+        crawl_callable = partial(
+            execute_pipeline_method, 
+            pipeline_class=pipeline_class, 
+            configparam=configparam, 
+            method_name='crawl_tranql',
+            **kwargs
+        )
+        crawl_task = create_python_task(
+            dag,
+            f"crawl_{name}",
+            crawl_callable,
+            pass_conf=False)
+        crawl_task.set_upstream(annotate_task)
 
-            index_concepts_task = create_python_task(
-                dag,
-                f"index_{name}_concepts",
-                pipeline.index_concepts,
-                pass_conf=False,
-                no_output_files=True)
-            index_concepts_task.set_upstream(crawl_task)
+        # --- 6. Index Concepts Task ---
+        index_concepts_callable = partial(
+            execute_pipeline_method, 
+            pipeline_class=pipeline_class, 
+            configparam=configparam, 
+            method_name='index_concepts',
+            **kwargs
+        )
+        index_concepts_task = create_python_task(
+            dag,
+            f"index_{name}_concepts",
+            index_concepts_callable,
+            pass_conf=False,
+            no_output_files=True)
+        index_concepts_task.set_upstream(crawl_task)
 
-            validate_index_concepts_task = create_python_task(
-                dag,
-                f"validate_{name}_index_concepts",
-                pipeline.validate_indexed_concepts,
-                pass_conf=False,
-                no_output_files=True
-            )
-            validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, annotate_task])
+        # --- 7. Validate Indexed Concepts Task ---
+        val_index_concepts_callable = partial(
+            execute_pipeline_method, 
+            pipeline_class=pipeline_class, 
+            configparam=configparam, 
+            method_name='validate_indexed_concepts',
+            **kwargs
+        )
+        validate_index_concepts_task = create_python_task(
+            dag,
+            f"validate_{name}_index_concepts",
+            val_index_concepts_callable,
+            pass_conf=False,
+            no_output_files=True
+        )
+        validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, annotate_task])
 
-            complete_task = EmptyOperator(task_id=f"complete_{name}")
-            complete_task.set_upstream(
-                (make_kgx_task,
-                 validate_index_variables_task, validate_index_concepts_task))
+        # --- 8. Complete Task ---
+        complete_task = EmptyOperator(task_id=f"complete_{name}")
+        complete_task.set_upstream(
+            (make_kgx_task,
+             validate_index_variables_task, validate_index_concepts_task))
 
     return tg
