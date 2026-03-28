@@ -151,15 +151,16 @@ class DugPipeline():
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.search_obj:
         # close elastic search connection
-        self.event_loop.run_until_complete(self.search_obj.es.close())
-        # close async loop
-        if self.event_loop.is_running() and not self.event_loop.is_closed():
-            self.event_loop.close()
-        if exc_type or exc_val or exc_tb:
-            traceback.print_exc()
-            log.error("%s %s %s", exc_val, exc_val, exc_tb)
-            log.exception("Got an exception")
+            self.event_loop.run_until_complete(self.search_obj.es.close())
+            # close async loop
+            if self.event_loop.is_running() and not self.event_loop.is_closed():
+                self.event_loop.close()
+            if exc_type or exc_val or exc_tb:
+                traceback.print_exc()
+                log.error("%s %s %s", exc_val, exc_val, exc_tb)
+                log.exception("Got an exception")
 
     def get_data_format(self):
         """Access method for data_format parameter
