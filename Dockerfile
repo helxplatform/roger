@@ -35,7 +35,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir \
     "apache-airflow[postgres,celery,redis,fab]==${AIRFLOW_VERSION}" \
     "apache-airflow-providers-cncf-kubernetes" \
-    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.11.txt"
+    --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-3.12.txt"
 
 # Fix auth rollback bug.
 RUN pip install --no-cache-dir \
