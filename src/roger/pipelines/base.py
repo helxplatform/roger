@@ -756,7 +756,7 @@ class DugPipeline():
                               str(concept.id), search_term)
                     import json
                     log.error("search_element_ids: %s", json.dumps(searched_element_ids))
-                    log.error("sample_elements: %s", json.dumps(sample_elements))
+                    log.error("sample_elements: %s", json.dumps({k: list(v) for k,v in sample_elements.items()}))
                     raise PipelineException(
                         f"Validation error - Did not find {curie} for"
                         f" Concept id : {concept.id}, "
