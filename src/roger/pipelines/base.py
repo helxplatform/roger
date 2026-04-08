@@ -664,7 +664,7 @@ class DugPipeline():
         count = 0
         for concept_id, concept in concepts.items():
             count += 1
-            self.index_obj.index_element(concept, index=self.concepts_index)
+            self.index_obj.index_concept(concept, index=self.concepts_index)
             # Index knowledge graph answers for each concept
             for kg_answer_id, kg_answer in concept.kg_answers.items():
                 self.index_obj.index_kg_answer(
