@@ -892,13 +892,14 @@ class DugPipeline():
 
         if element_object_files is specified, only those files are
         indexed. Otherwise, if the input_data_path is supplied, elements files
-        under that path are indexed. If neither is supplied, the default
-        directory is searched for index files and those are indexed.
+        under that path are indexed. If neither is supplied, the expanded
+        concepts directory is searched for elements files that have been
+        updated with KG-derived optional terms from the crawl step.
         """
         # self.clear_variables_index()
         if element_object_files is None:
-            element_object_files = storage.dug_elements_objects(
-                input_data_path,format='txt')
+            element_object_files = storage.dug_expanded_elements_objects(
+                input_data_path, format='txt')
         for file_ in element_object_files:
             self.index_elements(file_)
         output_log = self.log_stream.getvalue() if to_string else ''
@@ -910,7 +911,7 @@ class DugPipeline():
                                    output_data_path=None):
         "Validate output from index variables task for pipeline"
         if not element_object_files:
-            element_object_files = storage.dug_elements_objects(
+            element_object_files = storage.dug_expanded_elements_objects(
                 input_data_path, format='txt')
         for file_ in element_object_files:
             log.info("Validating %s", str(file_))
@@ -932,8 +933,8 @@ class DugPipeline():
         }
         annotated_elements_files_dict = {
             get_data_set_name(file): file for file in
-            storage.dug_elements_objects(data_path=input_data_path,
-                                         format='txt')
+            storage.dug_expanded_elements_objects(data_path=input_data_path,
+                                                  format='txt')
         }
         try:
             assert (len(expanded_concepts_files_dict) ==
@@ -1020,6 +1021,50 @@ class DugPipeline():
             self.crawl_concepts(concepts=data_set,
                                 data_set_name=original_variables_dataset_name,
                                 output_path= output_data_path)
+
+            # After expanding concepts with KG answers, update the
+            # corresponding elements' optional_terms so that KG-derived
+            # search terms are present when elements are later indexed.
+            # This mirrors what Crawler.crawl() does after concept expansion.
+            # The updated elements are written to the expanded concepts
+            # directory (alongside expanded_concepts.txt) rather than
+            # mutating the annotate step's output.
+            annotation_elements_file = os.path.join(
+                os.path.dirname(file_), 'elements.txt')
+            expanded_elements_file_name = os.path.join(
+                original_variables_dataset_name, 'elements.txt')
+            if not output_data_path:
+                expanded_elements_file = (
+                    storage.dug_expanded_concepts_path(
+                        expanded_elements_file_name))
+            else:
+                expanded_elements_file = os.path.join(
+                    output_data_path, expanded_elements_file_name)
+            if os.path.exists(annotation_elements_file):
+                log.info("Updating element optional terms from expanded "
+                         "concepts for %s", original_variables_dataset_name)
+                elements = jsonpickle.decode(
+                    storage.read_object(annotation_elements_file))
+                for element in elements:
+                    if isinstance(element, DugConcept):
+                        continue
+                    # Replace each element's concept references with
+                    # the expanded versions that now carry kg_answers.
+                    for concept_id in list(element.concepts.keys()):
+                        if concept_id in data_set:
+                            element.concepts[concept_id] = data_set[
+                                concept_id]
+                    element.set_optional_terms()
+                storage.write_object(
+                    jsonpickle.encode(elements, indent=2),
+                    expanded_elements_file)
+                log.info("Updated elements serialized to %s",
+                         expanded_elements_file)
+            else:
+                log.warning("Elements file not found at %s, skipping "
+                            "optional terms update",
+                            annotation_elements_file)
+
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 

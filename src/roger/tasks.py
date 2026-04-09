@@ -376,23 +376,6 @@ def create_pipeline_taskgroup(
                 }],
                 pass_conf=False)
 
-            index_variables_task = create_python_task(
-                dag,
-                f"index_{name}_variables",
-                pipeline.index_variables,
-                pass_conf=False,
-                no_output_files=True)
-            index_variables_task.set_upstream(annotate_task)
-
-            validate_index_variables_task = create_python_task(
-                dag,
-                f"validate_{name}_index_variables",
-                pipeline.validate_indexed_variables,
-                pass_conf=False,
-                no_output_files=True
-            )
-            validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
-
             make_kgx_task = create_python_task(
                 dag,
                 f"make_kgx_{name}",
@@ -406,6 +389,23 @@ def create_pipeline_taskgroup(
                 pipeline.crawl_tranql,
                 pass_conf=False)
             crawl_task.set_upstream(annotate_task)
+
+            index_variables_task = create_python_task(
+                dag,
+                f"index_{name}_variables",
+                pipeline.index_variables,
+                pass_conf=False,
+                no_output_files=True)
+            index_variables_task.set_upstream(crawl_task)
+
+            validate_index_variables_task = create_python_task(
+                dag,
+                f"validate_{name}_index_variables",
+                pipeline.validate_indexed_variables,
+                pass_conf=False,
+                no_output_files=True
+            )
+            validate_index_variables_task.set_upstream(index_variables_task)
 
             index_concepts_task = create_python_task(
                 dag,
@@ -422,7 +422,7 @@ def create_pipeline_taskgroup(
                 pass_conf=False,
                 no_output_files=True
             )
-            validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, annotate_task])
+            validate_index_concepts_task.set_upstream([index_variables_task, index_concepts_task])
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
             complete_task.set_upstream(
