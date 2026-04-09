@@ -405,7 +405,7 @@ def create_pipeline_taskgroup(
                 pass_conf=False,
                 no_output_files=True
             )
-            validate_index_variables_task.set_upstream(index_variables_task)
+            validate_index_variables_task.set_upstream([crawl_task, index_variables_task])
 
             index_concepts_task = create_python_task(
                 dag,
@@ -422,7 +422,7 @@ def create_pipeline_taskgroup(
                 pass_conf=False,
                 no_output_files=True
             )
-            validate_index_concepts_task.set_upstream([index_variables_task, index_concepts_task])
+            validate_index_concepts_task.set_upstream([crawl_task, index_variables_task, index_concepts_task])
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
             complete_task.set_upstream(
