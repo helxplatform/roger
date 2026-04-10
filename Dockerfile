@@ -1,5 +1,5 @@
 # Use a Debian-based image for better compatibility
-FROM python:3.11.14-slim-trixie
+FROM python:3.11-slim-trixie
 
 # Set Airflow version and home directory
 
