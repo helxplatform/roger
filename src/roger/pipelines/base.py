@@ -732,7 +732,7 @@ class DugPipeline():
                 # avoids elastic failure due to some reserved characters
                 # 'search_phase_execution_exception',
                 # 'token_mgr_error: Lexical error ...
-                search_term = re.sub(r'[^a-zA-Z0-9_\-\ ]+', '', search_term)
+                search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', search_term)
 
                 searched_element_ids = self._search_elements(curie, search_term)
 
