@@ -712,6 +712,9 @@ class DugPipeline():
             concept = concepts[curie]
             if not concept.kg_answers:
                 continue
+            if curie not in sample_elements:
+                # Concept had no variable elements associated
+                continue
             search_terms = []
             for key in concept.kg_answers:
                 kg_object = concept.kg_answers[key]
@@ -736,16 +739,6 @@ class DugPipeline():
                 search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', search_term)
 
                 searched_element_ids = self._search_elements(curie, search_term)
-
-                if curie not in sample_elements:
-                    log.error("Did not find Curie id %s in Elements.",
-                              str(curie))
-                    log.error("Concept id : %s, Search term: %s",
-                              str(concept.id), search_term)
-                    raise PipelineException(
-                        f"Validation error - Did not find {curie} for "
-                        f"Concept id : {concept.id}, "
-                        f"Search term: {search_term}")
 
                 present = bool([x for x in sample_elements[curie]
                                 if x in searched_element_ids])
