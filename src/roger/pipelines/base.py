@@ -695,10 +695,10 @@ class DugPipeline():
         log.info("Found only %d Concepts with Knowledge graph out of %d. %d%%",
                  len(sample_concepts), len(concepts),
                  (len(sample_concepts) / len(concepts)) * 100)
-        # 2. pick elements that have concepts in the sample concepts set
+        # 2. pick variables that have concepts in the sample concepts set
         sample_elements = {}
         for element in elements:
-            if isinstance(element, DugConcept):
+            if not isinstance(element, DugVariable):
                 continue
             for concept in element.concepts:
                 # add elements that have kg
@@ -732,6 +732,7 @@ class DugPipeline():
                 # avoids elastic failure due to some reserved characters
                 # 'search_phase_execution_exception',
                 # 'token_mgr_error: Lexical error ...
+                search_term = re.sub(r'-', ' ', search_term)
                 search_term = re.sub(r'[^a-zA-Z0-9_\ ]+', '', search_term)
 
                 searched_element_ids = self._search_elements(curie, search_term)
