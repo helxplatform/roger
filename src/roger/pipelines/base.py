@@ -529,7 +529,7 @@ class DugPipeline():
                 concept = concepts[0]
                 curie = concept.id
                 search_term = re.sub(r'-', ' ', concept.name)
-                search_term = re.sub(r'[^a-zA-Z0-9/_\ ]+', '', search_term)
+                search_term = re.sub(r'[^a-zA-Z0-9/\._\ ]+', '', search_term)
                 if len(search_term) < 3:
                     # anything less than 3 chars won't return hits
                     continue
@@ -737,7 +737,7 @@ class DugPipeline():
                 # 'search_phase_execution_exception',
                 # 'token_mgr_error: Lexical error ...
                 search_term = re.sub(r'-', ' ', search_term)
-                search_term = re.sub(r'[^a-zA-Z0-9/_\ ]+', '', search_term)
+                search_term = re.sub(r'[^a-zA-Z0-9/\._\ ]+', '', search_term)
 
                 searched_element_ids = self._search_elements(curie, search_term)
 
