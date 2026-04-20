@@ -554,7 +554,7 @@ class DugPipeline():
 
     def _search_elements(self, curie, search_term):
         "Asynchronously call a search on the curie and search term"
-        page_size = 1000
+        page_size = 10000
         offset = 0
         hits, total_items, _ = self.event_loop.run_until_complete(
             self.search_obj.search_elements(
