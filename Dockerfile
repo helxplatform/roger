@@ -3,6 +3,7 @@ FROM python:3.12-slim-trixie
 # FROM dhi.io/python:3.12-debian13-dev
 
 # Set Airflow version and home directory
+
 ARG AIRFLOW_VERSION=3.2.0
 
 ARG AIRFLOW_HOME=/opt/airflow
