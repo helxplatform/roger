@@ -6,7 +6,7 @@ An Airflow workflow for the Roger Translator KGX data pipeline.
 """
 
 from airflow.models import DAG
-from airflow.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
 import roger
 from roger.tasks import default_args, create_python_task
 from roger.config import config

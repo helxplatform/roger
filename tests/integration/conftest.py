@@ -1,7 +1,8 @@
 import os
+import glob
+import json
 
 from roger.core.enums import SchemaType
-import json
 
 class BiolinkMock:
     def __init__(self):
@@ -39,9 +40,18 @@ def kgx_objects():
     return [os.path.join(*os.path.split(__file__)[:-1], 'data', file)
             for file in kgx_files]
 
-def merged_objects():
-    return [os.path.join(*os.path.split(__file__)[:-1], 'data', file)
-            for file in merged_files]
+def merged_objects(file_type, path=None):
+    """ A list of merged KGX objects. """
+    if not path:
+        merged_pattern = merge_path(f"**/{file_type}.jsonl")
+    else:
+        merged_pattern =  merge_path(f"**/{file_type}.jsonl", path=path)
+    # this thing should always return one edges or nodes file (based on file_type)
+    try:
+        return sorted(glob.glob(merged_pattern, recursive=True))[0]
+    except IndexError:
+        raise ValueError(f"Could not find merged KGX of type {file_type} "
+                         f"in {merged_pattern}")
 
 def bulk_path(*args, **kwargs):
     return os.path.join(*os.path.split(__file__)[:-1], 'data', 'bulk')

@@ -10,8 +10,8 @@ import shutil
 
 # Airflow 3.x - prefer provider imports and new public types
 from airflow.providers.standard.operators.python import PythonOperator
-from airflow.operators.empty import EmptyOperator
-from airflow.utils.task_group import TaskGroup
+from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.sdk import TaskGroup
 from airflow.models import DAG
 from airflow.models.taskinstance import TaskInstance
 from airflow.providers.standard.operators.bash import BashOperator
@@ -219,7 +219,7 @@ def generate_dir_name_from_task_instance(task_instance: TaskInstance,
     # local dir structure.
     if not roger_config.lakefs_config.enabled:
         return None
-    root_data_dir = os.getenv("ROGER_DATA_DIR").rstrip('/')
+    root_data_dir = os.getenv("ROGER_DATA_DIR", "/tmp/roger/data").rstrip('/')
     task_id = task_instance.task_id
     dag_id = task_instance.dag_id
     run_id = task_instance.run_id
@@ -295,7 +295,9 @@ def setup_input_data(context: Context, exec_conf):
     logger.info(">>> end of downloading data")
 
 
-def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos=None, pass_conf=True, no_output_files=False):
+def create_python_task(dag, name, a_callable, func_kwargs=None,
+                       external_repos=None, pass_conf=True,
+                       no_output_files=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -349,7 +351,6 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos=N
 
     return PythonOperator(**python_operator_args)
 
-
 def create_pipeline_taskgroup(
         dag,
         pipeline_class: type,
@@ -375,23 +376,6 @@ def create_pipeline_taskgroup(
                 }],
                 pass_conf=False)
 
-            index_variables_task = create_python_task(
-                dag,
-                f"index_{name}_variables",
-                pipeline.index_variables,
-                pass_conf=False,
-                no_output_files=True)
-            index_variables_task.set_upstream(annotate_task)
-
-            validate_index_variables_task = create_python_task(
-                dag,
-                f"validate_{name}_index_variables",
-                pipeline.validate_indexed_variables,
-                pass_conf=False,
-                no_output_files=True
-            )
-            validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
-
             make_kgx_task = create_python_task(
                 dag,
                 f"make_kgx_{name}",
@@ -405,6 +389,23 @@ def create_pipeline_taskgroup(
                 pipeline.crawl_tranql,
                 pass_conf=False)
             crawl_task.set_upstream(annotate_task)
+
+            index_variables_task = create_python_task(
+                dag,
+                f"index_{name}_variables",
+                pipeline.index_variables,
+                pass_conf=False,
+                no_output_files=True)
+            index_variables_task.set_upstream(crawl_task)
+
+            validate_index_variables_task = create_python_task(
+                dag,
+                f"validate_{name}_index_variables",
+                pipeline.validate_indexed_variables,
+                pass_conf=False,
+                no_output_files=True
+            )
+            validate_index_variables_task.set_upstream([crawl_task, index_variables_task])
 
             index_concepts_task = create_python_task(
                 dag,
@@ -421,7 +422,7 @@ def create_pipeline_taskgroup(
                 pass_conf=False,
                 no_output_files=True
             )
-            validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, annotate_task])
+            validate_index_concepts_task.set_upstream([crawl_task, index_variables_task, index_concepts_task])
 
             complete_task = EmptyOperator(task_id=f"complete_{name}")
             complete_task.set_upstream(

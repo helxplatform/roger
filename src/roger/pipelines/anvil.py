@@ -1,12 +1,13 @@
+"Pipeline for anvil data"
+
 from roger.pipelines import DugPipeline
-from roger.core import  storage
-from roger.logger import logger
+from roger.core import storage
 
-
-class PicSure(DugPipeline):
-    "Pipeline for BACPAC data set"
-    pipeline_name = "bdc-test6"  #lakefs 
-    parser_name = "dbgap"
+class AnvilPipeline(DugPipeline):
+    "Pipeline for Anvil data set"
+    pipeline_name = 'anvil'
+    parser_name = 'Anvil'
+    files_dir = 'anvil'
 
     def get_objects(self, input_data_path=None):
         """Retrieve anvil objects
@@ -21,6 +22,4 @@ class PicSure(DugPipeline):
                 not file_name.startswith('GapExchange_')
                 and file_name.endswith('.xml')),
             input_data_path)
-        logger.info("**********")
-        logger.info(files)
         return sorted([str(f) for f in files])
