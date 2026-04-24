@@ -1,8 +1,10 @@
 # Use a Debian-based image for better compatibility
 FROM python:3.12-slim-trixie
+# FROM dhi.io/python:3.12-debian13-dev
 
 # Set Airflow version and home directory
-ARG AIRFLOW_VERSION=3.1.7
+ARG AIRFLOW_VERSION=3.2.0
+
 ARG AIRFLOW_HOME=/opt/airflow
 
 # Environment variables
@@ -13,7 +15,8 @@ ENV AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow@po
 ENV PYTHONUNBUFFERED=1
 
 # Create airflow user and directories
-RUN useradd --uid 50000 --home-dir ${AIRFLOW_HOME} --create-home airflow && \
+RUN groupadd -g 50000 airflow
+RUN useradd --uid 50000 --home-dir ${AIRFLOW_HOME} -g 50000 --create-home airflow && \
     mkdir -p ${AIRFLOW_HOME}/dags ${AIRFLOW_HOME}/logs ${AIRFLOW_HOME}/plugins ${AIRFLOW_HOME}/config
 
 # Install system dependencies
