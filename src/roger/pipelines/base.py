@@ -144,8 +144,9 @@ class DugPipeline():
         self.sections_index = indexing_config.get('sections_index')
         self.kg_index = indexing_config.get('kg_index')
 
-        self.search_obj: Search = self.factory.build_search_obj()
-        self.index_obj: Index = self.factory.build_indexer_obj()
+        self.search_obj = None 
+        self.index_obj = None 
+
 
     def __enter__(self):
         self.event_loop = asyncio.new_event_loop()
@@ -477,6 +478,14 @@ class DugPipeline():
         return graph
 
     def index_elements(self, elements_file):
+        if self.index_obj == None: 
+            self.index_obj: Index = self.factory.build_indexer_obj([
+                self.variables_index,
+                self.concepts_index,
+                self.kg_index,
+
+        ])
+
         "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
         elements =jsonpickle.decode(storage.read_object(elements_file))
@@ -507,7 +516,7 @@ class DugPipeline():
                 log.info("%d %%", percent_complete)
         log.info("Done indexing %s.", elements_file)
 
-    def validate_indexed_element_file(self, elements_file):
+    def validate_indexed_element_file(self, elements_file):        
         "After submitting elements for indexing, verify that they're available"
         elements = [x for x in jsonpickle.decode(
             storage.read_object(elements_file))
@@ -554,6 +563,13 @@ class DugPipeline():
 
     def _search_elements(self, curie, search_term):
         "Asynchronously call a search on the curie and search term"
+        if self.search_obj == None : 
+            self.search_obj: Search = self.factory.build_search_obj([
+                self.variables_index,
+                self.concepts_index,
+                self.kg_index,
+            ])
+            
         page_size = 10000
         offset = 0
         hits, total_items, _ = self.event_loop.run_until_complete(
@@ -663,6 +679,15 @@ class DugPipeline():
         log.info("Indexing Concepts")
         total = len(concepts)
         count = 0
+
+        if self.index_obj == None: 
+            self.index_obj: Index = self.factory.build_indexer_obj([
+                self.variables_index,
+                self.concepts_index,
+                self.kg_index,
+
+        ])
+
         for concept_id, concept in concepts.items():
             count += 1
             self.index_obj.index_concept(concept, index=self.concepts_index)
