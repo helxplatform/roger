@@ -10,8 +10,7 @@ import os
 
 from airflow.models import DAG
 from airflow.providers.standard.operators.empty import EmptyOperator
-from airflow.providers.standard.operators.python import PythonOperator
-from roger.tasks import default_args, create_pipeline_taskgroup, logger, create_python_task
+from roger.tasks import default_args, create_pipeline_taskgroup
 
 env_enabled_datasets = os.getenv(
     "ROGER_DUG__INPUTS_DATA__SETS", "topmed,anvil").split(",")

@@ -570,7 +570,7 @@ class DugPipeline():
             log.error(f"Concept id : {curie}, Search term: {search_term}")
             raise Exception(f"Validation error - Did not find {curie} for"
                             f"Search term: {search_term}")
-        
+
         while len(hits) < total_items:
             offset += page_size
             new_hits, _, _ = self.event_loop.run_until_complete(
