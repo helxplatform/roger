@@ -15,14 +15,23 @@ import jsonpickle
 
 import requests
 
-from dug.core import get_parser, get_annotator, get_plugin_manager, DugConcept, DugVariable, DugStudy, DugSection
+from dug.core import get_parser, get_annotator, get_plugin_manager
 from dug.core.concept_expander import ConceptExpander
 from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
-from dug.core.parsers import Parser, DugElement
+from dug.core.parsers import Parser
 from dug.core.annotators import Annotator
 from dug.core.async_search import Search
 from dug.core.index import Index
+
+from dug_data_model.v2 import (
+    DugConcept,
+    DugElement,
+    DugSection,
+    DugStudy,
+    DugVariable,
+    dedupe_and_sort,
+)
 
 from roger.config import RogerConfig
 from roger.core import storage
@@ -754,7 +763,7 @@ class DugPipeline():
             # the variable.
             # make unique
             search_terms_cap = 10
-            search_terms = list(set(search_terms))[:search_terms_cap]
+            search_terms = dedupe_and_sort(search_terms)[:search_terms_cap]
             log.debug("Using %d Search terms for concept %s", len(search_terms),
                       str(curie))
             for search_term in search_terms:
