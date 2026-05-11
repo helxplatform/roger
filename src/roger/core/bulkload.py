@@ -56,6 +56,9 @@ class BulkLoad:
             if node.get('description'):
                 node['description'] = node['description'].replace('\n',
                                                                   ' ')
+            if node.get('name'):
+                node['name'] = node['name'].replace('\n',
+                                                    ' ')
             if not node.get('category'):
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
