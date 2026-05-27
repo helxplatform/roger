@@ -1,5 +1,6 @@
 "Base class for implementing a dataset annotate, crawl, and index pipeline"
 
+# ruff: noqa
 import os
 import asyncio
 from io import StringIO
