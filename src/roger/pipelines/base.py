@@ -164,7 +164,8 @@ class DugPipeline():
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         # close elastic search connection
-        self.event_loop.run_until_complete(self.search_obj.es.close())
+        if self.search_obj is not None:
+            self.event_loop.run_until_complete(self.search_obj.es.close())
         # close async loop
         if self.event_loop.is_running() and not self.event_loop.is_closed():
             self.event_loop.close()
