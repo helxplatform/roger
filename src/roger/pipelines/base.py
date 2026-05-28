@@ -1132,3 +1132,4 @@ class DDM2Pipeline(DugPipeline):
         DDM2 pipelines.
         """
         return file_name.endswith('.dug.json'),
+
