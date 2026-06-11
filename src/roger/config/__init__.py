@@ -12,7 +12,10 @@ from flatten_dict import flatten, unflatten
 from ._base import DictLike
 from .s3_config import S3Config
 
-CONFIG_FILENAME = Path(__file__).parent.resolve() / "config.yaml"
+if os.environ.get('ROGER_CONFIG_FILE', None):
+    CONFIG_FILENAME = Path(os.environ.get('ROGER_CONFIG_FILE'))
+else:
+    CONFIG_FILENAME = Path(__file__).parent.resolve() / "config.yaml"
 
 @dataclass
 class RedisConfig(DictLike):
@@ -21,6 +24,7 @@ class RedisConfig(DictLike):
     host: str = "redis"
     graph: str = "test"
     port: int = 6379
+    use_redis_cache: bool = True
 
     def __post_init__(self):
         self.port = int(self.port)
@@ -144,6 +148,8 @@ class IndexingConfig(DictLike):
     variables_index: str = "variables_index"
     concepts_index: str = "concepts_index"
     kg_index: str = "kg_index"
+    studies_index: str = "studies_index"
+    sections_index: str = "sections_index"
     tranql_min_score: float = 0.2
     excluded_identifiers: List[str] = field(default_factory=lambda: [
         "CHEBI:17336"
@@ -224,10 +230,16 @@ class RogerConfig(DictLike):
             redis_host=self.redisgraph.host,
             redis_password=self.redisgraph.password,
             redis_port=self.redisgraph.port,
+            use_redis_cache=self.redisgraph.use_redis_cache,
             nboost_host=self.elasticsearch.nboost_host,
             preprocessor=self.annotation.preprocessor,
             annotator_type=self.annotation.annotator_type,
             annotator_args=self.annotation.annotator_args,
+            concepts_index_name=self.indexing.get('concepts_index'),
+            variables_index_name=self.indexing.get('variables_index'),
+            studies_index_name=self.indexing.get('studies_index'),
+            sections_index_name=self.indexing.get('sections_index'),
+            kg_index_name=self.indexing.get('kg_index'),
             normalizer={
                 'url': self.annotation.normalizer,
             },

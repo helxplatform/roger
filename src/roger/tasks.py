@@ -10,8 +10,8 @@ import shutil
 
 # Airflow 3.x - prefer provider imports and new public types
 from airflow.providers.standard.operators.python import PythonOperator
-from airflow.operators.empty import EmptyOperator
-from airflow.utils.task_group import TaskGroup
+from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.sdk import TaskGroup
 from airflow.models import DAG
 from airflow.models.taskinstance import TaskInstance
 from airflow.providers.standard.operators.bash import BashOperator
@@ -65,7 +65,7 @@ def task_wrapper(python_callable, **kwargs):
     }
     logger.info(f"Task function args: {func_args}")
     # overrides values
-    config.dag_run = dag_run    
+    config.dag_run = dag_run
     # CHANGE HERE: Pass func_args as 'task_kwargs'
     if pass_conf:
         return python_callable(task_kwargs=func_args, config=config)
@@ -296,7 +296,9 @@ def setup_input_data(context: Context, exec_conf):
     logger.info(">>> end of downloading data")
 
 
-def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos=None, pass_conf=True, no_output_files=False):
+def create_python_task(dag, name, a_callable, func_kwargs=None,
+                       external_repos=None, pass_conf=True,
+                       no_output_files=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -352,17 +354,17 @@ def create_python_task(dag, name, a_callable, func_kwargs=None, external_repos=N
 
 def execute_pipeline_method(pipeline_class, configparam, method_name, task_kwargs, **pipeline_kwargs):
     """
-    Lazy execution wrapper. 
+    Lazy execution wrapper.
     Initializes the heavy pipeline class and executes the method ONLY inside the K8s worker pod.
     """
     logger.info(f"Initializing {pipeline_class.__name__} for method {method_name}")
-    
+
     # 1. The class initialization happens safely here, ignored by the Scheduler
     with pipeline_class(config=configparam, **pipeline_kwargs) as pipeline:
-        
+
         # 2. Grab the requested method (e.g., pipeline.annotate)
         method_to_call = getattr(pipeline, method_name)
-        
+
         # 3. Run it with the Airflow context args
         return method_to_call(**task_kwargs)
 
@@ -378,12 +380,12 @@ def create_pipeline_taskgroup(
     input_dataset_version = pipeline_class.input_version
 
     with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
-        
+
         # --- 1. Annotate Task ---
         annotate_callable = partial(
-            execute_pipeline_method, 
-            pipeline_class=pipeline_class, 
-            configparam=configparam, 
+            execute_pipeline_method,
+            pipeline_class=pipeline_class,
+            configparam=configparam,
             method_name='annotate',
             **kwargs
         )
@@ -399,9 +401,9 @@ def create_pipeline_taskgroup(
 
         # --- 2. Index Variables Task ---
         index_vars_callable = partial(
-            execute_pipeline_method, 
-            pipeline_class=pipeline_class, 
-            configparam=configparam, 
+            execute_pipeline_method,
+            pipeline_class=pipeline_class,
+            configparam=configparam,
             method_name='index_variables',
             **kwargs
         )
@@ -415,9 +417,9 @@ def create_pipeline_taskgroup(
 
         # --- 3. Validate Indexed Variables Task ---
         val_index_vars_callable = partial(
-            execute_pipeline_method, 
-            pipeline_class=pipeline_class, 
-            configparam=configparam, 
+            execute_pipeline_method,
+            pipeline_class=pipeline_class,
+            configparam=configparam,
             method_name='validate_indexed_variables',
             **kwargs
         )
@@ -432,9 +434,9 @@ def create_pipeline_taskgroup(
 
         # --- 4. Make KGX Task ---
         make_kgx_callable = partial(
-            execute_pipeline_method, 
-            pipeline_class=pipeline_class, 
-            configparam=configparam, 
+            execute_pipeline_method,
+            pipeline_class=pipeline_class,
+            configparam=configparam,
             method_name='make_kg_tagged',
             **kwargs
         )
@@ -447,9 +449,9 @@ def create_pipeline_taskgroup(
 
         # --- 5. Crawl Task ---
         crawl_callable = partial(
-            execute_pipeline_method, 
-            pipeline_class=pipeline_class, 
-            configparam=configparam, 
+            execute_pipeline_method,
+            pipeline_class=pipeline_class,
+            configparam=configparam,
             method_name='crawl_tranql',
             **kwargs
         )
@@ -462,9 +464,9 @@ def create_pipeline_taskgroup(
 
         # --- 6. Index Concepts Task ---
         index_concepts_callable = partial(
-            execute_pipeline_method, 
-            pipeline_class=pipeline_class, 
-            configparam=configparam, 
+            execute_pipeline_method,
+            pipeline_class=pipeline_class,
+            configparam=configparam,
             method_name='index_concepts',
             **kwargs
         )
@@ -478,9 +480,9 @@ def create_pipeline_taskgroup(
 
         # --- 7. Validate Indexed Concepts Task ---
         val_index_concepts_callable = partial(
-            execute_pipeline_method, 
-            pipeline_class=pipeline_class, 
-            configparam=configparam, 
+            execute_pipeline_method,
+            pipeline_class=pipeline_class,
+            configparam=configparam,
             method_name='validate_indexed_concepts',
             **kwargs
         )

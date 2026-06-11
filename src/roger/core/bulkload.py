@@ -56,6 +56,9 @@ class BulkLoad:
             if node.get('description'):
                 node['description'] = node['description'].replace('\n',
                                                                   ' ')
+            if node.get('name'):
+                node['name'] = node['name'].replace('\n',
+                                                    ' ')
             if not node.get('category'):
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
@@ -325,6 +328,7 @@ class BulkLoad:
 
         log.info ("bulk loading graph: %s", str(graph))
         args = []
+        collect_labels = set()
         if len(nodes) > 0:
             bulk_path_root = glob.glob(storage.bulk_path('**/nodes', path=input_data_path), recursive=True)[0] + os.path.sep
             nodes_with_type = []

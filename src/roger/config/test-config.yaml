@@ -4,6 +4,7 @@ redisgraph:
   host: localhost
   graph: test
   port: 6379
+  use_redis_cache: False
 
 logging:
   level: DEBUG
@@ -61,7 +62,7 @@ annotation:
           llm_model_args:
             top_p: 0
             temperature: 0.1
-  normalizer: "https://nodenormalization-dev.apps.renci.org/get_normalized_nodes?conflate=false&description=true&curie="
+  normalizer: "https://nodenormalization-exp.apps.renci.org/get_normalized_nodes?conflate=false&description=true&curie="
   synonym_service: "https://name-resolution-sri.renci.org/reverse_lookup"
   ontology_metadata: "https://api.monarchinitiative.org/api/bioentity/"
 
