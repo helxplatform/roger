@@ -1,6 +1,7 @@
 # Tasks and methods related to Airflow implementations of Roger
 
 import os
+import json
 from datetime import datetime
 from functools import partial
 from typing import Union
@@ -11,11 +12,17 @@ import shutil
 # Airflow 3.x - prefer provider imports and new public types
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.providers.standard.operators.empty import EmptyOperator
+from airflow.exceptions import AirflowSkipException
 from airflow.sdk import TaskGroup
 from airflow.models import DAG
 from airflow.models.taskinstance import TaskInstance
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.utils.context import Context  # type: ignore
+try:
+    # Task SDK Variable works on Airflow 3.x workers (no direct DB access)
+    from airflow.sdk import Variable
+except ImportError:
+    from airflow.models import Variable
 
 from roger.config import config, RogerConfig
 from roger.logger import get_logger
@@ -23,6 +30,7 @@ from roger.pipelines.base import DugPipeline
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 from lakefs_sdk.configuration import Configuration
 from lakefs_sdk.models.merge import Merge
+from lakefs_sdk.exceptions import NotFoundException
 
 logger = get_logger()
 
@@ -30,6 +38,8 @@ default_args = {
     'owner': 'RENCI',
     'start_date': datetime(2025, 1, 1)
 }
+
+REMOVED_FILES_MANIFEST = "removed_files.json"
 
 
 def task_wrapper(python_callable, **kwargs):
@@ -129,8 +139,91 @@ def pagination_helper(page_fetcher, **kwargs):
         kwargs['after'] = resp.pagination.next_offset
 
 
+def incremental_state_key(dag_id: str, task_id: str, repo: str,
+                          branch: str) -> str:
+    """Airflow Variable key holding the last source commit consumed by a
+    task. task_id is the group-qualified id, unique within a dag."""
+    return f"roger_incr::{dag_id}::{task_id}::{repo}@{branch}"
+
+
+def get_state_file_path(task_instance: TaskInstance) -> Union[str, None]:
+    path = generate_dir_name_from_task_instance(
+        task_instance, roger_config=config, suffix='state')
+    return str(path) if path else None
+
+
+def read_state_file(task_instance: TaskInstance) -> dict:
+    path = get_state_file_path(task_instance)
+    if path and os.path.isfile(path):
+        with open(path) as f:
+            return json.load(f)
+    return {}
+
+
+def write_state_file(task_instance: TaskInstance, state: dict):
+    path = get_state_file_path(task_instance)
+    if not path:
+        return
+    with open(path, 'w') as f:
+        json.dump(state, f)
+
+
+def resolve_ref_tip(client: LakeFsWrapper, repo: str, ref: str) -> str:
+    """Resolve any ref (branch, tag or commit id) to a commit id.
+
+    log_commits is used instead of branches_api.get_branch because dataset
+    versions may be tags rather than branches.
+    """
+    results = client._client.refs_api.log_commits(
+        repository=repo, ref=ref, amount=1).results
+    return results[0].id if results else ref
+
+
+def get_changed_files(client: LakeFsWrapper, repo: str, from_ref: str,
+                      to_ref: str, prefixes=None) -> dict:
+    """Diff two refs, returning paths bucketed as added/changed/removed.
+
+    Unlike avalon's get_changes this keeps 'removed' entries and filters by
+    path prefixes. Prefixes are normalized with a trailing '/' so that
+    'a/task' does not match 'a/task_b/...'; '*' or empty means no filter.
+    """
+    changes = {'added': [], 'changed': [], 'removed': []}
+    if not prefixes or '*' in prefixes:
+        norm = None
+    else:
+        norm = tuple(p if p.endswith('/') else p + '/' for p in prefixes)
+    for diff in pagination_helper(client._client.refs_api.diff_refs,
+                                  repository=repo, left_ref=from_ref,
+                                  right_ref=to_ref):
+        if norm and not diff.path.startswith(norm):
+            continue
+        if diff.type in changes:
+            changes[diff.type].append(diff.path)
+    return changes
+
+
+def _get_last_consumed(key: str) -> Union[str, None]:
+    try:
+        return Variable.get(key, default=None)
+    except TypeError:
+        try:
+            return Variable.get(key, default_var=None)
+        except Exception:
+            return None
+    except Exception:
+        return None
+
+
+def _advance_state_variables(state: dict):
+    for key, entry in state.get('entries', {}).items():
+        Variable.set(key, entry['commit_id'])
+        logger.info("Recorded last ingested commit %s for %s",
+                    entry['commit_id'], key)
+
+
 def avalon_commit_callback(context: Context, **kwargs):
     client: LakeFsWrapper = init_lakefs_client(config=config)
+    state = read_state_file(context['ti'])
     # now files have been processed,
     # this part should
     # get the out path of the task
@@ -151,6 +244,19 @@ def avalon_commit_callback(context: Context, **kwargs):
     branch = config.lakefs_config.branch
     repo = config.lakefs_config.repo
 
+    # record source-data removals alongside outputs so a future cleanup task
+    # can drop the derived docs/objects
+    if state.get('removed'):
+        os.makedirs(local_path, exist_ok=True)
+        with open(local_path + REMOVED_FILES_MANIFEST, 'w') as f:
+            json.dump(state['removed'], f, indent=2)
+
+    # real source commit(s) consumed by this task, recorded by
+    # setup_input_data; falls back to branch name for runs without state
+    # (e.g. manual repository_id overrides)
+    consumed = ",".join(sorted(
+        {e['commit_id'] for e in state.get('entries', {}).values()}))
+
     logger.info("Pushing local path %s to %s@%s in %s dir",
                 local_path, repo, temp_branch_name, remote_path)
     put_files(
@@ -164,8 +270,7 @@ def avalon_commit_callback(context: Context, **kwargs):
         lake_fs_client=client,
         branch=temp_branch_name,
         repo=repo,
-        # @TODO figure out how to pass real commit id here
-        commit_id=branch,
+        commit_id=consumed or branch,
         source_branch_name=branch
     )
 
@@ -183,6 +288,10 @@ def avalon_commit_callback(context: Context, **kwargs):
                                                   )
 
         logger.info(f"merged branch {temp_branch_name} into {branch}")
+        # only advance incremental state once outputs are safely merged; a
+        # failed merge leaves the Variables untouched so the next run
+        # re-processes the same commit window (idempotent)
+        _advance_state_variables(state)
     except Exception as e:
         logger.error(e)
     finally:
@@ -195,6 +304,17 @@ def avalon_commit_callback(context: Context, **kwargs):
         logger.info(f"deleting local dir {local_path}")
 
     # cleanup local dirs
+    clean_up(context, **kwargs)
+
+
+def record_state_callback(context: Context, **kwargs):
+    """Success callback for tasks with no lakefs output: advance the
+    incremental state Variables and clean local dirs."""
+    state = read_state_file(context['ti'])
+    _advance_state_variables(state)
+    if state.get('removed'):
+        logger.warning("Upstream removals not propagated to indexes: %s",
+                       state['removed'])
     clean_up(context, **kwargs)
 
 
@@ -212,6 +332,9 @@ def clean_up(context: Context, **kwargs):
     for f in files_to_clean:
         if os.path.exists(f):
             shutil.rmtree(f)
+    state_file = get_state_file_path(context['ti'])
+    if state_file and os.path.isfile(state_file):
+        os.remove(state_file)
 
 
 def generate_dir_name_from_task_instance(task_instance: TaskInstance,
@@ -240,13 +363,16 @@ def setup_input_data(context: Context, exec_conf):
     logger.info(">>> context")
     logger.info(context)
 
+    task_instance: TaskInstance = context['ti']
     input_dir = str(generate_dir_name_from_task_instance(
-        context['ti'], roger_config=config, suffix="input"))
+        task_instance, roger_config=config, suffix="input"))
     os.makedirs(input_dir, exist_ok=True)
 
     client = init_lakefs_client(config=config)
     repos = exec_conf.get('repos', [])
     dag_params = context.get("params", {})
+    dag_id = task_instance.dag_id
+    task_id = task_instance.task_id
 
     if dag_params.get("repository_id"):
         logger.info(">>> repository_id supplied. Overriding repo.")
@@ -260,9 +386,7 @@ def setup_input_data(context: Context, exec_conf):
     if not repos or len(repos) == 0:
         branch = config.lakefs_config.branch
         repo = config.lakefs_config.repo
-        task_instance: TaskInstance = context['ti']
         upstream_ids = task_instance.task.upstream_task_ids
-        dag_id = task_instance.dag_id
         repos = [{
             'repo': repo,
             'branch': branch,
@@ -274,15 +398,17 @@ def setup_input_data(context: Context, exec_conf):
     for r in repos:
         if not r.get('path'):
             r['path'] = '*'
+        if not os.path.exists(input_dir + f'/{r["repo"]}'):
+            os.mkdir(input_dir + f'/{r["repo"]}')
     logger.info(f"repos : {repos}")
 
     logger.info(">>> start of downloading data")
-    for r in repos:
-        if not os.path.exists(input_dir + f'/{r["repo"]}'):
-            os.mkdir(input_dir + f'/{r["repo"]}')
-
-        if not dag_params.get("repository_id"):
-            logger.info("downloading %s from %s@%s to %s", r['path'], r['repo'], r['branch'], input_dir)
+    if dag_params.get("repository_id"):
+        # manual override: honor the explicit repo/branch/commit range,
+        # bypassing incremental state entirely
+        for r in repos:
+            logger.info("downloading %s from %s@%s to %s",
+                        r['path'], r['repo'], r['branch'], input_dir)
             get_files(
                 local_path=input_dir + f'/{r["repo"]}',
                 remote_path=r['path'],
@@ -293,7 +419,74 @@ def setup_input_data(context: Context, exec_conf):
                 changes_to=r.get("commitid_to"),
                 lake_fs_client=client
             )
+        logger.info(">>> end of downloading data")
+        return
+
+    incremental = bool(dag_params.get("incremental"))
+    # one tip resolution / state key / diff per source ref, even when a task
+    # pulls several upstream paths from the same repo+branch
+    groups = {}
+    for r in repos:
+        groups.setdefault((r['repo'], r['branch']), []).append(r['path'])
+
+    state = {'entries': {}, 'removed': {}}
+    any_change = False
+    for (repo, branch), prefixes in groups.items():
+        local_path = input_dir + f'/{repo}'
+        tip = resolve_ref_tip(client, repo, branch)
+        key = incremental_state_key(dag_id, task_id, repo, branch)
+        last = _get_last_consumed(key) if incremental else None
+        changes = None
+        if last and last == tip:
+            logger.info("No new commits on %s@%s since %s", repo, branch, tip)
+        elif last:
+            try:
+                changes = get_changed_files(client, repo, last, tip, prefixes)
+            except NotFoundException:
+                logger.warning(
+                    "Commit %s not found on %s; falling back to full "
+                    "download", last, repo)
+                last = None
+        if last and changes is not None:
+            to_download = changes['added'] + changes['changed']
+            logger.info("Incremental %s@%s %s..%s: %d added, %d changed, "
+                        "%d removed", repo, branch, last, tip,
+                        len(changes['added']), len(changes['changed']),
+                        len(changes['removed']))
+            if to_download:
+                client.download_files(
+                    remote_files=to_download,
+                    local_path=local_path,
+                    repository=repo,
+                    branch_or_commit_id=tip)
+            if changes['removed']:
+                state['removed'].setdefault(
+                    repo, []).extend(changes['removed'])
+            if to_download or changes['removed']:
+                any_change = True
+        elif not last:
+            # first run, incremental disabled, or unreachable last commit:
+            # full download pinned to the resolved tip
+            for prefix in prefixes:
+                logger.info("downloading %s from %s@%s to %s",
+                            prefix, repo, tip, input_dir)
+                get_files(
+                    local_path=local_path,
+                    remote_path=prefix,
+                    branch=tip,
+                    repo=repo,
+                    changes_only=False,
+                    lake_fs_client=client
+                )
+            any_change = True
+        state['entries'][key] = {
+            'repo': repo, 'branch': branch, 'commit_id': tip}
     logger.info(">>> end of downloading data")
+
+    if incremental and not any_change:
+        raise AirflowSkipException(
+            "No changes in source refs since last successful run")
+    write_state_file(task_instance, state)
 
 
 def create_python_task(dag, name, a_callable, func_kwargs=None,
@@ -345,8 +538,13 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
 
         # pass fixed kwargs into partials so resulting callback accepts (context,)
         python_operator_args['on_failure_callback'] = partial(clean_up, **op_kwargs)
+        # pre_execute creates the input dir before it can raise
+        # AirflowSkipException; clean it up on skip too
+        python_operator_args['on_skipped_callback'] = partial(clean_up, **op_kwargs)
         if not no_output_files:
             python_operator_args['on_success_callback'] = partial(avalon_commit_callback, **op_kwargs)
+        else:
+            python_operator_args['on_success_callback'] = partial(record_state_callback, **op_kwargs)
 
     python_operator_args["op_kwargs"] = op_kwargs
 
@@ -496,7 +694,10 @@ def create_pipeline_taskgroup(
         validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, annotate_task])
 
         # --- 8. Complete Task ---
-        complete_task = EmptyOperator(task_id=f"complete_{name}")
+        # none_failed: a group skipped for "no new data" still completes
+        # green; genuine failures still propagate as upstream_failed
+        complete_task = EmptyOperator(task_id=f"complete_{name}",
+                                      trigger_rule="none_failed")
         complete_task.set_upstream(
             (make_kgx_task,
              validate_index_variables_task, validate_index_concepts_task))

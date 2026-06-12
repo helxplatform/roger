@@ -18,17 +18,23 @@ env_enabled_datasets = os.getenv(
 with DAG(
         dag_id='annotate_and_index',
         default_args=default_args,
+        # incremental state Variables have no compare-and-swap; serialize runs
+        max_active_runs=1,
         params=
             {
                 "repository_id": None,
                 "branch_name": None,
                 "commitid_from": None,
-                "commitid_to": None
+                "commitid_to": None,
+                # diff source refs against the last ingested commit and only
+                # process new/changed files; set false to force a full run
+                "incremental": True
             },
         # schedule_interval=None
 ) as dag:
     init = EmptyOperator(task_id="init", dag=dag)
-    finish = EmptyOperator(task_id="finish", dag=dag)
+    finish = EmptyOperator(task_id="finish", dag=dag,
+                           trigger_rule="none_failed")
 
 
     from roger import pipelines
