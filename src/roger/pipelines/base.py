@@ -480,12 +480,7 @@ class DugPipeline():
 
     def index_elements(self, elements_file):
         if self.index_obj == None: 
-            self.index_obj: Index = self.factory.build_indexer_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-
-        ])
+            self.index_obj: Index = self.factory.build_indexer_obj()
 
         "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
@@ -565,11 +560,7 @@ class DugPipeline():
     def _search_elements(self, curie, search_term):
         "Asynchronously call a search on the curie and search term"
         if self.search_obj == None : 
-            self.search_obj: Search = self.factory.build_search_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-            ])
+            self.search_obj: Search = self.factory.build_search_obj()
             
         page_size = 10000
         offset = 0
@@ -682,12 +673,7 @@ class DugPipeline():
         count = 0
 
         if self.index_obj == None: 
-            self.index_obj: Index = self.factory.build_indexer_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-
-        ])
+            self.index_obj: Index = self.factory.build_indexer_obj()
 
         for concept_id, concept in concepts.items():
             count += 1
