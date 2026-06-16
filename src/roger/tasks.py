@@ -202,6 +202,30 @@ def get_changed_files(client: LakeFsWrapper, repo: str, from_ref: str,
     return changes
 
 
+def find_sibling_files(client: LakeFsWrapper, repo: str, ref: str,
+                       downloaded, marker="GapExchange_") -> list:
+    """dbGaP data dicts need a sibling GapExchange_<dir> file in the same
+    lakefs directory for study name/description. Incremental diffs only
+    carry the changed data dicts, so list each affected dir and pull any
+    marker file not already downloaded."""
+    extra = set()
+    seen_dirs = set()
+    for path in downloaded:
+        d = path.rsplit('/', 1)[0] if '/' in path else ''
+        if d in seen_dirs:
+            continue
+        seen_dirs.add(d)
+        list_prefix = d + '/' if d else ''
+        for obj in pagination_helper(
+                client._client.objects_api.list_objects,
+                repository=repo, ref=ref, prefix=list_prefix,
+                delimiter='/', amount=1000):
+            name = obj.path.rsplit('/', 1)[-1]
+            if name.startswith(marker) and obj.path not in downloaded:
+                extra.add(obj.path)
+    return sorted(extra)
+
+
 def _get_last_consumed(key: str) -> Union[str, None]:
     try:
         return Variable.get(key, default=None)
@@ -454,6 +478,11 @@ def setup_input_data(context: Context, exec_conf):
                         len(changes['added']), len(changes['changed']),
                         len(changes['removed']))
             if to_download:
+                siblings = find_sibling_files(client, repo, tip, to_download)
+                if siblings:
+                    logger.info("Adding %d sibling file(s): %s",
+                                len(siblings), siblings)
+                    to_download = to_download + siblings
                 client.download_files(
                     remote_files=to_download,
                     local_path=local_path,
