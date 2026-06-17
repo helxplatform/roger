@@ -732,3 +732,74 @@ def create_pipeline_taskgroup(
              validate_index_variables_task, validate_index_concepts_task))
 
     return tg
+
+
+# ponytail: prefixes string-coupled to create_pipeline_taskgroup's group/task
+# naming; breaks only if annotate_and_index renames its taskgroup/tasks.
+ANNOTATE_DAG_ID = "annotate_and_index"
+
+
+def _annotate_index_source_path(name: str, task: str) -> str:
+    """Runtime-repo prefix where annotate_and_index committed a task's output:
+    {dag_id}/{group_id}.{task_id}/"""
+    group = f"{name}_dataset_pipeline_task_group"
+    return f"{ANNOTATE_DAG_ID}/{group}.{task}"
+
+
+def create_index_only_taskgroup(
+        dag,
+        pipeline_class: type,
+        configparam: RogerConfig,
+        **kwargs):
+    """Re-index ES from annotate_and_index outputs already present in the
+    runtime repo (e.g. after merging dev->prod). Pulls annotate/crawl outputs
+    by explicit path from the configured runtime repo+branch; no annotate or
+    crawl is re-run."""
+    name = pipeline_class.pipeline_name
+    repo = configparam.lakefs_config.repo
+    branch = configparam.lakefs_config.branch
+
+    def index_task(task_name, method_name, source_tasks):
+        callable_ = partial(
+            execute_pipeline_method,
+            pipeline_class=pipeline_class,
+            configparam=configparam,
+            method_name=method_name,
+            **kwargs)
+        return create_python_task(
+            dag, task_name, callable_,
+            external_repos=[{
+                'name': repo,
+                'branch': branch,
+                'path': _annotate_index_source_path(name, src),
+            } for src in source_tasks],
+            pass_conf=False,
+            no_output_files=True)
+
+    with TaskGroup(group_id=f"{name}_index_only_task_group") as tg:
+        annotate_src = f"annotate_{name}_files"
+        crawl_src = f"crawl_{name}"
+
+        index_variables_task = index_task(
+            f"index_{name}_variables", 'index_variables', [annotate_src])
+        # validate_indexed_variables reads only annotated elements
+        validate_variables_task = index_task(
+            f"validate_{name}_index_variables",
+            'validate_indexed_variables', [annotate_src])
+        validate_variables_task.set_upstream(index_variables_task)
+
+        index_concepts_task = index_task(
+            f"index_{name}_concepts", 'index_concepts', [crawl_src])
+        # validate_indexed_concepts pairs expanded concepts (crawl) with
+        # annotated elements (annotate), so it needs both prefixes
+        validate_concepts_task = index_task(
+            f"validate_{name}_index_concepts",
+            'validate_indexed_concepts', [annotate_src, crawl_src])
+        validate_concepts_task.set_upstream(index_concepts_task)
+
+        complete_task = EmptyOperator(task_id=f"complete_{name}",
+                                      trigger_rule="none_failed")
+        complete_task.set_upstream(
+            (validate_variables_task, validate_concepts_task))
+
+    return tg
