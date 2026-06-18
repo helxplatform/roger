@@ -63,6 +63,7 @@ RUN apt-get purge -y --auto-remove \
     libffi-dev \
     libssl-dev \
     curl \
+    perl \
     git && \
     apt-get clean
 
