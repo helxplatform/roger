@@ -57,13 +57,12 @@ RUN rm /tmp/requirements.txt
 # COPY . /opt/roger
 # RUN pip install /opt/roger
 
-RUN apt-get purge -y --auto-remove --allow-remove-essential \
+RUN apt-get purge -y --auto-remove \
     build-essential \
     libpq-dev \
     libffi-dev \
     libssl-dev \
     curl \
-    perl-base \
     git && \
     apt-get clean
 
@@ -71,6 +70,9 @@ RUN if [ -n "$ROGER_SOURCE" ]; then pip install -e $ROGER_SOURCE; fi
 
 # Set ownership
 RUN chown -R airflow:airflow ${AIRFLOW_HOME}
+
+# Vulnerability cleanup
+RUN apt-get purge -y --auto-remove --allow-remove-essential perl-base
 
 # Switch to airflow user
 USER airflow
