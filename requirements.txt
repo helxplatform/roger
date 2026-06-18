@@ -15,7 +15,7 @@ git+https://github.com/helxplatform/avalon.git@lakefs-1.71.0
 h11>=0.16.0
 starlette<1.0.0
 datetime
-# Latest redisgraph version
+# Latest redis version
 redis==5.3.1
 falkordb
 #--- patch
