@@ -57,13 +57,13 @@ RUN rm /tmp/requirements.txt
 # COPY . /opt/roger
 # RUN pip install /opt/roger
 
-RUN apt-get purge -y --auto-remove \
+RUN apt-get purge -y --auto-remove --allow-remove-essential \
     build-essential \
     libpq-dev \
     libffi-dev \
     libssl-dev \
     curl \
-    perl \
+    perl-base \
     git && \
     apt-get clean
 
