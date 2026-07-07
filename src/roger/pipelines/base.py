@@ -25,14 +25,17 @@ from dug.core.annotators import Annotator
 from dug.core.async_search import Search
 from dug.core.index import Index
 
-from dug_data_model.v2 import (
+from dug.core.parsers import (
     DugConcept,
     DugElement,
     DugSection,
     DugStudy,
     DugVariable,
-    dedupe_and_sort,
 )
+
+
+def dedupe_and_sort(items):
+    return sorted(set(items))
 
 from roger.config import RogerConfig
 from roger.core import storage
