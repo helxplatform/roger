@@ -251,6 +251,40 @@ class DugPipeline():
                             e, delay)
                 time.sleep(delay)
 
+    def _annotate_single_file(self, parse_file, parser, output_data_path):
+        """Annotate a single file. Safe to call from multiple threads
+        (each call creates its own annotator and HTTP session)."""
+        current_file_name = '.'.join(
+            os.path.basename(parse_file).split('.')[:-1])
+        elements_file_path = os.path.join(output_data_path, current_file_name)
+        elements_file = os.path.join(elements_file_path, 'elements.txt')
+        concepts_file = os.path.join(elements_file_path, 'concepts.txt')
+
+        # Skip if already annotated
+        if os.path.exists(elements_file) and os.path.exists(concepts_file):
+            log.info("Skipping already annotated: %s", parse_file)
+            return
+
+        annotator = self.init_annotator()
+        http_session = self.factory.build_http_session()
+        crawler = Crawler(
+            crawl_file=parse_file,
+            parser=parser,
+            annotator=annotator,
+            tranqlizer='',
+            tranql_queries=[],
+            http_session=http_session,
+        )
+        elements = parser(parse_file)
+        crawler.elements = elements
+        crawler.crawlspace = elements_file_path
+        crawler.annotate_elements()
+        non_expanded_concepts = crawler.concepts
+        elements = crawler.elements
+        storage.write_object(jsonpickle.encode(elements, indent=2), elements_file)
+        storage.write_object(jsonpickle.encode(non_expanded_concepts, indent=2), concepts_file)
+        log.info("Parsed and annotated: %s", parse_file)
+
     def annotate_files(self, parsable_files, output_data_path=None):
         """
         Annotates a Data element file using a Dug parser.
@@ -258,67 +292,35 @@ class DugPipeline():
         :param parsable_files: Files to parse.
         :return: None.
         """
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import threading
+
         if not output_data_path:
             output_data_path = storage.dug_annotation_path('')
         log.info("Parsing files")
-        log.info("Intializing parser")
         parser = self.get_parser()
         log.info("Done intializing parser")
-        annotator = self.init_annotator()
-        log.info("Done intializing annotator")
-        for ct, parse_file in enumerate(parsable_files):
-            log.debug("Creating Dug Crawler object on parse_file %s "
-                      "at %d of %d", parse_file, ct , len(parsable_files))
-            crawler = Crawler(
-                crawl_file=parse_file,
-                parser=parser,
-                annotator=annotator,
-                tranqlizer='',
-                tranql_queries=[],
-                http_session=self.cached_session
-            )
 
-            # configure output space.
-            current_file_name = '.'.join(
-                os.path.basename(parse_file).split('.')[:-1])
-            elements_file_path = os.path.join(
-                output_data_path, current_file_name)
-            elements_file = os.path.join(elements_file_path, 'elements.txt')
-            concepts_file = os.path.join(elements_file_path, 'concepts.txt')
+        max_workers = getattr(self.config.annotation, 'annotation_workers', 4)
+        total = len(parsable_files)
+        completed = 0
+        lock = threading.Lock()
 
-            # Use the specified parser to parse the parse_file into elements.
-            log.debug("Parser is %s", str(parser))
-            elements = parser(parse_file)
-            log.debug("Parsed elements: %s", str(elements))
-
-            # This inserts the list of elements into the crawler where
-            # annotate_elements expects to find it. Maybe in some future version
-            # of Dug this could be a parameter instead of an attribute?
-            crawler.elements = elements
-
-            # @TODO propose for Dug to make this a crawler class init param(??)
-            crawler.crawlspace = elements_file_path
-            log.debug("Crawler annotator: %s", str(crawler.annotator))
-            crawler.annotate_elements()
-
-            # Extract out the concepts gotten out of annotation
-            # Extract out the elements
-            non_expanded_concepts = crawler.concepts
-            # The elements object will have been modified by annotate_elements,
-            # so we want to make sure to catch those modifications.
-            elements = crawler.elements
-
-            # Write pickles of objects to file
-            log.info("Parsed and annotated: %s", parse_file)
-
-            storage.write_object(jsonpickle.encode(elements, indent=2),
-                                 elements_file)
-            log.info("Serialized annotated elements to : %s", elements_file)
-
-            storage.write_object(
-                jsonpickle.encode(non_expanded_concepts, indent=2),
-                concepts_file)
-            log.info("Serialized annotated concepts to : %s", concepts_file)
+        log.info("Annotating %d files with %d workers", total, max_workers)
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(self._annotate_single_file, f, parser, output_data_path): f
+                for f in parsable_files
+            }
+            for future in as_completed(futures):
+                parse_file = futures[future]
+                try:
+                    future.result()
+                except Exception as e:
+                    log.error("Error annotating %s: %s", parse_file, e)
+                with lock:
+                    completed += 1
+                    log.debug("Progress: %d of %d files done", completed, total)
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """

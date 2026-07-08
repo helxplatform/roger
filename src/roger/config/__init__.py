@@ -95,6 +95,7 @@ class BulkLoaderConfig(DictLike):
 @dataclass
 class AnnotationConfig(DictLike):
     annotator_type: str = "monarch"
+    annotation_workers: int = 4
     annotator_args: dict = field(
         default_factory=lambda: {
             "monarch": {
