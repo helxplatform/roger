@@ -251,9 +251,9 @@ class DugPipeline():
                             e, delay)
                 time.sleep(delay)
 
-    def _annotate_single_file(self, parse_file, parser, output_data_path):
-        """Annotate a single file. Safe to call from multiple threads
-        (each call creates its own annotator and HTTP session)."""
+    def _annotate_single_file(self, parse_file, parser, output_data_path, thread_local):
+        """Annotate a single file. Safe to call from multiple threads.
+        Uses thread-local annotator and session (created once per thread, reused)."""
         current_file_name = '.'.join(
             os.path.basename(parse_file).split('.')[:-1])
         elements_file_path = os.path.join(output_data_path, current_file_name)
@@ -265,15 +265,18 @@ class DugPipeline():
             log.info("Skipping already annotated: %s", parse_file)
             return
 
-        annotator = self.init_annotator()
-        http_session = self.factory.build_http_session()
+        # Reuse per-thread annotator and session (created once per worker thread)
+        if not hasattr(thread_local, 'annotator'):
+            thread_local.annotator = self.init_annotator()
+            thread_local.http_session = self.factory.build_http_session()
+
         crawler = Crawler(
             crawl_file=parse_file,
             parser=parser,
-            annotator=annotator,
+            annotator=thread_local.annotator,
             tranqlizer='',
             tranql_queries=[],
-            http_session=http_session,
+            http_session=thread_local.http_session,
         )
         elements = parser(parse_file)
         crawler.elements = elements
@@ -306,10 +309,11 @@ class DugPipeline():
         completed = 0
         lock = threading.Lock()
 
+        thread_local = threading.local()
         log.info("Annotating %d files with %d workers", total, max_workers)
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(self._annotate_single_file, f, parser, output_data_path): f
+                executor.submit(self._annotate_single_file, f, parser, output_data_path, thread_local): f
                 for f in parsable_files
             }
             for future in as_completed(futures):
