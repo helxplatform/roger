@@ -1038,59 +1038,62 @@ class DugPipeline():
         log.info("Crawling Dug Concepts, found %d file(s).",
                  len(concept_files))
         for file_ in concept_files:
-            objects = storage.read_object(file_)
-            objects = objects or {}
-            if not objects:
-                log.info(f'no concepts in {file_}')
-            data_set =  jsonpickle.decode(objects)
-            original_variables_dataset_name = os.path.split(
-                os.path.dirname(file_))[-1]
-            self.crawl_concepts(concepts=data_set,
-                                data_set_name=original_variables_dataset_name,
-                                output_path= output_data_path)
+            try:
+                objects = storage.read_object(file_)
+                objects = objects or {}
+                if not objects:
+                    log.info(f'no concepts in {file_}')
+                data_set =  jsonpickle.decode(objects)
+                original_variables_dataset_name = os.path.split(
+                    os.path.dirname(file_))[-1]
+                self.crawl_concepts(concepts=data_set,
+                                    data_set_name=original_variables_dataset_name,
+                                    output_path= output_data_path)
 
-            # After expanding concepts with KG answers, update the
-            # corresponding elements' optional_terms so that KG-derived
-            # search terms are present when elements are later indexed.
-            # This mirrors what Crawler.crawl() does after concept expansion.
-            # The updated elements are written to the expanded concepts
-            # directory (alongside expanded_concepts.txt) rather than
-            # mutating the annotate step's output.
-            annotation_elements_file = os.path.join(
-                os.path.dirname(file_), 'elements.txt')
-            expanded_elements_file_name = os.path.join(
-                original_variables_dataset_name, 'elements.txt')
-            if not output_data_path:
-                expanded_elements_file = (
-                    storage.dug_expanded_concepts_path(
-                        expanded_elements_file_name))
-            else:
-                expanded_elements_file = os.path.join(
-                    output_data_path, expanded_elements_file_name)
-            if os.path.exists(annotation_elements_file):
-                log.info("Updating element optional terms from expanded "
-                         "concepts for %s", original_variables_dataset_name)
-                elements = jsonpickle.decode(
-                    storage.read_object(annotation_elements_file))
-                for element in elements:
-                    if isinstance(element, DugConcept):
-                        continue
-                    # Replace each element's concept references with
-                    # the expanded versions that now carry kg_answers.
-                    for concept_id in list(element.concepts.keys()):
-                        if concept_id in data_set:
-                            element.concepts[concept_id] = data_set[
-                                concept_id]
-                    element.set_optional_terms()
-                storage.write_object(
-                    jsonpickle.encode(elements, indent=2),
-                    expanded_elements_file)
-                log.info("Updated elements serialized to %s",
-                         expanded_elements_file)
-            else:
-                log.warning("Elements file not found at %s, skipping "
-                            "optional terms update",
-                            annotation_elements_file)
+                # After expanding concepts with KG answers, update the
+                # corresponding elements' optional_terms so that KG-derived
+                # search terms are present when elements are later indexed.
+                # This mirrors what Crawler.crawl() does after concept expansion.
+                # The updated elements are written to the expanded concepts
+                # directory (alongside expanded_concepts.txt) rather than
+                # mutating the annotate step's output.
+                annotation_elements_file = os.path.join(
+                    os.path.dirname(file_), 'elements.txt')
+                expanded_elements_file_name = os.path.join(
+                    original_variables_dataset_name, 'elements.txt')
+                if not output_data_path:
+                    expanded_elements_file = (
+                        storage.dug_expanded_concepts_path(
+                            expanded_elements_file_name))
+                else:
+                    expanded_elements_file = os.path.join(
+                        output_data_path, expanded_elements_file_name)
+                if os.path.exists(annotation_elements_file):
+                    log.info("Updating element optional terms from expanded "
+                             "concepts for %s", original_variables_dataset_name)
+                    elements = jsonpickle.decode(
+                        storage.read_object(annotation_elements_file))
+                    for element in elements:
+                        if isinstance(element, DugConcept):
+                            continue
+                        # Replace each element's concept references with
+                        # the expanded versions that now carry kg_answers.
+                        for concept_id in list(element.concepts.keys()):
+                            if concept_id in data_set:
+                                element.concepts[concept_id] = data_set[
+                                    concept_id]
+                        element.set_optional_terms()
+                    storage.write_object(
+                        jsonpickle.encode(elements, indent=2),
+                        expanded_elements_file)
+                    log.info("Updated elements serialized to %s",
+                             expanded_elements_file)
+                else:
+                    log.warning("Elements file not found at %s, skipping "
+                                "optional terms update",
+                                annotation_elements_file)
+            except Exception as e:
+                log.error("Skipping corrupt annotation file %s: %s", file_, e)
 
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
