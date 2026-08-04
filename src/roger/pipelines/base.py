@@ -29,6 +29,7 @@ from roger.core import storage
 from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
 
+from roger.utils.http_utils import harden_session
 from roger.utils.s3_utils import S3Utils
 
 log = get_logger()
@@ -121,7 +122,17 @@ class DugPipeline():
         dug_conf = config.to_dug_conf()
         self.element_mapping = config.indexing.element_mapping
         self.factory = DugFactory(dug_conf)
-        self.cached_session = self.factory.build_http_session()
+        # dug builds this session with no timeout, so bound it here before
+        # handing it to the Crawler. This is the session every annotation
+        # call goes through.
+        annotation_conf = config.annotation
+        self.cached_session = harden_session(
+            self.factory.build_http_session(),
+            connect_timeout=annotation_conf.http_connect_timeout,
+            read_timeout=annotation_conf.http_read_timeout,
+            retries=annotation_conf.http_retries,
+            backoff_factor=annotation_conf.http_retry_backoff,
+        )
         self.event_loop = asyncio.new_event_loop()
         self.log_stream = StringIO()
         if to_string:
