@@ -491,12 +491,7 @@ class DugPipeline():
 
     def index_elements(self, elements_file):
         if self.index_obj == None: 
-            self.index_obj: Index = self.factory.build_indexer_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-
-        ])
+            self.index_obj: Index = self.factory.build_indexer_obj()
 
         "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
@@ -693,12 +688,7 @@ class DugPipeline():
         count = 0
 
         if self.index_obj == None: 
-            self.index_obj: Index = self.factory.build_indexer_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-
-        ])
+            self.index_obj: Index = self.factory.build_indexer_obj()
 
         for concept_id, concept in concepts.items():
             count += 1
