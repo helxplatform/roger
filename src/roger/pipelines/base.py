@@ -571,11 +571,7 @@ class DugPipeline():
     def _search_elements(self, curie, search_term):
         "Asynchronously call a search on the curie and search term"
         if self.search_obj == None : 
-            self.search_obj: Search = self.factory.build_search_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-            ])
+            self.search_obj: Search = self.factory.build_search_obj()
             
         page_size = 10000
         offset = 0
