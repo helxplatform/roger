@@ -771,6 +771,11 @@ class DugPipeline():
 
     def clear_index(self, index_id):
         "Delete the index specified by index_id from ES"
+        # lazy init: clearing can run as the first ES touch of a task
+        if self.search_obj is None:
+            self.search_obj: Search = self.factory.build_search_obj()
+        if self.index_obj is None:
+            self.index_obj: Index = self.factory.build_indexer_obj()
         exists = self.event_loop.run_until_complete(
             self.search_obj.es.indices.exists(index=index_id))
         if exists:
