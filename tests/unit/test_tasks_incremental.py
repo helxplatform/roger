@@ -223,6 +223,60 @@ def test_setup_input_data_incremental_pulls_gap_exchange(monkeypatch,
                                  's/phs1.v1/GapExchange_phs1.v1.xml'}
 
 
+def test_setup_input_data_incremental_pull_false(monkeypatch, lakefs_env):
+    # ES rebuild tasks: even with incremental=True and no upstream changes,
+    # incremental_pull=False must force a full pinned download (no skip)
+    client = FakeClient(tip="tipA")
+    monkeypatch.setattr(tasks, "init_lakefs_client", lambda config: client)
+    monkeypatch.setattr(tasks, "_get_last_consumed", lambda key: "tipA")
+    get_files = MagicMock()
+    monkeypatch.setattr(tasks, "get_files", get_files)
+
+    context = {'ti': make_ti(), 'params': {'incremental': True}}
+    exec_conf = {'repos': [{'repo': 'roger-out', 'branch': 'main',
+                            'path': 'dag/task'}],
+                 'incremental_pull': False}
+    tasks.setup_input_data(context, exec_conf)
+
+    get_files.assert_called_once()
+    call = get_files.call_args.kwargs
+    assert call['branch'] == "tipA"
+    assert call['changes_only'] is False
+
+
+def test_removed_bases(lakefs_env):
+    removed = {
+        # external source repo: filename minus last extension
+        'topmed': ['some/dir/study_one.xml', 'study_two.csv'],
+        # roger repo: first segment under the upstream task path
+        'roger-out': [
+            'annotate_and_index/tg.annotate_x_files/study_three/elements.txt',
+            'annotate_and_index/tg.annotate_x_files/.removed_files.json',
+        ],
+    }
+    bases = tasks.removed_bases(
+        removed, 'annotate_and_index', ['tg.annotate_x_files'])
+    assert bases == {'study_one', 'study_two', 'study_three'}
+
+
+def test_stale_output_paths():
+    remote = 'annotate_and_index/tg.crawl_x/'
+    existing = [
+        remote + 'study_one/expanded_concepts.txt',
+        remote + 'study_one/elements.txt',
+        remote + 'study_one_kgx.json',
+        remote + 'study_one_extra/elements.txt',   # prefix sibling: keep
+        remote + 'study_two/elements.txt',         # not removed: keep
+        remote + '.removed_files.json',            # manifest: keep
+    ]
+    stale = tasks.stale_output_paths(existing, remote, {'study_one'})
+    assert stale == [
+        remote + 'study_one/expanded_concepts.txt',
+        remote + 'study_one/elements.txt',
+        remote + 'study_one_kgx.json',
+    ]
+
+
 def test_setup_input_data_manual_override_precedence(monkeypatch, lakefs_env):
     client = FakeClient()
     monkeypatch.setattr(tasks, "init_lakefs_client", lambda config: client)

@@ -793,6 +793,16 @@ class DugPipeline():
         "Delete the concepts index from ES"
         self.clear_index(self.concepts_index)
 
+    def clear_all_es_indexes(self, to_string=False, input_data_path=None,
+                             output_data_path=None):
+        """Wipe every ES index ahead of a full rebuild from the files
+        remaining in lakefs. Callable as an Airflow task method."""
+        for index_id in (self.variables_index, self.studies_index,
+                         self.sections_index, self.concepts_index,
+                         self.kg_index):
+            self.clear_index(index_id)
+        return self.log_stream.getvalue() if to_string else ''
+
     ####
     # Methods above this are directly from what used to be
     # dug_helpers.dug_utils.Dug. Methods below are consolidated from what used
