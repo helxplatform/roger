@@ -3,7 +3,7 @@ FROM python:3.12.13-slim-trixie
 
 # Set Airflow version and home directory
 
-ARG AIRFLOW_VERSION=3.2.0
+ARG AIRFLOW_VERSION=3.2.2
 
 ARG AIRFLOW_HOME=/opt/airflow
 
@@ -61,6 +61,10 @@ RUN apt-get purge -y --auto-remove \
 
 # Set ownership
 RUN chown -R airflow:airflow ${AIRFLOW_HOME}
+
+
+# Vulnerability cleanup
+RUN apt-get purge -y --auto-remove --allow-remove-essential perl-base
 
 # Switch to airflow user
 USER airflow
