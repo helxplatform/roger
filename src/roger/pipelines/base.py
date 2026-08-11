@@ -675,6 +675,7 @@ class DugPipeline():
         if self.index_obj == None: 
             self.index_obj: Index = self.factory.build_indexer_obj()
 
+        log.info(concepts)
         for concept_id, concept in concepts.items():
             count += 1
             self.index_obj.index_concept(concept, index=self.concepts_index)
