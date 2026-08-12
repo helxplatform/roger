@@ -1,6 +1,8 @@
 "Base class for implementing a dataset annotate, crawl, and index pipeline"
 
 import os
+import random
+import time
 import asyncio
 from io import StringIO
 import logging
@@ -675,6 +677,7 @@ class DugPipeline():
         if self.index_obj == None: 
             self.index_obj: Index = self.factory.build_indexer_obj()
 
+        log.info(concepts)
         for concept_id, concept in concepts.items():
             count += 1
             self.index_obj.index_concept(concept, index=self.concepts_index)
@@ -771,6 +774,11 @@ class DugPipeline():
 
     def clear_index(self, index_id):
         "Delete the index specified by index_id from ES"
+        # lazy init: clearing can run as the first ES touch of a task
+        if self.search_obj is None:
+            self.search_obj: Search = self.factory.build_search_obj()
+        if self.index_obj is None:
+            self.index_obj: Index = self.factory.build_indexer_obj()
         exists = self.event_loop.run_until_complete(
             self.search_obj.es.indices.exists(index=index_id))
         if exists:
@@ -792,6 +800,16 @@ class DugPipeline():
     def clear_concepts_index(self):
         "Delete the concepts index from ES"
         self.clear_index(self.concepts_index)
+
+    def clear_all_es_indexes(self, to_string=False, input_data_path=None,
+                             output_data_path=None):
+        """Wipe every ES index ahead of a full rebuild from the files
+        remaining in lakefs. Callable as an Airflow task method."""
+        for index_id in (self.variables_index, self.studies_index,
+                         self.sections_index, self.concepts_index,
+                         self.kg_index):
+            self.clear_index(index_id)
+        return self.log_stream.getvalue() if to_string else ''
 
     ####
     # Methods above this are directly from what used to be

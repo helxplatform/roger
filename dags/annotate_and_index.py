@@ -10,7 +10,8 @@ import os
 
 from airflow.models import DAG
 from airflow.providers.standard.operators.empty import EmptyOperator
-from roger.tasks import default_args, create_pipeline_taskgroup
+from roger.tasks import (default_args, create_pipeline_taskgroup,
+                         create_es_taskgroup, create_es_wipe_task)
 
 env_enabled_datasets = os.getenv(
     "ROGER_DUG__INPUTS_DATA__SETS", "topmed,anvil").split(",")
@@ -42,20 +43,20 @@ with DAG(
     envspec = os.getenv("ROGER_DUG__INPUTS_DATA__SETS","topmed:v2.0")
     data_sets = envspec.split(",")
     pipeline_names = {x.split(':')[0]: x.split(':')[1] for x in data_sets}
-    for pipeline_class in pipelines.get_pipeline_classes(pipeline_names):
-        # Only use pipeline classes that are in the enabled datasets list and
-        # that have a properly defined pipeline_name attribute
+    pipeline_classes = list(pipelines.get_pipeline_classes(pipeline_names))
 
-        # TODO
-        # Overriding environment variable just to see if this is working.
-        # name = getattr(pipeline_class, 'pipeline_name', '*not defined*')
-        # if not name in env_enabled_datasets:
-        #     continue
-
-        # Do the thing to add the pipeline's subdag to the dag in the right way
-        # . . .
-
-        init >> create_pipeline_taskgroup(dag, pipeline_class, config) >> finish
+    if pipeline_classes:
+        # file-based tasks run incrementally per dataset; then one global
+        # index wipe; then elastic rebuilds from the full file set left in
+        # lakefs (so upstream deletions simply vanish from the indexes)
+        wipe_es = create_es_wipe_task(dag, pipeline_classes[0], config)
+        for pipeline_class in pipeline_classes:
+            init >> create_pipeline_taskgroup(dag, pipeline_class, config) \
+                >> wipe_es
+            wipe_es >> create_es_taskgroup(dag, pipeline_class, config) \
+                >> finish
+    else:
+        init >> finish
 
 if __name__ == "__main__":
     dag.test()

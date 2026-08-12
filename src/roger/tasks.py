@@ -30,6 +30,8 @@ from roger.pipelines.base import DugPipeline
 from avalon.mainoperations import put_files, LakeFsWrapper, get_files
 from lakefs_sdk.configuration import Configuration
 from lakefs_sdk.models.merge import Merge
+from lakefs_sdk.models.path_list import PathList
+from lakefs_sdk.models.commit_creation import CommitCreation
 from lakefs_sdk.exceptions import NotFoundException
 
 logger = get_logger()
@@ -39,7 +41,10 @@ default_args = {
     'start_date': datetime(2025, 1, 1)
 }
 
-REMOVED_FILES_MANIFEST = "removed_files.json"
+# dotfile: storage.py readers glob '*.json' / '**/*.json' over pulled task
+# outputs (e.g. kgx_objects) and glob skips dotfiles, so this never gets
+# parsed as pipeline data
+REMOVED_FILES_MANIFEST = ".removed_files.json"
 
 
 def task_wrapper(python_callable, **kwargs):
@@ -226,6 +231,49 @@ def find_sibling_files(client: LakeFsWrapper, repo: str, ref: str,
     return sorted(extra)
 
 
+def removed_bases(removed: dict, dag_id: str, upstream_ids) -> set:
+    """Map removed source paths to the dataset base names their derived
+    outputs are keyed by.
+
+    External-repo sources use annotate's convention (filename minus last
+    extension); roger-repo sources use the first path segment under the
+    upstream task dir (e.g. {dag}/{task}/<base>/elements.txt -> <base>).
+    """
+    bases = set()
+    roger_repo = config.lakefs_config.repo
+    for src_repo, paths in removed.items():
+        for p in paths:
+            if src_repo == roger_repo:
+                rel = p
+                for uid in upstream_ids:
+                    prefix = f"{dag_id}/{uid}/"
+                    if p.startswith(prefix):
+                        rel = p[len(prefix):]
+                        break
+                base = rel.split('/')[0]
+                if base == rel:
+                    # top-level file, not a dataset dir
+                    base = '.'.join(rel.split('.')[:-1])
+            else:
+                base = '.'.join(os.path.basename(p).split('.')[:-1])
+            if base and not base.startswith('.'):
+                bases.add(base)
+    return bases
+
+
+def stale_output_paths(existing, remote_path: str, bases: set) -> list:
+    """Pick output objects derived from removed sources: anything under
+    <base>/ or the <base>_kgx.json flat file make_kg_tagged emits."""
+    stale = []
+    for f in existing:
+        rel = f[len(remote_path):] if f.startswith(remote_path) else f
+        for b in bases:
+            if rel.startswith(b + '/') or rel == f"{b}_kgx.json":
+                stale.append(f)
+                break
+    return stale
+
+
 def _get_last_consumed(key: str) -> Union[str, None]:
     try:
         return Variable.get(key, default=None)
@@ -268,12 +316,13 @@ def avalon_commit_callback(context: Context, **kwargs):
     branch = config.lakefs_config.branch
     repo = config.lakefs_config.repo
 
-    # record source-data removals alongside outputs so a future cleanup task
-    # can drop the derived docs/objects
-    if state.get('removed'):
+    # record source-data removals alongside outputs; rewritten every run so
+    # the committed manifest always reflects the latest diff window. Also
+    # guarantees put_files has at least one file on removal-only runs.
+    if state:
         os.makedirs(local_path, exist_ok=True)
         with open(local_path + REMOVED_FILES_MANIFEST, 'w') as f:
-            json.dump(state['removed'], f, indent=2)
+            json.dump(state.get('removed', {}), f, indent=2)
 
     # real source commit(s) consumed by this task, recorded by
     # setup_input_data; falls back to branch name for runs without state
@@ -297,6 +346,28 @@ def avalon_commit_callback(context: Context, **kwargs):
         commit_id=consumed or branch,
         source_branch_name=branch
     )
+
+    # drop derived outputs whose source files were deleted upstream; done on
+    # the temp branch so the removal merges atomically with this run's
+    # outputs and propagates to downstream tasks via their input diffs
+    if state.get('removed'):
+        bases = removed_bases(state['removed'], dag_id,
+                              context['ti'].task.upstream_task_ids)
+        existing = client.get_filelist(repository=repo,
+                                       branch=temp_branch_name,
+                                       remote_path=remote_path)
+        stale = stale_output_paths(existing, remote_path, bases)
+        if stale:
+            logger.info("Deleting %d stale outputs for removed sources: %s",
+                        len(stale), stale)
+            client._client.objects_api.delete_objects(
+                repository=repo, branch=temp_branch_name,
+                path_list=PathList(paths=stale))
+            client._client.commits_api.commit(
+                repository=repo, branch=temp_branch_name,
+                commit_creation=CommitCreation(
+                    message=f"remove stale {task_id} outputs "
+                            f"for deleted sources"))
 
     for diff in pagination_helper(client._client.refs_api.diff_refs,
                                   repository=repo, left_ref=branch,
@@ -446,7 +517,8 @@ def setup_input_data(context: Context, exec_conf):
         logger.info(">>> end of downloading data")
         return
 
-    incremental = bool(dag_params.get("incremental"))
+    incremental = (bool(dag_params.get("incremental"))
+                   and exec_conf.get('incremental_pull', True))
     # one tip resolution / state key / diff per source ref, even when a task
     # pulls several upstream paths from the same repo+branch
     groups = {}
@@ -520,12 +592,17 @@ def setup_input_data(context: Context, exec_conf):
 
 def create_python_task(dag, name, a_callable, func_kwargs=None,
                        external_repos=None, pass_conf=True,
-                       no_output_files=False):
+                       no_output_files=False, no_input_files=False,
+                       incremental_pull=True):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
+    :param no_input_files: skip the lakefs input download entirely.
+    :param incremental_pull: when False the task always downloads its full
+        inputs even if the dag runs with incremental=True (needed for tasks
+        that rebuild state from scratch, e.g. ES indexing after a wipe).
     """
 
     if external_repos is None:
@@ -550,20 +627,20 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
 
     if config.lakefs_config.enabled:
         pre_exec_conf = {
-            'repos': []
+            'repos': [],
+            'incremental_pull': incremental_pull
         }
         if external_repos:
-            pre_exec_conf = {
-                'repos': [{
-                    'repo': r['name'],
-                    'branch': r['branch'],
-                    'path': r.get('path', '*')
-                } for r in external_repos]
-            }
+            pre_exec_conf['repos'] = [{
+                'repo': r['name'],
+                'branch': r['branch'],
+                'path': r.get('path', '*')
+            } for r in external_repos]
 
-        pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
-        # pre_execute will be called with context -> partial keeps exec_conf fixed
-        python_operator_args['pre_execute'] = pre_exec
+        if not no_input_files:
+            pre_exec = partial(setup_input_data, exec_conf=pre_exec_conf)
+            # pre_execute will be called with context -> partial keeps exec_conf fixed
+            python_operator_args['pre_execute'] = pre_exec
 
         # pass fixed kwargs into partials so resulting callback accepts (context,)
         python_operator_args['on_failure_callback'] = partial(clean_up, **op_kwargs)
@@ -597,16 +674,24 @@ def execute_pipeline_method(pipeline_class, configparam, method_name, task_kwarg
 
 
 
+def file_task_group_id(name):
+    return f"{name}_dataset_pipeline_task_group"
+
+
 def create_pipeline_taskgroup(
         dag,
         pipeline_class: type,
         configparam: RogerConfig,
         **kwargs):
-    """Emit an Airflow dag pipeline for the specified pipeline_class"""
+    """Emit the file-based (lakefs-committed, incremental) task group for
+    the specified pipeline_class: annotate -> crawl, make_kgx.
+
+    ES indexing/validation lives in create_es_taskgroup and runs after a
+    global index wipe, rebuilding elastic from the files left in lakefs."""
     name = pipeline_class.pipeline_name
     input_dataset_version = pipeline_class.input_version
 
-    with TaskGroup(group_id=f"{name}_dataset_pipeline_task_group") as tg:
+    with TaskGroup(group_id=file_task_group_id(name)) as tg:
 
         # --- 1. Annotate Task ---
         annotate_callable = partial(
@@ -626,40 +711,7 @@ def create_pipeline_taskgroup(
             }],
             pass_conf=False)
 
-        # --- 2. Index Variables Task ---
-        index_vars_callable = partial(
-            execute_pipeline_method,
-            pipeline_class=pipeline_class,
-            configparam=configparam,
-            method_name='index_variables',
-            **kwargs
-        )
-        index_variables_task = create_python_task(
-            dag,
-            f"index_{name}_variables",
-            index_vars_callable,
-            pass_conf=False,
-            no_output_files=True)
-        index_variables_task.set_upstream(annotate_task)
-
-        # --- 3. Validate Indexed Variables Task ---
-        val_index_vars_callable = partial(
-            execute_pipeline_method,
-            pipeline_class=pipeline_class,
-            configparam=configparam,
-            method_name='validate_indexed_variables',
-            **kwargs
-        )
-        validate_index_variables_task = create_python_task(
-            dag,
-            f"validate_{name}_index_variables",
-            val_index_vars_callable,
-            pass_conf=False,
-            no_output_files=True
-        )
-        validate_index_variables_task.set_upstream([annotate_task, index_variables_task])
-
-        # --- 4. Make KGX Task ---
+        # --- 2. Make KGX Task ---
         make_kgx_callable = partial(
             execute_pipeline_method,
             pipeline_class=pipeline_class,
@@ -674,7 +726,7 @@ def create_pipeline_taskgroup(
             pass_conf=False)
         make_kgx_task.set_upstream(annotate_task)
 
-        # --- 5. Crawl Task ---
+        # --- 3. Crawl Task ---
         crawl_callable = partial(
             execute_pipeline_method,
             pipeline_class=pipeline_class,
@@ -689,47 +741,104 @@ def create_pipeline_taskgroup(
             pass_conf=False)
         crawl_task.set_upstream(annotate_task)
 
-        # --- 6. Index Concepts Task ---
-        index_concepts_callable = partial(
-            execute_pipeline_method,
-            pipeline_class=pipeline_class,
-            configparam=configparam,
-            method_name='index_concepts',
-            **kwargs
-        )
-        index_concepts_task = create_python_task(
-            dag,
-            f"index_{name}_concepts",
-            index_concepts_callable,
-            pass_conf=False,
-            no_output_files=True)
-        index_concepts_task.set_upstream(crawl_task)
-
-        # --- 7. Validate Indexed Concepts Task ---
-        val_index_concepts_callable = partial(
-            execute_pipeline_method,
-            pipeline_class=pipeline_class,
-            configparam=configparam,
-            method_name='validate_indexed_concepts',
-            **kwargs
-        )
-        validate_index_concepts_task = create_python_task(
-            dag,
-            f"validate_{name}_index_concepts",
-            val_index_concepts_callable,
-            pass_conf=False,
-            no_output_files=True
-        )
-        validate_index_concepts_task.set_upstream([crawl_task, index_concepts_task, annotate_task])
-
-        # --- 8. Complete Task ---
+        # --- 4. Complete Task ---
         # none_failed: a group skipped for "no new data" still completes
         # green; genuine failures still propagate as upstream_failed
         complete_task = EmptyOperator(task_id=f"complete_{name}",
                                       trigger_rule="none_failed")
-        complete_task.set_upstream(
-            (make_kgx_task,
-             validate_index_variables_task, validate_index_concepts_task))
+        complete_task.set_upstream((make_kgx_task, crawl_task))
+
+    return tg
+
+
+def create_es_wipe_task(dag, pipeline_class: type, configparam: RogerConfig,
+                        **kwargs):
+    """Single task that wipes all ES indexes before the per-dataset rebuild
+    tasks repopulate them from lakefs. Any pipeline class works: index names
+    come from shared config."""
+    wipe_callable = partial(
+        execute_pipeline_method,
+        pipeline_class=pipeline_class,
+        configparam=configparam,
+        method_name='clear_all_es_indexes',
+        **kwargs
+    )
+    return create_python_task(
+        dag,
+        "wipe_es_indexes",
+        wipe_callable,
+        pass_conf=False,
+        no_output_files=True,
+        no_input_files=True)
+
+
+def create_es_taskgroup(
+        dag,
+        pipeline_class: type,
+        configparam: RogerConfig,
+        **kwargs):
+    """Emit the elastic task group for a pipeline: full (non-incremental)
+    pulls of this run's file outputs from lakefs, indexed into the freshly
+    wiped indexes so ES always mirrors what lakefs holds."""
+    name = pipeline_class.pipeline_name
+    repo = config.lakefs_config.repo
+    branch = config.lakefs_config.branch
+    file_group = file_task_group_id(name)
+    annotate_path = f"{dag.dag_id}/{file_group}.annotate_{name}_files"
+    crawl_path = f"{dag.dag_id}/{file_group}.crawl_{name}"
+
+    def full_pull(*paths):
+        return {
+            'external_repos': [
+                {'name': repo, 'branch': branch, 'path': p} for p in paths],
+            'pass_conf': False,
+            'no_output_files': True,
+            'incremental_pull': False,
+        }
+
+    with TaskGroup(group_id=f"{name}_es_index_task_group") as tg:
+
+        index_variables_task = create_python_task(
+            dag,
+            f"index_{name}_variables",
+            partial(execute_pipeline_method,
+                    pipeline_class=pipeline_class,
+                    configparam=configparam,
+                    method_name='index_variables',
+                    **kwargs),
+            **full_pull(annotate_path))
+
+        validate_index_variables_task = create_python_task(
+            dag,
+            f"validate_{name}_index_variables",
+            partial(execute_pipeline_method,
+                    pipeline_class=pipeline_class,
+                    configparam=configparam,
+                    method_name='validate_indexed_variables',
+                    **kwargs),
+            **full_pull(annotate_path))
+        validate_index_variables_task.set_upstream(index_variables_task)
+
+        index_concepts_task = create_python_task(
+            dag,
+            f"index_{name}_concepts",
+            partial(execute_pipeline_method,
+                    pipeline_class=pipeline_class,
+                    configparam=configparam,
+                    method_name='index_concepts',
+                    **kwargs),
+            **full_pull(crawl_path))
+
+        validate_index_concepts_task = create_python_task(
+            dag,
+            f"validate_{name}_index_concepts",
+            partial(execute_pipeline_method,
+                    pipeline_class=pipeline_class,
+                    configparam=configparam,
+                    method_name='validate_indexed_concepts',
+                    **kwargs),
+            **full_pull(crawl_path, annotate_path))
+        validate_index_concepts_task.set_upstream(index_concepts_task)
 
     return tg
 
