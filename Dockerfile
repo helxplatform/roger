@@ -1,7 +1,6 @@
 # Use a Debian-based image for better compatibility
 FROM python:3.12.13-slim-trixie
 # FROM dhi.io/python:3.12-debian13-dev
-
 # Set Airflow version and home directory
 
 ARG AIRFLOW_VERSION=3.2.0
@@ -70,6 +69,9 @@ RUN if [ -n "$ROGER_SOURCE" ]; then pip install -e $ROGER_SOURCE; fi
 
 # Set ownership
 RUN chown -R airflow:airflow ${AIRFLOW_HOME}
+
+# Vulnerability cleanup
+RUN apt-get purge -y --auto-remove --allow-remove-essential perl-base
 
 # Switch to airflow user
 USER airflow
