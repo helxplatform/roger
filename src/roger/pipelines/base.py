@@ -7,6 +7,7 @@ import logging
 import re
 import hashlib
 import traceback
+from datetime import datetime, timezone
 from functools import reduce
 from pathlib import Path
 import tarfile
@@ -489,8 +490,16 @@ class DugPipeline():
 
         return graph
 
+    def record_ingest_date(self, *indices):
+        if self.index_obj is None:
+            self.index_obj: Index = self.factory.build_indexer_obj()
+        timestamp = datetime.now(timezone.utc).isoformat()
+        for index in indices:
+            log.info("Recording ingest date %s on %s", timestamp, index)
+            self.index_obj.set_ingest_date(index, timestamp)
+
     def index_elements(self, elements_file):
-        if self.index_obj == None: 
+        if self.index_obj == None:
             self.index_obj: Index = self.factory.build_indexer_obj()
 
         "Submit elements_file to ElasticSearch for indexing "
@@ -920,6 +929,8 @@ class DugPipeline():
                 input_data_path, format='txt')
         for file_ in element_object_files:
             self.index_elements(file_)
+        self.record_ingest_date(self.variables_index, self.studies_index,
+                                self.sections_index)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
@@ -1108,6 +1119,9 @@ class DugPipeline():
             for file_ in extracted_elements_files:
                 log.info(f"reading file {file_}")
                 self.index_elements(file_)
+            self.record_ingest_date(self.variables_index, self.studies_index,
+                                    self.sections_index)
+        self.record_ingest_date(self.concepts_index, self.kg_index)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
