@@ -20,7 +20,8 @@ Only pass --downstream when the runtime repo ALREADY holds crawl and KGX
 outputs for these datasets; it claims everything up to that commit is
 consumed, and work that never ran would be skipped permanently.
 
-Run inside the roger image / an airflow pod. --apply needs Airflow importable.
+Run inside the roger image / an airflow pod. --apply shells out to the airflow
+CLI, so it needs a pod with metadata-DB access (scheduler, not a worker).
 """
 
 import argparse
@@ -111,9 +112,13 @@ def main():
               file=sys.stderr)
         return
 
-    from airflow.sdk import Variable
+    # airflow.sdk.Variable only works inside a running task (it needs
+    # SUPERVISOR_COMMS), so shell out to the CLI, which is what the printed
+    # commands do anyway. Needs a pod with metadata-DB access.
+    import subprocess
     for key, commit in pairs:
-        Variable.set(key, commit)
+        subprocess.run(['airflow', 'variables', 'set', key, commit],
+                       check=True)
         print(f"set {key} = {commit}")
 
 
