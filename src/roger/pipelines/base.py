@@ -7,6 +7,7 @@ import logging
 import re
 import hashlib
 import traceback
+from datetime import datetime, timezone
 from functools import reduce
 from pathlib import Path
 import tarfile
@@ -29,6 +30,7 @@ from roger.core import storage
 from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
 
+from roger.utils.http_utils import harden_session
 from roger.utils.s3_utils import S3Utils
 
 log = get_logger()
@@ -121,7 +123,17 @@ class DugPipeline():
         dug_conf = config.to_dug_conf()
         self.element_mapping = config.indexing.element_mapping
         self.factory = DugFactory(dug_conf)
-        self.cached_session = self.factory.build_http_session()
+        # dug builds this session with no timeout, so bound it here before
+        # handing it to the Crawler. This is the session every annotation
+        # call goes through.
+        annotation_conf = config.annotation
+        self.cached_session = harden_session(
+            self.factory.build_http_session(),
+            connect_timeout=annotation_conf.http_connect_timeout,
+            read_timeout=annotation_conf.http_read_timeout,
+            retries=annotation_conf.http_retries,
+            backoff_factor=annotation_conf.http_retry_backoff,
+        )
         self.event_loop = asyncio.new_event_loop()
         self.log_stream = StringIO()
         if to_string:
@@ -478,14 +490,17 @@ class DugPipeline():
 
         return graph
 
-    def index_elements(self, elements_file):
-        if self.index_obj == None: 
-            self.index_obj: Index = self.factory.build_indexer_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
+    def record_ingest_date(self, *indices):
+        if self.index_obj is None:
+            self.index_obj: Index = self.factory.build_indexer_obj()
+        timestamp = datetime.now(timezone.utc).isoformat()
+        for index in indices:
+            log.info("Recording ingest date %s on %s", timestamp, index)
+            self.index_obj.set_ingest_date(index, timestamp)
 
-        ])
+    def index_elements(self, elements_file):
+        if self.index_obj == None:
+            self.index_obj: Index = self.factory.build_indexer_obj()
 
         "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
@@ -565,11 +580,7 @@ class DugPipeline():
     def _search_elements(self, curie, search_term):
         "Asynchronously call a search on the curie and search term"
         if self.search_obj == None : 
-            self.search_obj: Search = self.factory.build_search_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-            ])
+            self.search_obj: Search = self.factory.build_search_obj()
             
         page_size = 10000
         offset = 0
@@ -682,12 +693,7 @@ class DugPipeline():
         count = 0
 
         if self.index_obj == None: 
-            self.index_obj: Index = self.factory.build_indexer_obj([
-                self.variables_index,
-                self.concepts_index,
-                self.kg_index,
-
-        ])
+            self.index_obj: Index = self.factory.build_indexer_obj()
 
         for concept_id, concept in concepts.items():
             count += 1
@@ -923,6 +929,8 @@ class DugPipeline():
                 input_data_path, format='txt')
         for file_ in element_object_files:
             self.index_elements(file_)
+        self.record_ingest_date(self.variables_index, self.studies_index,
+                                self.sections_index)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
@@ -1111,6 +1119,9 @@ class DugPipeline():
             for file_ in extracted_elements_files:
                 log.info(f"reading file {file_}")
                 self.index_elements(file_)
+            self.record_ingest_date(self.variables_index, self.studies_index,
+                                    self.sections_index)
+        self.record_ingest_date(self.concepts_index, self.kg_index)
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
 
