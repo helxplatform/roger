@@ -74,7 +74,10 @@ with DAG(
     create_bulk_load_edges = create_python_task(dag,
                                                 name="CreateBulkLoadEdges",
                                                 a_callable=roger.create_bulk_edges,
-                                                clear_output_prefix=True)
+                                                clear_output_prefix=True,
+                                                # edges dominate memory; the
+                                                # rest run at the chart default
+                                                memory="15Gi")
     bulk_load = create_python_task(dag,
                                    name="BulkLoad",
                                    a_callable=roger.bulk_load,

@@ -126,6 +126,24 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
     return k8s_executor_config
 
 
+def memory_override(limit: str, request: str = None) -> dict:
+    """executor_config bumping only this task's memory.
+
+    Everything else (image, volumes, env, service account) is inherited from
+    the chart's worker pod template; this patches the 'base' container so one
+    heavy task does not force the default up for every task. Keep request
+    well under limit: the namespace quota counts requests.memory and
+    limits.memory separately.
+    """
+    from kubernetes.client import models as k8s
+    return {"pod_override": k8s.V1Pod(spec=k8s.V1PodSpec(containers=[
+        k8s.V1Container(
+            name="base",
+            resources=k8s.V1ResourceRequirements(
+                requests={"memory": request or "1Gi"},
+                limits={"memory": limit}))]))}
+
+
 def init_lakefs_client(config: RogerConfig) -> LakeFsWrapper:
     configuration = Configuration()
     configuration.username = config.lakefs_config.access_key_id
@@ -635,7 +653,8 @@ def setup_input_data(context: Context, exec_conf):
 def create_python_task(dag, name, a_callable, func_kwargs=None,
                        external_repos=None, pass_conf=True,
                        no_output_files=False, no_input_files=False,
-                       incremental_pull=True, clear_output_prefix=False):
+                       incremental_pull=True, clear_output_prefix=False,
+                       memory=None):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -648,6 +667,8 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
     :param clear_output_prefix: mirror the local output dir into lakefs,
         deleting objects from previous runs. Needed when output filenames
         vary run to run (the bulk-load CSVs) and would otherwise accumulate.
+    :param memory: memory limit for this task's pod, e.g. '15Gi'. Omit to
+        take the chart's worker default.
     """
 
     if external_repos is None:
@@ -669,6 +690,8 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
         # executor_config example left commented; fill if needed
         "dag": dag,
     }
+    if memory:
+        python_operator_args["executor_config"] = memory_override(memory)
 
     if config.lakefs_config.enabled:
         pre_exec_conf = {

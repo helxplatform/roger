@@ -406,3 +406,14 @@ def test_orphaned_output_paths_empty_when_in_sync(tmp_path):
     remote = "dag/task/"
     assert tasks.orphaned_output_paths([remote + "a.csv"], remote,
                                        str(tmp_path)) == []
+
+
+def test_memory_override_patches_base_container():
+    pytest.importorskip("kubernetes")
+    cfg = tasks.memory_override("15Gi")
+    pod = cfg["pod_override"]
+    container = pod.spec.containers[0]
+    assert container.name == "base"
+    assert container.resources.limits == {"memory": "15Gi"}
+    # request stays small so the namespace quota is not reserved wholesale
+    assert container.resources.requests == {"memory": "1Gi"}
