@@ -44,20 +44,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      # Currently actions/setup-python supports caching
-      # but the cache is not as robust as cache action.
-      # Here we cache the entire python env which speeds subsequent builds up alot. (alot being scientific term)
-      # Ref: https://blog.allenai.org/python-caching-in-github-actions-e9452698e98d
-      - uses: actions/cache@v3
-        name: Cache Python
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('setup.py') }}-${{ hashFiles('requirements.txt') }}-${{ hashFiles('pyproject.toml') }}
-
-      - name: Install Requirements
-        run: |
-          pip install -r requirements.txt
-
+      # flake8 parses sources, it never imports them, so this job needs
+      # neither requirements.txt nor a cached interpreter. Caching
+      # ${{ env.pythonLocation }} also restores a stale site-packages/pip
+      # over the runner's own, which breaks pip outright.
       - name: Lint with flake8
         run: |
           pip install flake8
