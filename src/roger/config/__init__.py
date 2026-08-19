@@ -125,6 +125,12 @@ class AnnotationConfig(DictLike):
     synonym_service: str = "https://onto.renci.org/synonyms/"
     ontology_metadata: str = "https://api.monarchinitiative.org/api/bioentity/"
     clear_http_cache: bool = False
+    # Bounds on the annotation service calls. Without a read timeout a broken
+    # connection stalls the pipeline indefinitely rather than failing.
+    http_connect_timeout: float = 10.0
+    http_read_timeout: float = 120.0
+    http_retries: int = 3
+    http_retry_backoff: float = 1.0
     preprocessor: dict = field(default_factory=lambda:
         {
             "debreviator": {
@@ -141,6 +147,13 @@ class AnnotationConfig(DictLike):
     def __post_init__(self):
         self.annotator_args["sapbert"]["bagel"]["enabled"] = str(self.annotator_args["sapbert"]["bagel"][
                                                                  "enabled"]).lower() == "true"
+        # These can arrive from environment variables, where every value is a
+        # string. urllib3 rejects a string timeout outright, and a string retry
+        # count fails on the first retry, so coerce them here.
+        self.http_connect_timeout = float(self.http_connect_timeout)
+        self.http_read_timeout = float(self.http_read_timeout)
+        self.http_retries = int(self.http_retries)
+        self.http_retry_backoff = float(self.http_retry_backoff)
 
 
 @dataclass
