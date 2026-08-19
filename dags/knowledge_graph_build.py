@@ -69,10 +69,12 @@ with DAG(
 
     create_bulk_load_nodes = create_python_task(dag,
                                                 name="CreateBulkLoadNodes",
-                                                a_callable=roger.create_bulk_nodes)
+                                                a_callable=roger.create_bulk_nodes,
+                                                clear_output_prefix=True)
     create_bulk_load_edges = create_python_task(dag,
                                                 name="CreateBulkLoadEdges",
-                                                a_callable=roger.create_bulk_edges)
+                                                a_callable=roger.create_bulk_edges,
+                                                clear_output_prefix=True)
     bulk_load = create_python_task(dag,
                                    name="BulkLoad",
                                    a_callable=roger.bulk_load,

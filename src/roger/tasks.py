@@ -262,6 +262,39 @@ def removed_bases(removed: dict, dag_id: str, upstream_ids) -> set:
     return bases
 
 
+def orphaned_output_paths(existing, remote_path: str, local_path: str) -> list:
+    """Remote objects under this task's prefix that the local output dir no
+    longer holds.
+
+    The bulk-load CSV names encode data-dependent counters
+    ({type}.csv-{group}-{flush}), so every run writes new names and put_files
+    never overwrites the previous ones. Left alone they pile up and the
+    loader sees the same node id in files from several runs.
+    """
+    local = set()
+    for root, _, files in os.walk(local_path):
+        for name in files:
+            local.add(os.path.relpath(os.path.join(root, name), local_path))
+    orphans = []
+    for f in existing:
+        rel = f[len(remote_path):] if f.startswith(remote_path) else f
+        if rel not in local:
+            orphans.append(f)
+    return orphans
+
+
+def delete_objects(client: LakeFsWrapper, repo: str, branch: str,
+                   paths: list, message: str):
+    "Delete paths on branch and commit. Chunked; lakefs caps the path list."
+    for i in range(0, len(paths), 1000):
+        client._client.objects_api.delete_objects(
+            repository=repo, branch=branch,
+            path_list=PathList(paths=paths[i:i + 1000]))
+    client._client.commits_api.commit(
+        repository=repo, branch=branch,
+        commit_creation=CommitCreation(message=message))
+
+
 def stale_output_paths(existing, remote_path: str, bases: set) -> list:
     """Pick output objects derived from removed sources: anything under
     <base>/ or the <base>_kgx.json flat file make_kg_tagged emits."""
@@ -348,6 +381,19 @@ def avalon_commit_callback(context: Context, **kwargs):
         source_branch_name=branch
     )
 
+    # tasks whose output filenames shift between runs must mirror the local
+    # dir, not accumulate; otherwise consumers read several runs at once
+    if kwargs.get('clear_output_prefix'):
+        existing = client.get_filelist(repository=repo,
+                                       branch=temp_branch_name,
+                                       remote_path=remote_path)
+        orphans = orphaned_output_paths(existing, remote_path, local_path)
+        if orphans:
+            logger.info("Deleting %d output(s) from previous runs under %s",
+                        len(orphans), remote_path)
+            delete_objects(client, repo, temp_branch_name, orphans,
+                           f"drop superseded {task_id} outputs")
+
     # drop derived outputs whose source files were deleted upstream; done on
     # the temp branch so the removal merges atomically with this run's
     # outputs and propagates to downstream tasks via their input diffs
@@ -361,14 +407,9 @@ def avalon_commit_callback(context: Context, **kwargs):
         if stale:
             logger.info("Deleting %d stale outputs for removed sources: %s",
                         len(stale), stale)
-            client._client.objects_api.delete_objects(
-                repository=repo, branch=temp_branch_name,
-                path_list=PathList(paths=stale))
-            client._client.commits_api.commit(
-                repository=repo, branch=temp_branch_name,
-                commit_creation=CommitCreation(
-                    message=f"remove stale {task_id} outputs "
-                            f"for deleted sources"))
+            delete_objects(client, repo, temp_branch_name, stale,
+                           f"remove stale {task_id} outputs "
+                           f"for deleted sources")
 
     for diff in pagination_helper(client._client.refs_api.diff_refs,
                                   repository=repo, left_ref=branch,
@@ -594,7 +635,7 @@ def setup_input_data(context: Context, exec_conf):
 def create_python_task(dag, name, a_callable, func_kwargs=None,
                        external_repos=None, pass_conf=True,
                        no_output_files=False, no_input_files=False,
-                       incremental_pull=True):
+                       incremental_pull=True, clear_output_prefix=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -604,6 +645,9 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
     :param incremental_pull: when False the task always downloads its full
         inputs even if the dag runs with incremental=True (needed for tasks
         that rebuild state from scratch, e.g. ES indexing after a wipe).
+    :param clear_output_prefix: mirror the local output dir into lakefs,
+        deleting objects from previous runs. Needed when output filenames
+        vary run to run (the bulk-load CSVs) and would otherwise accumulate.
     """
 
     if external_repos is None:
@@ -649,7 +693,9 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
         # AirflowSkipException; clean it up on skip too
         python_operator_args['on_skipped_callback'] = partial(clean_up, **op_kwargs)
         if not no_output_files:
-            python_operator_args['on_success_callback'] = partial(avalon_commit_callback, **op_kwargs)
+            python_operator_args['on_success_callback'] = partial(
+                avalon_commit_callback,
+                clear_output_prefix=clear_output_prefix, **op_kwargs)
         else:
             python_operator_args['on_success_callback'] = partial(record_state_callback, **op_kwargs)
 

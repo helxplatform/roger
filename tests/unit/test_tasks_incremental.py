@@ -381,3 +381,28 @@ def test_task_wrapper_calls_pipeline_method_shape(monkeypatch):
                              pass_conf=False)
     assert out == "annotated"
     assert seen['to_string'] is True
+
+
+def test_orphaned_output_paths(tmp_path):
+    """Objects from previous runs, whose names no longer exist locally."""
+    (tmp_path / "nodes").mkdir()
+    (tmp_path / "nodes" / "biolink~Gene.csv-0-4").write_text("x")
+    (tmp_path / "nodes" / "biolink~Gene.csv-1-4").write_text("x")
+
+    remote = "knowledge_graph_build/CreateBulkLoadNodes/"
+    existing = [
+        remote + "nodes/biolink~Gene.csv-0-4",   # current run, keep
+        remote + "nodes/biolink~Gene.csv-1-4",   # current run, keep
+        remote + "nodes/biolink~Gene.csv-0-3",   # previous run, drop
+        remote + "nodes/biolink~AnatomicalEntity.csv-0-31",  # older, drop
+    ]
+    orphans = tasks.orphaned_output_paths(existing, remote, str(tmp_path))
+    assert orphans == [remote + "nodes/biolink~Gene.csv-0-3",
+                       remote + "nodes/biolink~AnatomicalEntity.csv-0-31"]
+
+
+def test_orphaned_output_paths_empty_when_in_sync(tmp_path):
+    (tmp_path / "a.csv").write_text("x")
+    remote = "dag/task/"
+    assert tasks.orphaned_output_paths([remote + "a.csv"], remote,
+                                       str(tmp_path)) == []
