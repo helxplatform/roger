@@ -81,10 +81,11 @@ def task_wrapper(python_callable, **kwargs):
     logger.info(f"Task function args: {func_args}")
     # overrides values
     config.dag_run = dag_run
-    # CHANGE HERE: Pass func_args as 'task_kwargs'
+    # splat, so this works for both callable shapes: roger.core functions
+    # (bulk_load, merge_nodes, ...) and execute_pipeline_method
     if pass_conf:
-        return python_callable(task_kwargs=func_args, config=config)
-    return python_callable(task_kwargs=func_args)
+        return python_callable(**func_args, config=config)
+    return python_callable(**func_args)
 
 
 def get_executor_config(data_path='/opt/airflow/share/data'):
@@ -656,7 +657,9 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
 
     return PythonOperator(**python_operator_args)
 
-def execute_pipeline_method(pipeline_class, configparam, method_name, task_kwargs, **pipeline_kwargs):
+def execute_pipeline_method(pipeline_class, configparam, method_name,
+                            input_data_path=None, output_data_path=None,
+                            to_string=False, **pipeline_kwargs):
     """
     Lazy execution wrapper.
     Initializes the heavy pipeline class and executes the method ONLY inside the K8s worker pod.
@@ -670,7 +673,9 @@ def execute_pipeline_method(pipeline_class, configparam, method_name, task_kwarg
         method_to_call = getattr(pipeline, method_name)
 
         # 3. Run it with the Airflow context args
-        return method_to_call(**task_kwargs)
+        return method_to_call(input_data_path=input_data_path,
+                              output_data_path=output_data_path,
+                              to_string=to_string)
 
 
 

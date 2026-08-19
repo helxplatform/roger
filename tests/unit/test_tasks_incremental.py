@@ -5,6 +5,7 @@ Roger image); they skip cleanly elsewhere.
 """
 
 import os
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
@@ -330,3 +331,53 @@ def test_state_file_noop_when_lakefs_disabled(monkeypatch):
     assert tasks.get_state_file_path(ti) is None
     tasks.write_state_file(ti, {'entries': {}})  # must not raise
     assert tasks.read_state_file(ti) == {}
+
+
+def test_task_wrapper_calls_core_function_shape(monkeypatch):
+    """roger.core functions take explicit kwargs, not a task_kwargs dict."""
+    monkeypatch.setattr(tasks.config.lakefs_config, "enabled", False)
+    seen = {}
+
+    def core_like(to_string=False, config=None, input_data_path=None,
+                  output_data_path=None):
+        seen.update(to_string=to_string, config=config,
+                    input_data_path=input_data_path,
+                    output_data_path=output_data_path)
+        return "ok"
+
+    assert tasks.task_wrapper(core_like, dag_run=None, to_string=True) == "ok"
+    assert seen['to_string'] is True
+    assert seen['config'] is tasks.config
+    assert seen['input_data_path'] is None
+
+
+def test_task_wrapper_calls_pipeline_method_shape(monkeypatch):
+    "The annotate/index path goes through execute_pipeline_method."
+    monkeypatch.setattr(tasks.config.lakefs_config, "enabled", False)
+    seen = {}
+
+    class FakePipeline:
+        def __init__(self, config=None, **kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def annotate(self, to_string=False, input_data_path=None,
+                     output_data_path=None):
+            seen.update(to_string=to_string,
+                        input_data_path=input_data_path,
+                        output_data_path=output_data_path)
+            return "annotated"
+
+    callable_ = partial(tasks.execute_pipeline_method,
+                        pipeline_class=FakePipeline,
+                        configparam=tasks.config,
+                        method_name='annotate')
+    out = tasks.task_wrapper(callable_, dag_run=None, to_string=True,
+                             pass_conf=False)
+    assert out == "annotated"
+    assert seen['to_string'] is True
