@@ -482,3 +482,33 @@ def test_merge_searchable_docs_dedupes_tags():
     tag = {"category": "c", "value": "v"}
     merged = base.merge_searchable_docs({"tags": [tag]}, {"tags": [dict(tag)]})
     assert merged["tags"] == [tag]
+
+
+def test_validate_concepts_waits_for_index_variables(monkeypatch,
+                                                     lakefs_env):
+    """validate_indexed_concepts searches the VARIABLES index, so it must
+    wait for index_variables -- not just index_concepts. Otherwise it runs
+    against a freshly wiped, half-populated index and finds nothing."""
+    made = {}
+
+    def fake_create_python_task(dag, name, a_callable, **kw):
+        t = MagicMock(name=name)
+        t.upstreams = []
+        t.set_upstream = lambda other: t.upstreams.append(other)
+        made[name] = t
+        return t
+
+    monkeypatch.setattr(tasks, "create_python_task", fake_create_python_task)
+    monkeypatch.setattr(tasks, "TaskGroup", MagicMock())
+    monkeypatch.setattr(tasks, "EmptyOperator", MagicMock())
+
+    class FakePipeline:
+        pipeline_name = "heal-cdes"
+        input_version = "main"
+
+    tasks.create_es_taskgroup(SimpleNamespace(dag_id="annotate_and_index"),
+                              FakePipeline, tasks.config)
+
+    validate = made["validate_heal-cdes_index_concepts"]
+    assert made["index_heal-cdes_concepts"] in validate.upstreams
+    assert made["index_heal-cdes_variables"] in validate.upstreams

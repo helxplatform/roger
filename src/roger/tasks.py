@@ -919,6 +919,10 @@ def create_es_taskgroup(
                     **kwargs),
             **full_pull(crawl_path))
         validate_index_concepts_task.set_upstream(index_concepts_task)
+        # it asserts variables are findable by KG-derived terms, so it
+        # searches the variables index -- which must be fully populated
+        # first, not just the concepts index
+        validate_index_concepts_task.set_upstream(index_variables_task)
 
     return tg
 
@@ -982,6 +986,8 @@ def create_index_only_taskgroup(
             f"validate_{name}_index_concepts",
             'validate_indexed_concepts', [crawl_src])
         validate_concepts_task.set_upstream(index_concepts_task)
+        # searches the variables index too; see create_es_taskgroup
+        validate_concepts_task.set_upstream(index_variables_task)
 
         complete_task = EmptyOperator(task_id=f"complete_{name}",
                                       trigger_rule="none_failed")
