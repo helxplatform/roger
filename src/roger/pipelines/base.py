@@ -501,38 +501,63 @@ class DugPipeline():
             self.index_obj.set_ingest_date(index, timestamp)
 
     def index_elements(self, elements_file):
-        if self.index_obj == None:
+        """Submit one elements file to ElasticSearch, routed by element type.
+
+        Bulk, for the same reason as _index_concepts: dug's index_element
+        costs 2 requests for a new document and 3 for an existing one (exists
+        + get + update), which on a 127k-document index is hours of
+        sequential round trips.
+
+        The update path in dug unions search_terms/optional_terms/parents/
+        programs/tags/identifiers into whatever is already indexed. That
+        merge is dead weight for this data: element ids are unique within and
+        across datasets, and each element already carries its full parents
+        list (study/section), so there is nothing to union -- re-indexing
+        just rewrote identical content. A bulk index op replaces the document
+        instead, which also refreshes name/description/data_type, fields the
+        merge path silently left stale.
+        """
+        from elasticsearch.helpers import bulk
+
+        if self.index_obj is None:
             self.index_obj: Index = self.factory.build_indexer_obj()
 
-        "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
-        elements =jsonpickle.decode(storage.read_object(elements_file))
-        count = 0
-        total = len(elements)
-        # Index Annotated Elements
+        elements = jsonpickle.decode(storage.read_object(elements_file))
         log.info("found %d from elements files.", len(elements))
-        for element in elements:
-            count += 1
-            # Only index DugElements as concepts will be
-            # indexed differently in next step
-            if not isinstance(element, DugConcept):
+
+        # isinstance, not type(): pipelines may subclass these
+        index_for = ((DugVariable, self.variables_index),
+                     (DugStudy, self.studies_index),
+                     (DugSection, self.sections_index))
+
+        def actions():
+            for element in elements:
+                # concepts are indexed separately by _index_concepts
+                if isinstance(element, DugConcept) or not element.id:
+                    continue
+                index = next((idx for cls, idx in index_for
+                              if isinstance(element, cls)), None)
+                if index is None:
+                    continue
                 # override data-type with mapping values
                 if element.type.lower() in self.element_mapping:
                     element.type = self.element_mapping[element.type.lower()]
-                if not element.id:
-                    # no id no indexing
-                    continue
-                # Use the Dug Index object to submit the element to ES
-                if isinstance(element, DugVariable):
-                    self.index_obj.index_element(element, index=self.variables_index)
-                elif isinstance(element, DugStudy):
-                    self.index_obj.index_element(element, index=self.studies_index)
-                elif isinstance(element, DugSection):
-                    self.index_obj.index_element(element, index=self.sections_index)
-            percent_complete = (count / total) * 100
-            if percent_complete % 10 == 0:
-                log.info("%d %%", percent_complete)
-        log.info("Done indexing %s.", elements_file)
+                yield {'_op_type': 'index',
+                       '_index': index,
+                       '_id': element.get_id(),
+                       '_source': element.get_searchable_dict()}
+
+        indexed, errors = bulk(self.index_obj.es, actions(),
+                               chunk_size=1000, raise_on_error=False,
+                               request_timeout=120)
+        if errors:
+            log.error("%d document(s) failed to index; first: %s",
+                      len(errors), errors[0])
+            raise PipelineException(
+                f"Bulk indexing failed for {len(errors)} document(s) "
+                f"from {elements_file}")
+        log.info("Done indexing %s: %d document(s).", elements_file, indexed)
 
     def validate_indexed_element_file(self, elements_file):        
         "After submitting elements for indexing, verify that they're available"
@@ -689,30 +714,53 @@ class DugPipeline():
         # log.info("Extracted elements serialized to %s", extracted_output_file)
 
     def _index_concepts(self, concepts):
-        "Submit concepts to ElasticSearch for indexing"
-        log.info("Indexing Concepts")
-        total = len(concepts)
-        count = 0
+        """Submit concepts and their KG answers to ElasticSearch.
 
-        if self.index_obj == None: 
+        Uses the bulk API rather than dug's per-doc index_concept /
+        index_kg_answer: those issue an exists check plus a write per
+        document, so a 60k-concept dataset became ~150k sequential round
+        trips and ran for an hour. Bulk sends 1000 docs per request.
+
+        Dropping the exists check is deliberate. index_concept skips
+        documents already present, which silently keeps stale copies; these
+        tasks always rebuild the indexes wholesale, so an id-keyed upsert is
+        both correct and what we want.
+        """
+        from elasticsearch.helpers import bulk
+        from dug_data_model.v2 import dedupe_and_sort
+
+        if self.index_obj is None:
             self.index_obj: Index = self.factory.build_indexer_obj()
 
-        log.info(concepts)
-        for concept_id, concept in concepts.items():
-            count += 1
-            self.index_obj.index_concept(concept, index=self.concepts_index)
-            # Index knowledge graph answers for each concept
-            for kg_answer_id, kg_answer in concept.kg_answers.items():
-                self.index_obj.index_kg_answer(
-                    concept_id=concept_id,
-                    kg_answer=kg_answer,
-                    index=self.kg_index,
-                    id_suffix=kg_answer_id
-                )
-            percent_complete = int((count / total) * 100)
-            if percent_complete % 10 == 0:
-                log.info("%s %%", percent_complete)
-        log.info("Done Indexing concepts")
+        log.info("Indexing %d concepts", len(concepts))
+
+        def actions():
+            for concept_id, concept in concepts.items():
+                yield {'_op_type': 'index',
+                       '_index': self.concepts_index,
+                       '_id': concept_id,
+                       '_source': concept.get_searchable_dict()}
+                for kg_answer_id, kg_answer in concept.kg_answers.items():
+                    targets = (kg_answer.get_node_names(include_curie=False)
+                               + kg_answer.get_node_synonyms(
+                                   include_curie=False))
+                    yield {'_op_type': 'index',
+                           '_index': self.kg_index,
+                           '_id': f"{concept_id}_{kg_answer_id}",
+                           '_source': {
+                               'concept_id': concept_id,
+                               'search_targets': dedupe_and_sort(targets),
+                               'knowledge_graph': kg_answer.get_kg()}}
+
+        indexed, errors = bulk(self.index_obj.es, actions(),
+                               chunk_size=1000, raise_on_error=False,
+                               request_timeout=120)
+        if errors:
+            log.error("%d document(s) failed to index; first: %s",
+                      len(errors), errors[0])
+            raise PipelineException(
+                f"Bulk indexing failed for {len(errors)} document(s)")
+        log.info("Done Indexing concepts: %d document(s)", indexed)
 
     def _validate_indexed_concepts(self, elements, concepts):
         """

@@ -417,3 +417,36 @@ def test_memory_override_patches_base_container():
     assert container.resources.limits == {"memory": "15Gi"}
     # request stays small so the namespace quota is not reserved wholesale
     assert container.resources.requests == {"memory": "1Gi"}
+
+
+def test_es_taskgroup_pulls_crawl_outputs_only(monkeypatch, lakefs_env):
+    """index_variables must read crawl's expanded elements.txt, not
+    annotate's: only the crawl copy carries KG-derived optional_terms, and
+    the storage glob ('**/elements.txt') cannot tell them apart."""
+    recorded = {}
+
+    def fake_create_python_task(dag, name, a_callable, **kw):
+        recorded[name] = [r['path'] for r in (kw.get('external_repos') or [])]
+        return MagicMock(name=name)
+
+    monkeypatch.setattr(tasks, "create_python_task", fake_create_python_task)
+    monkeypatch.setattr(tasks, "TaskGroup", MagicMock())
+    monkeypatch.setattr(tasks, "EmptyOperator", MagicMock())
+
+    class FakePipeline:
+        pipeline_name = "heal-mds-studies"
+        input_version = "main"
+
+    dag = SimpleNamespace(dag_id="annotate_and_index")
+    tasks.create_es_taskgroup(dag, FakePipeline, tasks.config)
+
+    assert set(recorded) == {
+        "index_heal-mds-studies_variables",
+        "validate_heal-mds-studies_index_variables",
+        "index_heal-mds-studies_concepts",
+        "validate_heal-mds-studies_index_concepts"}, recorded
+    for name, paths in recorded.items():
+        assert paths, f"{name} pulls nothing"
+        assert all("crawl_heal-mds-studies" in p for p in paths), (name, paths)
+        assert not any("annotate_heal-mds-studies_files" in p
+                       for p in paths), (name, paths)

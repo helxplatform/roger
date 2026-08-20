@@ -858,7 +858,13 @@ def create_es_taskgroup(
     repo = config.lakefs_config.repo
     branch = config.lakefs_config.branch
     file_group = file_task_group_id(name)
-    annotate_path = f"{dag.dag_id}/{file_group}.annotate_{name}_files"
+    # Everything ES needs lives in the crawl output: expanded_concepts.txt
+    # AND an elements.txt whose optional_terms carry the KG-derived search
+    # terms (crawl_tranql rewrites it after expanding concepts). The
+    # annotate copy has empty optional_terms, so indexing that one makes
+    # validate_indexed_concepts unsatisfiable -- it searches by KG node
+    # name. storage.dug_expanded_elements_objects globs "**/elements.txt"
+    # and cannot tell the two apart, so only the crawl prefix is pulled.
     crawl_path = f"{dag.dag_id}/{file_group}.crawl_{name}"
 
     def full_pull(*paths):
@@ -880,7 +886,7 @@ def create_es_taskgroup(
                     configparam=configparam,
                     method_name='index_variables',
                     **kwargs),
-            **full_pull(annotate_path))
+            **full_pull(crawl_path))
 
         validate_index_variables_task = create_python_task(
             dag,
@@ -890,7 +896,7 @@ def create_es_taskgroup(
                     configparam=configparam,
                     method_name='validate_indexed_variables',
                     **kwargs),
-            **full_pull(annotate_path))
+            **full_pull(crawl_path))
         validate_index_variables_task.set_upstream(index_variables_task)
 
         index_concepts_task = create_python_task(
@@ -911,7 +917,7 @@ def create_es_taskgroup(
                     configparam=configparam,
                     method_name='validate_indexed_concepts',
                     **kwargs),
-            **full_pull(crawl_path, annotate_path))
+            **full_pull(crawl_path))
         validate_index_concepts_task.set_upstream(index_concepts_task)
 
     return tg
@@ -960,24 +966,21 @@ def create_index_only_taskgroup(
             no_output_files=True)
 
     with TaskGroup(group_id=f"{name}_index_only_task_group") as tg:
-        annotate_src = f"annotate_{name}_files"
+        # all four read crawl output; see create_es_taskgroup for why
         crawl_src = f"crawl_{name}"
 
         index_variables_task = index_task(
-            f"index_{name}_variables", 'index_variables', [annotate_src])
-        # validate_indexed_variables reads only annotated elements
+            f"index_{name}_variables", 'index_variables', [crawl_src])
         validate_variables_task = index_task(
             f"validate_{name}_index_variables",
-            'validate_indexed_variables', [annotate_src])
+            'validate_indexed_variables', [crawl_src])
         validate_variables_task.set_upstream(index_variables_task)
 
         index_concepts_task = index_task(
             f"index_{name}_concepts", 'index_concepts', [crawl_src])
-        # validate_indexed_concepts pairs expanded concepts (crawl) with
-        # annotated elements (annotate), so it needs both prefixes
         validate_concepts_task = index_task(
             f"validate_{name}_index_concepts",
-            'validate_indexed_concepts', [annotate_src, crawl_src])
+            'validate_indexed_concepts', [crawl_src])
         validate_concepts_task.set_upstream(index_concepts_task)
 
         complete_task = EmptyOperator(task_id=f"complete_{name}",
