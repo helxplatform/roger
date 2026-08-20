@@ -450,3 +450,35 @@ def test_es_taskgroup_pulls_crawl_outputs_only(monkeypatch, lakefs_env):
         assert all("crawl_heal-mds-studies" in p for p in paths), (name, paths)
         assert not any("annotate_heal-mds-studies_files" in p
                        for p in paths), (name, paths)
+
+
+def test_merge_searchable_docs_unions_lists_keeps_new_scalars():
+    """The same CDE id appears in several element files with different
+    concepts and parents (BRTHDTC in adult- and pediatric-demographic);
+    indexing must union those, not overwrite."""
+    base = pytest.importorskip("roger.pipelines.base")
+
+    adult = {"id": "BRTHDTC", "name": "BRTHDTC", "description": "old",
+             "identifiers": ["UMLS:C0005615"], "parents": ["adult-demographic"],
+             "search_terms": ["Birth"], "optional_terms": [], "programs": [],
+             "tags": []}
+    pediatric = {"id": "BRTHDTC", "name": "BRTHDTC", "description": "new",
+                 "identifiers": ["UMLS:C0011008"],
+                 "parents": ["pediatric-demographic"],
+                 "search_terms": ["Date of birth"], "optional_terms": [],
+                 "programs": [], "tags": []}
+
+    merged = base.merge_searchable_docs(adult, pediatric)
+    assert merged["identifiers"] == sorted(["UMLS:C0005615", "UMLS:C0011008"])
+    assert merged["parents"] == sorted(["adult-demographic",
+                                        "pediatric-demographic"])
+    assert set(merged["search_terms"]) == {"Birth", "Date of birth"}
+    # scalars come from the newer document
+    assert merged["description"] == "new"
+
+
+def test_merge_searchable_docs_dedupes_tags():
+    base = pytest.importorskip("roger.pipelines.base")
+    tag = {"category": "c", "value": "v"}
+    merged = base.merge_searchable_docs({"tags": [tag]}, {"tags": [dict(tag)]})
+    assert merged["tags"] == [tag]

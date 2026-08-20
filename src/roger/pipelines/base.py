@@ -15,6 +15,7 @@ from pathlib import Path
 import tarfile
 from typing import Union
 import jsonpickle
+from dug_data_model.v2 import dedupe_and_sort
 
 import requests
 
@@ -70,6 +71,31 @@ def make_edge(subj,
         "object": obj,
         "provided_by": "renci.bdc.semanticsearch.annotator"
     }
+
+# The six list fields dug's Index.index_element unions when a document id is
+# already present. It matters: the same CDE variable id appears in several
+# element files (e.g. BRTHDTC in both adult- and pediatric-demographic) with
+# different concepts and parents, and search must find it by any of them.
+MERGED_LIST_FIELDS = ('search_terms', 'optional_terms', 'parents',
+                      'programs', 'identifiers')
+
+
+def merge_searchable_docs(prior: dict, new: dict) -> dict:
+    """Union the list fields of two searchable dicts for the same id.
+
+    Scalars (name, description, data_type, ...) are taken from `new`; dug's
+    per-doc update path left them at whatever was written first, which let
+    edits upstream go stale.
+    """
+    merged = dict(new)
+    for field in MERGED_LIST_FIELDS:
+        merged[field] = dedupe_and_sort(
+            (prior.get(field) or []) + (new.get(field) or []))
+    tags = (prior.get('tags') or []) + (new.get('tags') or [])
+    merged['tags'] = [dict(t) for t in
+                      {tuple(sorted(d.items())) for d in tags}]
+    return merged
+
 
 class FileFetcher:
     """A basic remote file fetcher class
@@ -504,18 +530,14 @@ class DugPipeline():
         """Submit one elements file to ElasticSearch, routed by element type.
 
         Bulk, for the same reason as _index_concepts: dug's index_element
-        costs 2 requests for a new document and 3 for an existing one (exists
-        + get + update), which on a 127k-document index is hours of
+        costs 2 requests for a new document and 3 for an existing one
+        (exists + get + update), which on a 127k-document index is hours of
         sequential round trips.
 
-        The update path in dug unions search_terms/optional_terms/parents/
-        programs/tags/identifiers into whatever is already indexed. That
-        merge is dead weight for this data: element ids are unique within and
-        across datasets, and each element already carries its full parents
-        list (study/section), so there is nothing to union -- re-indexing
-        just rewrote identical content. A bulk index op replaces the document
-        instead, which also refreshes name/description/data_type, fields the
-        merge path silently left stale.
+        Union semantics are preserved -- ids repeat across element files and
+        each occurrence can carry different concepts and parents -- but the
+        reads are batched: one mget per 1000 ids instead of two requests per
+        document.
         """
         from elasticsearch.helpers import bulk
 
@@ -531,24 +553,43 @@ class DugPipeline():
                      (DugStudy, self.studies_index),
                      (DugSection, self.sections_index))
 
-        def actions():
-            for element in elements:
-                # concepts are indexed separately by _index_concepts
-                if isinstance(element, DugConcept) or not element.id:
-                    continue
-                index = next((idx for cls, idx in index_for
-                              if isinstance(element, cls)), None)
-                if index is None:
-                    continue
-                # override data-type with mapping values
-                if element.type.lower() in self.element_mapping:
-                    element.type = self.element_mapping[element.type.lower()]
-                yield {'_op_type': 'index',
-                       '_index': index,
-                       '_id': element.get_id(),
-                       '_source': element.get_searchable_dict()}
+        by_index = {}
+        for element in elements:
+            # concepts are indexed separately by _index_concepts
+            if isinstance(element, DugConcept) or not element.id:
+                continue
+            index = next((idx for cls, idx in index_for
+                          if isinstance(element, cls)), None)
+            if index is None:
+                continue
+            # override data-type with mapping values
+            if element.type.lower() in self.element_mapping:
+                element.type = self.element_mapping[element.type.lower()]
+            docs = by_index.setdefault(index, {})
+            doc_id = element.get_id()
+            doc = element.get_searchable_dict()
+            # same id twice inside one file
+            docs[doc_id] = (merge_searchable_docs(docs[doc_id], doc)
+                            if doc_id in docs else doc)
 
-        indexed, errors = bulk(self.index_obj.es, actions(),
+        # fold in what earlier files (or datasets) already indexed
+        for index, docs in by_index.items():
+            ids = list(docs)
+            for i in range(0, len(ids), 1000):
+                chunk = ids[i:i + 1000]
+                found = self.index_obj.es.mget(
+                    index=index, body={'ids': chunk})
+                for entry in found.get('docs', []):
+                    if entry.get('found'):
+                        doc_id = entry['_id']
+                        docs[doc_id] = merge_searchable_docs(
+                            entry['_source'], docs[doc_id])
+
+        actions = [{'_op_type': 'index', '_index': index,
+                    '_id': doc_id, '_source': doc}
+                   for index, docs in by_index.items()
+                   for doc_id, doc in docs.items()]
+        indexed, errors = bulk(self.index_obj.es, actions,
                                chunk_size=1000, raise_on_error=False,
                                request_timeout=120)
         if errors:
@@ -727,7 +768,6 @@ class DugPipeline():
         both correct and what we want.
         """
         from elasticsearch.helpers import bulk
-        from dug_data_model.v2 import dedupe_and_sort
 
         if self.index_obj is None:
             self.index_obj: Index = self.factory.build_indexer_obj()
