@@ -195,9 +195,17 @@ def write_state_file(task_instance: TaskInstance, state: dict):
 def resolve_ref_tip(client: LakeFsWrapper, repo: str, ref: str) -> str:
     """Resolve any ref (branch, tag or commit id) to a commit id.
 
-    log_commits is used instead of branches_api.get_branch because dataset
-    versions may be tags rather than branches.
+    Tags are tried first. lakefs validates log_commits' ref argument as a
+    *branch id*, so a tag whose name is not a legal branch name -- the
+    dotted versions this pipeline uses, e.g. kgx.data_sets
+    'baseline-graph:v7.0' -- is rejected with a 400 before the tag is ever
+    looked up. branches_api.get_branch has the same problem, which is why
+    neither API alone is enough.
     """
+    try:
+        return client._client.tags_api.get_tag(repository=repo, tag=ref).commit_id
+    except NotFoundException:
+        pass  # not a tag; a branch or commit id then
     results = client._client.refs_api.log_commits(
         repository=repo, ref=ref, amount=1).results
     return results[0].id if results else ref

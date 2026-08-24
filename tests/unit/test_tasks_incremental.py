@@ -51,6 +51,11 @@ def paged_objects(paths, page_size=2):
     return fetch
 
 
+def _tag_not_found(repository, tag):
+    from lakefs_sdk.exceptions import NotFoundException
+    raise NotFoundException(status=404)
+
+
 class FakeClient:
     def __init__(self, diff_entries=None, tip="tipA", objects=None):
         self.downloads = []
@@ -59,6 +64,9 @@ class FakeClient:
                 diff_refs=paged_diff(diff_entries or []),
                 log_commits=lambda repository, ref, amount:
                     SimpleNamespace(results=[SimpleNamespace(id=tip)])),
+            # resolve_ref_tip asks the tags API first; these fakes use
+            # branch names, so the tag lookup misses and it falls through
+            tags_api=SimpleNamespace(get_tag=_tag_not_found),
             objects_api=SimpleNamespace(
                 list_objects=paged_objects(objects or [])))
 
@@ -529,3 +537,33 @@ def test_quiet_noisy_loggers_caps_http_chatter():
     assert not logging.getLogger("httpcore.http11").isEnabledFor(logging.DEBUG)
     # roger's own logger is untouched
     assert logging.getLogger("roger").isEnabledFor(logging.INFO)
+
+
+def test_resolve_ref_tip_prefers_tags(monkeypatch):
+    """lakefs validates log_commits' ref as a *branch id*, so a dotted tag
+    like 'v7.0' (kgx.data_sets 'baseline-graph:v7.0') 400s before the tag is
+    looked up. Tags must be resolved through the tags API."""
+    from lakefs_sdk.exceptions import NotFoundException
+
+    calls = []
+
+    class Tags:
+        def get_tag(self, repository, tag):
+            calls.append(('get_tag', tag))
+            if tag == 'v7.0':
+                return SimpleNamespace(commit_id='tagcommit')
+            raise NotFoundException(status=404)
+
+    class Refs:
+        def log_commits(self, repository, ref, amount):
+            calls.append(('log_commits', ref))
+            assert ref != 'v7.0', "dotted tag must not reach log_commits"
+            return SimpleNamespace(
+                results=[SimpleNamespace(id='branchcommit')])
+
+    client = SimpleNamespace(_client=SimpleNamespace(tags_api=Tags(),
+                                                     refs_api=Refs()))
+
+    assert tasks.resolve_ref_tip(client, 'baseline-graph', 'v7.0') == 'tagcommit'
+    assert tasks.resolve_ref_tip(client, 'baseline-graph', 'main') == 'branchcommit'
+    assert ('log_commits', 'main') in calls
