@@ -512,3 +512,20 @@ def test_validate_concepts_waits_for_index_variables(monkeypatch,
     validate = made["validate_heal-cdes_index_concepts"]
     assert made["index_heal-cdes_concepts"] in validate.upstreams
     assert made["index_heal-cdes_variables"] in validate.upstreams
+
+
+def test_quiet_noisy_loggers_caps_http_chatter():
+    """requests_cache logs 5 DEBUG lines per HTTP call; a single annotate task
+    produced a 2.9 GB log that way, which evicted the api-server (750Mi
+    ephemeral) when the log was opened."""
+    import logging
+    rl = pytest.importorskip("roger.logger")
+
+    logging.getLogger("requests_cache.policy.actions").setLevel(logging.DEBUG)
+    rl.quiet_noisy_loggers()
+    # child loggers inherit the cap from the configured parent
+    assert not logging.getLogger(
+        "requests_cache.policy.actions").isEnabledFor(logging.DEBUG)
+    assert not logging.getLogger("httpcore.http11").isEnabledFor(logging.DEBUG)
+    # roger's own logger is untouched
+    assert logging.getLogger("roger").isEnabledFor(logging.INFO)

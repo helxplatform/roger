@@ -8,6 +8,8 @@ blow up with "'dict' object has no attribute 'id'".
 
     python scripts/migrate_pickled_classes.py --scan  <dir>   # what's in there
     python scripts/migrate_pickled_classes.py --fix   <dir>   # rewrite in place
+    python scripts/migrate_pickled_classes.py --restamp <dir> # class paths only,
+                                                             # for huge trees
     python scripts/migrate_pickled_classes.py --self-check     # no dir needed
 
 Run inside the roger image so the current dug/dug_data_model are importable.
@@ -15,6 +17,7 @@ Run inside the roger image so the current dug/dug_data_model are importable.
 
 import argparse
 import importlib
+import os
 import json
 import re
 import sys
@@ -96,13 +99,17 @@ def artifact_files(root):
 
 
 def field_drift(root):
+    return field_drift_paths(artifact_files(root))
+
+
+def field_drift_paths(paths):
     """Per class, which stored fields the current model no longer declares.
 
     Class names matching is not enough: a renamed field would migrate into a
     model that has no home for it, and the value would quietly vanish.
     """
     drift = {}
-    for path in artifact_files(root):
+    for path in paths:
         obj = jsonpickle.decode(path.read_text())
         stack, seen = [obj], set()
         while stack:
@@ -161,6 +168,131 @@ def scan(root):
     return broken
 
 
+
+def dead_modules(sample_paths):
+    """Which stored modules no longer import, from a sample of files.
+
+    Only the module set comes from the sample -- never the class list. A
+    sample of concepts.txt files sees DugConcept and nothing else, and a
+    mapping built from that would restamp DugConcept while leaving
+    DugVariable pointing at the dead module: a half-migrated file that still
+    decodes to plain dicts.
+    """
+    dead, found = set(), set()
+    for path in sample_paths:
+        found |= classes_in(path.read_text())
+    for cls in found:
+        module_path = cls.rpartition('.')[0]
+        if module_path in dead or module_path in sys.modules:
+            continue
+        try:
+            importlib.import_module(module_path)
+        except Exception:  # noqa: BLE001 - module is gone; restamp it
+            dead.add(module_path)
+    return dead
+
+
+def restamp_text(text, dead):
+    """Repoint every py/object under a dead module at its current home.
+
+    Resolves by class name, so classes that never appeared in the sample are
+    still rewritten. Returns (new_text, unmapped stored paths).
+    """
+    unmapped = set()
+
+    def repoint(match):
+        stored = match.group(1)
+        module_path, _, name = stored.rpartition('.')
+        if module_path not in dead:
+            return match.group(0)
+        current = CURRENT.get(name)
+        if current is None:
+            unmapped.add(stored)
+            return match.group(0)
+        return match.group(0).replace(
+            stored, f"{current.__module__}.{current.__name__}")
+
+    return PY_OBJECT.sub(repoint, text), unmapped
+
+
+def restamp(root, sample=20, dry_run=False):
+    """Rewrite stored class paths as text, without decoding.
+
+    --fix decodes and re-encodes every file, which is right when fields have
+    to be backfilled but costs seconds per file; at 150k artifacts that is
+    days. When the stored and current models declare the same fields, the
+    only thing that needs to change is the dotted path in "py/object", so a
+    streaming string replace does the whole job at I/O speed.
+
+    Field equivalence is not assumed: a sample is decoded through the shim
+    and checked for drift first, and any drift aborts the run.
+    """
+    files = artifact_files(root)
+    print(f"{len(files)} artifact file(s) under {root}")
+    if not files:
+        return 0
+
+    # stratify: concepts.txt holds only concepts and elements.txt only
+    # elements, so an unstratified slice can miss whole classes
+    sample_paths = []
+    per_kind = max(1, sample // len(ARTIFACTS))
+    for kind in ARTIFACTS:
+        of_kind = [f for f in files
+                   if f.name == kind and f.stat().st_size > 64]
+        step = max(1, len(of_kind) // per_kind)
+        sample_paths += of_kind[::step][:per_kind]
+    if not sample_paths:
+        raise SystemExit("no non-empty artifact files to sample")
+
+    dead = dead_modules(sample_paths)
+    if not dead:
+        print("nothing stale in the sample; already current")
+        return 0
+    print("dead module(s):", ", ".join(sorted(dead)))
+    for module_path in dead:
+        install_alias(module_path)
+    print(f"\nchecking {len(sample_paths)} sampled file(s) for field drift")
+    drift = field_drift_paths(sample_paths)
+    blocked = False
+    for name, (unknown, absent, count) in sorted(drift.items()):
+        print(f"  {name}: {count} object(s) inspected")
+        if unknown:
+            blocked = True
+            print(f"    !! stored but not declared -> {sorted(unknown)}")
+        if absent:
+            print(f"       new field, NOT backfilled by restamp -> "
+                  f"{sorted(absent)}")
+    if blocked:
+        raise SystemExit(
+            "aborting: restamp only rewrites class paths, so renamed or "
+            "dropped fields would be silently lost. Use --fix for these.")
+    if not drift:
+        raise SystemExit("aborting: decoded no model objects from the sample")
+
+    changed = 0
+    for i, path in enumerate(files, 1):
+        text = path.read_text()
+        new_text, unmapped = restamp_text(text, dead)
+        if unmapped:
+            raise SystemExit(
+                f"!! no current class for {sorted(unmapped)} in {path}; "
+                f"add an explicit mapping before restamping")
+        if new_text == text:
+            continue
+        changed += 1
+        if not dry_run:
+            # write-then-rename: a pod killed mid-write must not leave a
+            # truncated artifact behind, and there are 150k of them
+            tmp = path.with_name(path.name + '.restamp-tmp')
+            tmp.write_text(new_text)
+            os.replace(tmp, path)
+        if changed % 5000 == 0:
+            print(f"  {changed} rewritten ({i}/{len(files)} scanned)")
+    print(f"{'would rewrite' if dry_run else 'rewrote'} {changed} "
+          f"of {len(files)} file(s)")
+    return changed
+
+
 def fix(root, dry_run=False):
     files = artifact_files(root)
     for module_path in broken_modules(
@@ -215,6 +347,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--scan', metavar='DIR')
     parser.add_argument('--fix', metavar='DIR')
+    parser.add_argument('--restamp', metavar='DIR',
+                        help='rewrite class paths as text (fast path for\n'
+                             'very large trees); verifies a sample first')
+    parser.add_argument('--sample', type=int, default=20,
+                        help='files to decode for the drift check')
     parser.add_argument('--dry-run', action='store_true')
     parser.add_argument('--self-check', action='store_true')
     args = parser.parse_args()
@@ -223,10 +360,12 @@ def main():
         self_check()
     elif args.scan:
         scan(args.scan)
+    elif args.restamp:
+        restamp(args.restamp, sample=args.sample, dry_run=args.dry_run)
     elif args.fix:
         fix(args.fix, dry_run=args.dry_run)
     else:
-        parser.error("one of --scan, --fix, --self-check is required")
+        parser.error("one of --scan, --restamp, --fix, --self-check is required")
 
 
 if __name__ == '__main__':

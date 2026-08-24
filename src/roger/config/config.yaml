@@ -6,7 +6,9 @@ redisgraph:
   port: 6379
 
 logging:
-  level: DEBUG
+  # DEBUG here is roger's own logger; third-party HTTP chatter is capped
+  # separately in roger.logger.quiet_noisy_loggers.
+  level: INFO
   format: '[%(name)s][%(filename)s][%(lineno)d][%(funcName)20s] %(levelname)s: %(message)s'
 
 data_root: roger/data
