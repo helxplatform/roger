@@ -53,7 +53,12 @@ with DAG(
 
     merge_nodes = create_python_task (dag, name="MergeNodes",
                                       a_callable=roger.merge_nodes,
-                                      external_repos=input_repos
+                                      external_repos=input_repos,
+                                      # merges every KGX node across the
+                                      # baseline graph and all dataset
+                                      # outputs in one task; OOMed at the
+                                      # chart default
+                                      memory="15Gi",
                                       )
 
     # The rest of these  guys can just operate on the local lakefs repo/branch
