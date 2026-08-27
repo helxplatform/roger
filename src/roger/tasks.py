@@ -456,7 +456,13 @@ def avalon_commit_callback(context: Context, **kwargs):
         # re-processes the same commit window (idempotent)
         _advance_state_variables(state)
     except Exception as e:
+        # never swallow this: the clean_up below deletes the local output,
+        # so a logged-and-ignored merge failure destroyed the work and
+        # still reported success. Raising from post_execute fails the
+        # task, which keeps the output (on_failure_callback passes
+        # keep_output=True) so the retry resumes from it.
         logger.error(e)
+        raise
     finally:
         client._client.branches_api.delete_branch(
             repository=repo,
@@ -807,12 +813,24 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
         # pre_execute creates the input dir before it can raise
         # AirflowSkipException; clean it up on skip too
         python_operator_args['on_skipped_callback'] = partial(clean_up, **op_kwargs)
+        # post_execute, not on_success_callback. Airflow runs post_execute
+        # inside _execute_task, before it records end_date and releases
+        # downstream; success callbacks run in finalize(), after. Committing
+        # there meant downstream tasks read the branch before the output
+        # landed -- BulkLoad loaded an edgeless graph 105s early, and
+        # make_kgx built kgx from annotations 4.8h stale. Airflow also
+        # swallows exceptions from state-change callbacks (it only logs
+        # them), so a failed upload or merge used to leave the task green;
+        # from post_execute it fails the task instead.
         if not no_output_files:
-            python_operator_args['on_success_callback'] = partial(
-                avalon_commit_callback,
-                clear_output_prefix=clear_output_prefix, **op_kwargs)
+            commit = partial(avalon_commit_callback,
+                             clear_output_prefix=clear_output_prefix,
+                             **op_kwargs)
         else:
-            python_operator_args['on_success_callback'] = partial(record_state_callback, **op_kwargs)
+            commit = partial(record_state_callback, **op_kwargs)
+        # the hook is called as (context, result); our callbacks take context
+        python_operator_args['post_execute'] = (
+            lambda context, result=None, _c=commit: _c(context))
 
     python_operator_args["op_kwargs"] = op_kwargs
 

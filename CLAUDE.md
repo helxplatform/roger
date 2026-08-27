@@ -122,7 +122,11 @@ roger_incr::{dag_id}::{task_id}::{repo}@{branch}
 
 Use `from airflow.sdk import Variable` — `airflow.models.Variable` does direct DB access and is blocked on Airflow 3.x workers (`tasks.py` imports the SDK one with a fallback).
 
-State is **only advanced after a successful commit+merge**, inside `avalon_commit_callback`'s existing try block, so a swallowed merge failure can never mark unprocessed commits as consumed.
+State is **only advanced after a successful commit+merge**, inside
+`avalon_commit_callback`'s try block, so a failed merge can never mark
+unprocessed commits as consumed. That merge failure is re-raised rather than
+logged and dropped: the `clean_up` at the end of the callback deletes the
+local output, so swallowing it destroyed the work *and* reported success.
 
 ### Flow through one task
 
@@ -241,9 +245,19 @@ When `ROGER_LAKEFS__CONFIG_ENABLED=true`, each task pulls inputs from a LakeFS r
 | flag | effect |
 |---|---|
 | `no_input_files=True` | skip the `pre_execute` download entirely (used by `wipe_es_indexes`) |
-| `no_output_files=True` | success callback is `record_state_callback` (advances state only) instead of `avalon_commit_callback` (commits output) |
+| `no_output_files=True` | `post_execute` runs `record_state_callback` (advances state only) instead of `avalon_commit_callback` (commits output) |
 | `incremental_pull=False` | always download full inputs, even when the DAG run is incremental |
 | `pass_conf` | whether the DAG run conf is forwarded into the callable |
+
+Output is committed from **`post_execute`**, not `on_success_callback`.
+Airflow runs `post_execute` inside `_execute_task`, before it records
+`end_date` and releases downstream; success callbacks run later, in
+`finalize()`. Committing there let downstream tasks read the branch before the
+output landed — `BulkLoad` loaded an edgeless graph 105s early, and
+`make_kgx` built KGX from annotations 4.8 hours stale, both green. Airflow
+also only *logs* exceptions raised by state-change callbacks
+(`_run_task_state_change_callbacks`), so a failed upload or merge left the
+task successful; from `post_execute` it fails the task.
 
 `on_failure_callback` and `on_skipped_callback` both run `clean_up` — the skip variant matters because `pre_execute` creates the input dir *before* it can raise `AirflowSkipException`.
 
