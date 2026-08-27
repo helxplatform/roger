@@ -86,7 +86,13 @@ with DAG(
     bulk_load = create_python_task(dag,
                                    name="BulkLoad",
                                    a_callable=roger.bulk_load,
-                                   no_output_files=True)
+                                   no_output_files=True,
+                                   # deletes the graph and reloads it whole,
+                                   # so it always needs the complete node and
+                                   # edge csv set -- an incremental pull hands
+                                   # it only what changed and it would rebuild
+                                   # the graph from that fragment
+                                   incremental_pull=False)
     check_tranql = create_python_task(dag,
                                       name="CheckTranql",
                                       a_callable=roger.check_tranql,

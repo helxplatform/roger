@@ -319,6 +319,19 @@ class BulkLoad:
         graph = redisgraph['graph']
         log.info(f"bulk loading \n  nodes: {nodes} \n  edges: {edges}")
 
+        # An empty edge set is a valid loader invocation, so a build whose
+        # edge csvs never arrived loads nodes only and reports success. That
+        # is how the graph ended up with 3.9M nodes and no relationships:
+        # BulkLoad resolved the lakefs tip 100s before CreateBulkLoadEdges
+        # committed its 12GB of edges, so it read a commit where the prefix
+        # was still empty.
+        if nodes and not edges:
+            raise ValueError(
+                f"{len(nodes)} node csv(s) but no edge csv(s) under "
+                f"{storage.bulk_path('**/edges', input_data_path)}. "
+                "Refusing to bulk load an edgeless graph; check that "
+                "CreateBulkLoadEdges committed before this task ran.")
+
         try:
             log.info (f"deleting graph {graph} in preparation for bulk load.")
             db = self.get_redisgraph()
