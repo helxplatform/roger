@@ -567,3 +567,68 @@ def test_resolve_ref_tip_prefers_tags(monkeypatch):
     assert tasks.resolve_ref_tip(client, 'baseline-graph', 'v7.0') == 'tagcommit'
     assert tasks.resolve_ref_tip(client, 'baseline-graph', 'main') == 'branchcommit'
     assert ('log_commits', 'main') in calls
+
+
+# --- resuming an interrupted annotate --------------------------------------
+# Annotation costs tens of seconds per input file, so a bdc-parent run is
+# weeks long. Its output only reaches lakefs when the whole task succeeds, so
+# a task that died at file 40,000 of 61,597 used to discard all of it.
+
+def _write(path, text="x"):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as handle:
+        handle.write(text)
+
+
+def test_reuse_prior_try_outputs_carries_finished_work_forward(lakefs_env):
+    prior = lakefs_env / ("annotate_and_index_tg.annotate_topmed_files"
+                          "_manual__1_1_output")
+    _write(str(prior / "phs000007_dd" / "elements.txt"))
+    _write(str(prior / "phs000007_dd" / "concepts.txt"))
+
+    ti = make_ti(try_number=2)
+    assert tasks.reuse_prior_try_outputs(ti) == 2
+
+    current = lakefs_env / ("annotate_and_index_tg.annotate_topmed_files"
+                            "_manual__1_2_output")
+    assert (current / "phs000007_dd" / "elements.txt").is_file()
+    assert (current / "phs000007_dd" / "concepts.txt").is_file()
+
+
+def test_reuse_prior_try_outputs_does_not_overwrite_current_try(lakefs_env):
+    prior = lakefs_env / ("annotate_and_index_tg.annotate_topmed_files"
+                          "_manual__1_1_output")
+    current = lakefs_env / ("annotate_and_index_tg.annotate_topmed_files"
+                            "_manual__1_2_output")
+    _write(str(prior / "d" / "elements.txt"), "old")
+    _write(str(current / "d" / "elements.txt"), "new")
+
+    assert tasks.reuse_prior_try_outputs(make_ti(try_number=2)) == 0
+    assert (current / "d" / "elements.txt").read_text() == "new"
+
+
+def test_clean_up_keeps_output_on_failure(lakefs_env):
+    "The failure callback must not destroy what a retry can resume from."
+    ti = make_ti(try_number=1)
+    base = "annotate_and_index_tg.annotate_topmed_files_manual__1_1_"
+    _write(str(lakefs_env / (base + "input") / "src.xml"))
+    _write(str(lakefs_env / (base + "output") / "d" / "elements.txt"))
+
+    tasks.clean_up({'ti': ti}, keep_output=True)
+
+    assert not (lakefs_env / (base + "input")).exists()
+    assert (lakefs_env / (base + "output") / "d" / "elements.txt").is_file()
+
+
+def test_clean_up_all_tries_clears_every_try_dir(lakefs_env):
+    "A successful commit has everything; leaving try dirs would leak the PVC."
+    for try_number in (1, 2):
+        base = ("annotate_and_index_tg.annotate_topmed_files_manual__1_"
+                f"{try_number}_")
+        _write(str(lakefs_env / (base + "input") / "src.xml"))
+        _write(str(lakefs_env / (base + "output") / "d" / "elements.txt"))
+
+    tasks.clean_up({'ti': make_ti(try_number=2)}, all_tries=True)
+
+    leftovers = list(lakefs_env.glob("annotate_and_index_*"))
+    assert leftovers == [], leftovers

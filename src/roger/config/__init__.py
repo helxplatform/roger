@@ -131,6 +131,33 @@ class AnnotationConfig(DictLike):
     http_read_timeout: float = 120.0
     http_retries: int = 3
     http_retry_backoff: float = 1.0
+    # dug hands the annotator a requests_cache CachedSession, but
+    # requests_cache only caches GET/HEAD by default. Of the four annotation
+    # calls only node normalization is a GET; nemo token classification,
+    # sapbert, and name-resolution synonyms are POSTs and so were never
+    # cached. That matters enormously for dbGaP-shaped data: each data-dict
+    # file re-annotates its parent study element, so bdc-parent annotated the
+    # same 24 study descriptions 61,597 times, at ~53s each against ~1.4s for
+    # the variable that file actually contributes. All these services are
+    # read-only lookups keyed entirely by the request body, so caching POSTs
+    # is safe.
+    cache_post_requests: bool = True
+    # Nonzero for two reasons. The normalizer and synonym services have
+    # stable urls but drifting content, so entries should not live forever.
+    # (dug set no expiry at all, so the normalizer GETs it did cache were
+    # permanent; setting this bounds those too.)
+    # More importantly, requests_cache's redis backend writes entries with
+    # SETEX when an expiry is set, which makes cache keys volatile while the
+    # graph keys sharing that redis stay permanent -- so redis can be given
+    # a maxmemory with volatile-lru and will evict annotation cache before it
+    # ever touches the loaded graph. With no expiry the cache is permanent,
+    # unbounded, and under noeviction grows until the pod is OOMKilled,
+    # taking the graph with it. 0 disables expiry.
+    http_cache_expire_seconds: int = 30 * 24 * 3600
+    # Files annotate independently, and the work is almost entirely waiting
+    # on http, so threads help even under the GIL. Each worker gets its own
+    # session and annotator.
+    annotate_workers: int = 4
     preprocessor: dict = field(default_factory=lambda:
         {
             "debreviator": {
@@ -154,6 +181,15 @@ class AnnotationConfig(DictLike):
         self.http_read_timeout = float(self.http_read_timeout)
         self.http_retries = int(self.http_retries)
         self.http_retry_backoff = float(self.http_retry_backoff)
+        # ROGER_ANNOTATION_CACHE__POST__REQUESTS=false would otherwise be a
+        # truthy string, silently leaving the cache on
+        if isinstance(self.cache_post_requests, str):
+            self.cache_post_requests = (
+                self.cache_post_requests.strip().lower() == "true")
+        else:
+            self.cache_post_requests = bool(self.cache_post_requests)
+        self.http_cache_expire_seconds = int(self.http_cache_expire_seconds)
+        self.annotate_workers = max(1, int(self.annotate_workers))
 
 
 @dataclass

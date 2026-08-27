@@ -5,7 +5,8 @@ import pytest
 from requests_cache import CachedSession
 
 from roger.config import AnnotationConfig
-from roger.utils.http_utils import TimeoutRetryAdapter, harden_session
+from roger.utils.http_utils import (CACHEABLE_METHODS, TimeoutRetryAdapter,
+                                    enable_post_caching, harden_session)
 
 
 @pytest.fixture
@@ -44,6 +45,39 @@ def blackhole_server():
     yield f"http://127.0.0.1:{srv.getsockname()[1]}/annotate/", state
     for conn in state['held']:
         conn.close()
+    srv.close()
+
+
+@pytest.fixture
+def counting_server():
+    "A server that answers every POST and counts how many it received."
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(('127.0.0.1', 0))
+    srv.listen(8)
+    state = {'requests': 0}
+
+    def serve():
+        while True:
+            try:
+                conn, _ = srv.accept()
+            except OSError:
+                return
+            try:
+                conn.recv(65535)
+                state['requests'] += 1
+                body = b'{"denotations":[{"n":%d}]}' % state['requests']
+                conn.sendall(
+                    b'HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n'
+                    b'Content-Length: %d\r\n\r\n%s' % (len(body), body))
+            except OSError:
+                pass
+            finally:
+                conn.close()
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    yield f'http://127.0.0.1:{srv.getsockname()[1]}/annotate', state
     srv.close()
 
 
@@ -104,3 +138,59 @@ def test_timeouts_coerced_from_environment_strings():
     assert conf.http_retries == 7
     assert conf.http_retry_backoff == 2.0
     assert isinstance(conf.http_retries, int)
+
+
+# --- POST response caching -------------------------------------------------
+# Every annotation call is a POST and requests_cache caches only GET/HEAD by
+# default, so dug's CachedSession never returned a cached annotation. dbGaP
+# parsers emit the study element into every data-dict file of a study, so
+# bdc-parent re-annotated the same 24 study descriptions 61,597 times at
+# ~53s each, against ~1.4s for the variable each file actually contributes.
+
+def test_post_caching_off_by_default_in_requests_cache(tmp_path):
+    "Guard the premise: this is the upstream default the fix works around."
+    session = CachedSession(cache_name=str(tmp_path / 'c'))
+    assert 'POST' not in session.settings.allowable_methods
+
+
+def test_enable_post_caching_allows_post(tmp_path):
+    session = CachedSession(cache_name=str(tmp_path / 'c'))
+    assert enable_post_caching(session) is True
+    assert set(CACHEABLE_METHODS) <= set(session.settings.allowable_methods)
+
+
+def test_enable_post_caching_sets_expiry_only_when_asked(tmp_path):
+    never = CachedSession(cache_name=str(tmp_path / 'a'))
+    enable_post_caching(never, expire_seconds=0)
+    assert never.settings.expire_after in (None, -1)
+
+    ttl = CachedSession(cache_name=str(tmp_path / 'b'))
+    enable_post_caching(ttl, expire_seconds=3600)
+    assert ttl.settings.expire_after == 3600
+
+
+def test_enable_post_caching_tolerates_plain_session():
+    "The no-redis/no-cache path must warn, not raise."
+    import requests
+    assert enable_post_caching(requests.Session()) is False
+
+
+def test_identical_annotation_post_is_served_from_cache(tmp_path,
+                                                        counting_server):
+    """The whole point: the second identical study annotation must not hit
+    the network."""
+    url, state = counting_server
+    session = harden_session(
+        CachedSession(cache_name=str(tmp_path / 'cache')),
+        connect_timeout=0.5, read_timeout=2, retries=0, backoff_factor=0)
+    enable_post_caching(session)
+
+    payload = {'text': 'Framingham Heart Study, offspring cohort'}
+    first = session.post(url, json=payload)
+    second = session.post(url, json=payload)
+    other = session.post(url, json={'text': 'a different variable'})
+
+    assert first.json() == second.json()
+    assert getattr(second, 'from_cache', False) is True
+    # two network calls: the first payload and the different one
+    assert state['requests'] == 2, state

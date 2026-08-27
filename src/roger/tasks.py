@@ -466,8 +466,9 @@ def avalon_commit_callback(context: Context, **kwargs):
         logger.info(f"deleted temp branch {temp_branch_name}")
         logger.info(f"deleting local dir {local_path}")
 
-    # cleanup local dirs
-    clean_up(context, **kwargs)
+    # cleanup local dirs, including any left by earlier tries whose outputs
+    # were hard-linked into this one and are now committed
+    clean_up(context, all_tries=True, **kwargs)
 
 
 def record_state_callback(context: Context, **kwargs):
@@ -478,24 +479,100 @@ def record_state_callback(context: Context, **kwargs):
     if state.get('removed'):
         logger.warning("Upstream removals not propagated to indexes: %s",
                        state['removed'])
-    clean_up(context, **kwargs)
+    clean_up(context, all_tries=True, **kwargs)
 
 
-def clean_up(context: Context, **kwargs):
+def try_dir_pattern(task_instance: TaskInstance, suffix: str):
+    """Glob matching this task's dir for every try of the current dag run.
+
+    generate_dir_name_from_task_instance stamps the try number into the path,
+    so a retry gets a fresh directory and cannot see what the previous try
+    produced. This is how we find the previous tries.
+    """
+    root_data_dir = os.getenv("ROGER_DATA_DIR", "").rstrip('/')
+    return (f"{root_data_dir}/{task_instance.dag_id}_{task_instance.task_id}"
+            f"_{task_instance.run_id}_*_{suffix}")
+
+
+def reuse_prior_try_outputs(task_instance: TaskInstance):
+    """Hard-link outputs from earlier tries of this task into the current one.
+
+    Annotation is the expensive step -- tens of seconds per input file, weeks
+    for a large dbGaP study -- and its output is only committed to lakefs when
+    the whole task succeeds. So a task that died at file 40,000 of 61,597 used
+    to discard all 40,000 finished files, and the retry began again at zero.
+
+    Making the finished work visible in the current try's output dir means the
+    pipeline's own skip check (DugPipeline.annotation_is_complete) passes over
+    it, and the eventual successful commit includes it. Hard links keep this
+    free in both time and disk; a copy is the fallback for filesystems that
+    refuse them (nothing in-cluster does, but the local dev path is a bind
+    mount).
+
+    Returns the number of files made available.
+    """
+    current = str(generate_dir_name_from_task_instance(
+        task_instance, roger_config=config, suffix='output'))
+    if not current:
+        return 0
+    reused = 0
+    for prior in sorted(glob.glob(try_dir_pattern(task_instance, 'output'))):
+        if os.path.abspath(prior) == os.path.abspath(current):
+            continue
+        for src in glob.glob(prior.rstrip('/') + '/**', recursive=True):
+            if not os.path.isfile(src):
+                continue
+            dest = os.path.join(current,
+                                os.path.relpath(src, prior))
+            if os.path.exists(dest):
+                continue
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            try:
+                os.link(src, dest)
+            except OSError:
+                shutil.copy2(src, dest)
+            reused += 1
+    if reused:
+        logger.info("Reused %d output file(s) from earlier tries of %s",
+                    reused, task_instance.task_id)
+    return reused
+
+
+def clean_up(context: Context, keep_output=False, all_tries=False, **kwargs):
+    """Remove this task's local input and output dirs.
+
+    :param keep_output: leave the output dir in place. Used on failure, so a
+        retry can pick up the work already done (see
+        reuse_prior_try_outputs); the successful commit cleans it up.
+    :param all_tries: also remove the dirs left behind by earlier tries of
+        this task, whose contents have by then been hard-linked into this
+        try's output dir and committed.
+    """
+    task_instance = context['ti']
     input_dir = str(generate_dir_name_from_task_instance(
-        context['ti'],
-        roger_config=config,
-        suffix='output')).rstrip('/') + '/'
+        task_instance, roger_config=config, suffix='input')).rstrip('/') + '/'
     output_dir = str(generate_dir_name_from_task_instance(
-        context['ti'],
-        roger_config=config,
-        suffix='input')).rstrip('/') + '/'
-    files_to_clean = glob.glob(input_dir + '**', recursive=True) + [input_dir]
-    files_to_clean += glob.glob(output_dir + '**', recursive=True) + [output_dir]
+        task_instance, roger_config=config, suffix='output')).rstrip('/') + '/'
+
+    dirs_to_clean = [input_dir]
+    if all_tries:
+        dirs_to_clean += glob.glob(try_dir_pattern(task_instance, 'input'))
+    if not keep_output:
+        dirs_to_clean.append(output_dir)
+        if all_tries:
+            dirs_to_clean += glob.glob(try_dir_pattern(task_instance,
+                                                       'output'))
+    else:
+        logger.info("Keeping %s so a retry can resume from it", output_dir)
+
+    files_to_clean = []
+    for a_dir in dict.fromkeys(dirs_to_clean):
+        files_to_clean += glob.glob(a_dir.rstrip('/') + '/**', recursive=True)
+        files_to_clean.append(a_dir)
     for f in files_to_clean:
         if os.path.exists(f):
-            shutil.rmtree(f)
-    state_file = get_state_file_path(context['ti'])
+            shutil.rmtree(f, ignore_errors=True)
+    state_file = get_state_file_path(task_instance)
     if state_file and os.path.isfile(state_file):
         os.remove(state_file)
 
@@ -530,6 +607,10 @@ def setup_input_data(context: Context, exec_conf):
     input_dir = str(generate_dir_name_from_task_instance(
         task_instance, roger_config=config, suffix="input"))
     os.makedirs(input_dir, exist_ok=True)
+
+    # a retry starts in a fresh try dir; carry forward whatever earlier tries
+    # of this same task already finished so it resumes instead of restarting
+    reuse_prior_try_outputs(task_instance)
 
     client = init_lakefs_client(config=config)
     repos = exec_conf.get('repos', [])
@@ -719,7 +800,10 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
             python_operator_args['pre_execute'] = pre_exec
 
         # pass fixed kwargs into partials so resulting callback accepts (context,)
-        python_operator_args['on_failure_callback'] = partial(clean_up, **op_kwargs)
+        # keep the output dir on failure: the next try hard-links it in and
+        # skips the work already done (annotation is the expensive step)
+        python_operator_args['on_failure_callback'] = partial(
+            clean_up, keep_output=True, **op_kwargs)
         # pre_execute creates the input dir before it can raise
         # AirflowSkipException; clean it up on skip too
         python_operator_args['on_skipped_callback'] = partial(clean_up, **op_kwargs)

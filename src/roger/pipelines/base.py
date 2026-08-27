@@ -2,8 +2,10 @@
 
 import os
 import random
+import threading
 import time
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 import logging
 import re
@@ -33,7 +35,7 @@ from roger.core import storage
 from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
 
-from roger.utils.http_utils import harden_session
+from roger.utils.http_utils import enable_post_caching, harden_session
 from roger.utils.s3_utils import S3Utils
 
 log = get_logger()
@@ -154,14 +156,12 @@ class DugPipeline():
         # dug builds this session with no timeout, so bound it here before
         # handing it to the Crawler. This is the session every annotation
         # call goes through.
-        annotation_conf = config.annotation
-        self.cached_session = harden_session(
-            self.factory.build_http_session(),
-            connect_timeout=annotation_conf.http_connect_timeout,
-            read_timeout=annotation_conf.http_read_timeout,
-            retries=annotation_conf.http_retries,
-            backoff_factor=annotation_conf.http_retry_backoff,
-        )
+        self.annotation_conf = config.annotation
+        self.cached_session = self.build_annotation_session()
+        # one session and annotator per worker thread; requests.Session is
+        # not documented as thread safe and a silently corrupted annotation
+        # run costs weeks
+        self._thread_local = threading.local()
         self.event_loop = asyncio.new_event_loop()
         self.log_stream = StringIO()
         if to_string:
@@ -187,6 +187,37 @@ class DugPipeline():
         self.search_obj = None 
         self.index_obj = None 
 
+
+    def build_annotation_session(self):
+        """A hardened, POST-caching http session for annotation calls.
+
+        Built per call rather than shared so each annotate worker thread can
+        hold its own.
+        """
+        session = harden_session(
+            self.factory.build_http_session(),
+            connect_timeout=self.annotation_conf.http_connect_timeout,
+            read_timeout=self.annotation_conf.http_read_timeout,
+            retries=self.annotation_conf.http_retries,
+            backoff_factor=self.annotation_conf.http_retry_backoff,
+        )
+        if self.annotation_conf.cache_post_requests:
+            enable_post_caching(
+                session,
+                expire_seconds=self.annotation_conf.http_cache_expire_seconds)
+        return session
+
+    def thread_annotation_context(self):
+        """(session, annotator) owned by the calling thread.
+
+        The redis-backed response cache is shared, so worker threads still
+        see each other's annotations; only the client objects are private.
+        """
+        local = self._thread_local
+        if getattr(local, 'session', None) is None:
+            local.session = self.build_annotation_session()
+            local.annotator = self.init_annotator()
+        return local.session, local.annotator
 
     def __enter__(self):
         self.event_loop = asyncio.new_event_loop()
@@ -281,71 +312,120 @@ class DugPipeline():
     def annotate_files(self, parsable_files, output_data_path=None):
         """
         Annotates a Data element file using a Dug parser.
-        :param parser_name: Name of Dug parser to use.
         :param parsable_files: Files to parse.
+        :param output_data_path: Where to write elements.txt/concepts.txt.
         :return: None.
         """
         if not output_data_path:
             output_data_path = storage.dug_annotation_path('')
-        log.info("Parsing files")
         log.info("Intializing parser")
         parser = self.get_parser()
         log.info("Done intializing parser")
-        annotator = self.init_annotator()
-        log.info("Done intializing annotator")
-        for ct, parse_file in enumerate(parsable_files):
-            log.debug("Creating Dug Crawler object on parse_file %s "
-                      "at %d of %d", parse_file, ct , len(parsable_files))
-            crawler = Crawler(
-                crawl_file=parse_file,
-                parser=parser,
-                annotator=annotator,
-                tranqlizer='',
-                tranql_queries=[],
-                http_session=self.cached_session
-            )
 
-            # configure output space.
-            current_file_name = '.'.join(
-                os.path.basename(parse_file).split('.')[:-1])
-            elements_file_path = os.path.join(
-                output_data_path, current_file_name)
-            elements_file = os.path.join(elements_file_path, 'elements.txt')
-            concepts_file = os.path.join(elements_file_path, 'concepts.txt')
+        pending = [f for f in parsable_files
+                   if not self.annotation_is_complete(f, output_data_path)]
+        skipped = len(parsable_files) - len(pending)
+        if skipped:
+            log.info("Resuming: %d of %d files already annotated, %d to go",
+                     skipped, len(parsable_files), len(pending))
 
-            # Use the specified parser to parse the parse_file into elements.
-            log.debug("Parser is %s", str(parser))
-            elements = parser(parse_file)
-            log.debug("Parsed elements: %s", str(elements))
+        workers = max(1, int(self.annotation_conf.annotate_workers))
+        # A thread per file, not per element: files are wholly independent
+        # (own parse, own crawler, own output dir) and the work is nearly all
+        # http wait, so threads scale it despite the GIL. Element-level
+        # concurrency would have to live in dug's Crawler.
+        workers = min(workers, len(pending)) or 1
+        log.info("Annotating %d files with %d worker(s)", len(pending),
+                 workers)
 
-            # This inserts the list of elements into the crawler where
-            # annotate_elements expects to find it. Maybe in some future version
-            # of Dug this could be a parameter instead of an attribute?
-            crawler.elements = elements
+        if workers == 1:
+            for ct, parse_file in enumerate(pending):
+                self.annotate_one_file(parse_file, parser, output_data_path,
+                                       ct, len(pending))
+            return
 
-            # @TODO propose for Dug to make this a crawler class init param(??)
-            crawler.crawlspace = elements_file_path
-            log.debug("Crawler annotator: %s", str(crawler.annotator))
-            crawler.annotate_elements()
+        with ThreadPoolExecutor(max_workers=workers,
+                                thread_name_prefix='annotate') as pool:
+            futures = [
+                pool.submit(self.annotate_one_file, parse_file, parser,
+                            output_data_path, ct, len(pending))
+                for ct, parse_file in enumerate(pending)
+            ]
+            # surface the first failure rather than letting the pool swallow
+            # it; dug's annotate_elements has no per-element error handling,
+            # so a raised exception means that file produced nothing
+            for future in futures:
+                future.result()
 
-            # Extract out the concepts gotten out of annotation
-            # Extract out the elements
-            non_expanded_concepts = crawler.concepts
-            # The elements object will have been modified by annotate_elements,
-            # so we want to make sure to catch those modifications.
-            elements = crawler.elements
+    @staticmethod
+    def annotation_output_paths(parse_file, output_data_path):
+        "The (elements, concepts) files annotate_one_file writes for a source file"
+        stem = '.'.join(os.path.basename(parse_file).split('.')[:-1])
+        element_dir = os.path.join(output_data_path, stem)
+        return (os.path.join(element_dir, 'elements.txt'),
+                os.path.join(element_dir, 'concepts.txt'))
 
-            # Write pickles of objects to file
-            log.info("Parsed and annotated: %s", parse_file)
+    @classmethod
+    def annotation_is_complete(cls, parse_file, output_data_path):
+        """True if this file's annotation output is already fully written.
 
-            storage.write_object(jsonpickle.encode(elements, indent=2),
-                                 elements_file)
-            log.info("Serialized annotated elements to : %s", elements_file)
+        Both files are required: they are written in sequence, so a task
+        killed between the two leaves a half-annotated directory that must be
+        redone. Annotation is the most expensive step in the pipeline -- tens
+        of seconds per file, weeks for a large dbGaP study -- so a retry that
+        started from scratch threw away everything the previous try paid for.
+        """
+        return all(os.path.isfile(path) and os.path.getsize(path) > 0
+                   for path in cls.annotation_output_paths(parse_file,
+                                                           output_data_path))
 
-            storage.write_object(
-                jsonpickle.encode(non_expanded_concepts, indent=2),
-                concepts_file)
-            log.info("Serialized annotated concepts to : %s", concepts_file)
+    def annotate_one_file(self, parse_file, parser, output_data_path,
+                          index=0, total=0):
+        "Parse and annotate a single input file, writing pickles for it"
+        session, annotator = self.thread_annotation_context()
+        log.info("Annotating %s (%d of %d)", parse_file, index + 1, total)
+        elements_file, concepts_file = self.annotation_output_paths(
+            parse_file, output_data_path)
+        crawler = Crawler(
+            crawl_file=parse_file,
+            parser=parser,
+            annotator=annotator,
+            tranqlizer='',
+            tranql_queries=[],
+            http_session=session
+        )
+
+        # Use the specified parser to parse the parse_file into elements.
+        elements = parser(parse_file)
+        log.debug("Parsed elements: %s", str(elements))
+
+        # This inserts the list of elements into the crawler where
+        # annotate_elements expects to find it. Maybe in some future version
+        # of Dug this could be a parameter instead of an attribute?
+        crawler.elements = elements
+
+        # @TODO propose for Dug to make this a crawler class init param(??)
+        crawler.crawlspace = os.path.dirname(elements_file)
+        crawler.annotate_elements()
+
+        # Extract out the concepts gotten out of annotation
+        # Extract out the elements
+        non_expanded_concepts = crawler.concepts
+        # The elements object will have been modified by annotate_elements,
+        # so we want to make sure to catch those modifications.
+        elements = crawler.elements
+
+        # Write pickles of objects to file. elements first, then concepts;
+        # annotation_is_complete requires both, so a crash between them is
+        # correctly treated as unfinished on the next try.
+        log.info("Parsed and annotated: %s", parse_file)
+        storage.write_object(jsonpickle.encode(elements, indent=2),
+                             elements_file)
+        storage.write_object(
+            jsonpickle.encode(non_expanded_concepts, indent=2),
+            concepts_file)
+        log.info("Serialized annotated elements and concepts to %s",
+                 os.path.dirname(elements_file))
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """

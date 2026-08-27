@@ -154,6 +154,84 @@ This is a **heuristic**, deliberately fail-safe: archive-style sources (one tarb
 
 `params={"incremental": false}` on a DAG run forces a full pull everywhere. Per-task, `create_python_task(..., incremental_pull=False)` opts a single task out permanently (this is what the ES groups use).
 
+## Annotation cost, caching, and resume
+
+Annotation is the dominant cost in the whole repo, and two structural facts
+explain nearly all of it.
+
+**dbGaP parsers emit the study element into every data-dict file.** So a study
+with 55,000 data dicts annotates its study description 55,000 times.
+Measured on `bdc-parent` (61,597 XML files, **24 distinct studies**; Framingham
+`phs000007.v35.p16` alone is 54,986 files):
+
+| | per file |
+|---|---|
+| study element (the same one every time) | ~53.5 s |
+| variable element (what the file actually contributes) | ~1.4 s |
+
+That is 55 s/file, 39 days for the dataset, **96% of it recomputing 24
+answers**.
+
+**Dug's cached session cached only one of its four calls.**
+`DugFactory.build_http_session` returns `requests_cache.CachedSession`, whose
+`allowable_methods` defaults to `('GET', 'HEAD')`. Of the four annotation
+calls, only node normalization is a GET (`DefaultNormalizer.make_request`,
+`dug/core/annotators/_base.py`); nemo token classification, sapbert, and
+name-resolution synonyms are all **POST** and so were never cached.
+
+`roger.utils.http_utils.enable_post_caching` fixes it
+(`annotation.cache_post_requests`, on by default). The request body is part of
+requests_cache's key for POST, so this is correct, not a heuristic. Faster
+annotator endpoints do not help here: the bottleneck is call *count*.
+
+The same function also sets `expire_after`, which dug never did — so the
+normalizer GETs that *were* being cached had no expiry and grew unbounded.
+See the eviction note below.
+
+Keep `annotation.http_cache_expire_seconds` **nonzero** (default 30 days).
+requests_cache's redis backend writes entries with `SETEX` only when an expiry
+is set. That makes annotation cache keys volatile while the FalkorDB graph keys
+in the same redis stay permanent — so redis can be given a `maxmemory` with
+`volatile-lru` and will evict cache before it ever touches the graph. With no
+expiry the cache is permanent and unbounded, and under `noeviction` (the
+deployed default, with `maxmemory 0`) it grows until the pod is OOMKilled,
+taking the loaded graph with it.
+
+`annotation.annotate_workers` (default 4) threads `annotate_files` over input
+files. Files are wholly independent — own parse, own `Crawler`, own output dir
+— and the work is nearly all HTTP wait, so this scales despite the GIL. Each
+worker gets its own session and annotator via
+`DugPipeline.thread_annotation_context`; the response cache is shared, so
+workers still see each other's annotations. Element-level concurrency is not
+possible without changing dug: `Crawler.annotate_elements` is a serial loop,
+and inside it `AnnotateSapbert.__call__` does one classify call, then a sapbert
+call per entity, then a normalize *and* a synonym call per identifier, all
+sequentially. Log volume scales with worker count — see the ephemeral-storage
+history in `roger.logger`.
+
+### Resume
+
+Task output only reaches lakefs on task *success*, so a 39-day task that died
+at file 40,000 used to discard all of it and restart at zero. Three pieces make
+retries resume:
+
+- `DugPipeline.annotation_is_complete` skips input files whose `elements.txt`
+  **and** `concepts.txt` both exist and are non-empty. Both are required: they
+  are written in sequence, so a kill between them leaves a directory that looks
+  started but is unusable.
+- `clean_up(..., keep_output=True)` is the failure callback, so the dead try's
+  output survives.
+- `reuse_prior_try_outputs` (from `setup_input_data`) hard-links earlier tries'
+  outputs into the current try's dir — necessary because
+  `generate_dir_name_from_task_instance` stamps the try number into the path, so
+  a retry otherwise starts in an empty directory. The successful commit then
+  includes everything, and `clean_up(..., all_tries=True)` clears every try dir.
+
+This covers retries within a dag run. It does **not** checkpoint mid-task: a
+single try that never succeeds commits nothing, and a fresh dag run gets a new
+`run_id` and therefore new dirs. Sharding a dataset across mapped tasks is the
+next step if that becomes the binding constraint.
+
 ## LakeFS integration (via the `avalon` library)
 
 When `ROGER_LAKEFS__CONFIG_ENABLED=true`, each task pulls inputs from a LakeFS repo/branch (`get_files()`), works in a task-specific local dir (named by `generate_dir_name_from_task_instance`), writes outputs back (`put_files()`), and commits via a temp branch merged after task success (`Merge(strategy="source-wins")`). Without LakeFS, tasks read/write a shared local data root.

@@ -1,6 +1,6 @@
 import os
 
-from roger.config import RogerConfig, RedisConfig
+from roger.config import AnnotationConfig, RedisConfig, RogerConfig
 
 
 def test_merge():
@@ -73,3 +73,29 @@ def test_redis_conf():
     redis_conf = RedisConfig(**{"port": "6379"})
     assert redis_conf.port == 6379
 
+
+
+def test_annotation_cache_flags_coerced_from_environment_strings():
+    """Env vars arrive as strings, and 'false' is truthy -- which would leave
+    POST caching on for someone who explicitly turned it off."""
+    conf = AnnotationConfig(
+        cache_post_requests='false',
+        http_cache_expire_seconds='3600',
+        annotate_workers='8',
+    )
+    assert conf.cache_post_requests is False
+    assert conf.http_cache_expire_seconds == 3600
+    assert conf.annotate_workers == 8
+
+    assert AnnotationConfig(cache_post_requests='true').cache_post_requests
+    # a zero or negative worker count would break ThreadPoolExecutor
+    assert AnnotationConfig(annotate_workers='0').annotate_workers == 1
+
+
+def test_annotation_cache_defaults_are_safe():
+    """POST caching on, and a nonzero expiry so requests_cache writes redis
+    entries with SETEX -- keeping the annotation cache evictable while the
+    graph keys sharing that redis are not."""
+    conf = AnnotationConfig()
+    assert conf.cache_post_requests is True
+    assert conf.http_cache_expire_seconds > 0
