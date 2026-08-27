@@ -92,7 +92,13 @@ with DAG(
                                    # edge csv set -- an incremental pull hands
                                    # it only what changed and it would rebuild
                                    # the graph from that fragment
-                                   incremental_pull=False)
+                                   incremental_pull=False,
+                                   # the loader holds a node-id -> internal
+                                   # id map for every node in the graph so it
+                                   # can resolve edge endpoints; at 3.9M nodes
+                                   # and 78M edges the chart default 2Gi is
+                                   # not enough
+                                   memory="15Gi")
     check_tranql = create_python_task(dag,
                                       name="CheckTranql",
                                       a_callable=roger.check_tranql,
