@@ -163,6 +163,13 @@ class AnnotationConfig(DictLike):
     # they take to answer one (0.13ms/curie at n=200 vs 10-26ms at n=1).
     # See roger.utils.batched_annotator. Off puts the serial path back.
     batch_identifier_lookups: bool = True
+    # Memory limit for the annotate task pods. The chart default (2Gi) was
+    # sized for the serial annotator; annotate_workers threads hold one
+    # parsed file each, and some files are large -- bdc-biolincc has files
+    # with 13,299 elements, and jsonpickle.encode builds the whole output
+    # string in memory before it is written. Four of those at once OOMKilled
+    # the task at 2Gi.
+    annotate_memory: str = "6Gi"
     preprocessor: dict = field(default_factory=lambda:
         {
             "debreviator": {

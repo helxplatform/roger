@@ -893,6 +893,9 @@ def create_pipeline_taskgroup(
                 'name': getattr(pipeline_class, 'pipeline_name'),
                 'branch': input_dataset_version
             }],
+            # annotate_workers threads each hold a whole parsed file; the
+            # chart default was sized for the serial annotator
+            memory=configparam.annotation.annotate_memory,
             pass_conf=False)
 
         # --- 2. Make KGX Task ---

@@ -66,6 +66,10 @@ annotation:
   # request each per element. Both services are flat in batch size, so this
   # turns ~2 requests per identifier into 2 per element.
   batch_identifier_lookups: true
+  # annotate task pod memory. Threads hold a parsed file each, so this scales
+  # with annotate_workers; 2Gi (the chart default) OOMKilled bdc-biolincc,
+  # whose largest files carry 13,299 elements.
+  annotate_memory: 6Gi
   annotator_type: sapbert
   annotator_args:
     monarch:
