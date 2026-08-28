@@ -62,6 +62,10 @@ annotation:
   http_cache_expire_seconds: 2592000
   # threads over input files inside one annotate task
   annotate_workers: 4
+  # Batch the normalize/synonym lookups dug makes per identifier into one
+  # request each per element. Both services are flat in batch size, so this
+  # turns ~2 requests per identifier into 2 per element.
+  batch_identifier_lookups: true
   annotator_type: sapbert
   annotator_args:
     monarch:

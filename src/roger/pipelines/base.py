@@ -27,6 +27,7 @@ from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement
 from dug.core.annotators import Annotator
+from dug.core.annotators.sapbert_annotator import AnnotateSapbert
 from dug.core.async_search import Search
 from dug.core.index import Index
 
@@ -36,6 +37,7 @@ from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
 
 from roger.utils.http_utils import enable_post_caching, harden_session
+from roger.utils.batched_annotator import BatchedAnnotator
 from roger.utils.s3_utils import S3Utils
 
 log = get_logger()
@@ -296,6 +298,13 @@ class DugPipeline():
             try:
                 log.info("Initializing annotator")
                 annotator = self.get_annotator()
+                # Only sapbert: the batching wrapper drives
+                # text_classification/annotate_classifiers, which the
+                # monarch annotator does not have.
+                if (self.annotation_conf.batch_identifier_lookups
+                        and isinstance(annotator, AnnotateSapbert)):
+                    annotator = BatchedAnnotator(annotator)
+                    log.info("Batching identifier lookups")
                 return annotator  # success
             except Exception as e:
                 attempt += 1

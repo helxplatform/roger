@@ -158,6 +158,11 @@ class AnnotationConfig(DictLike):
     # on http, so threads help even under the GIL. Each worker gets its own
     # session and annotator.
     annotate_workers: int = 4
+    # dug resolves identifiers one at a time; both the normalizer and the
+    # name resolution service take a list and answer it in about the time
+    # they take to answer one (0.13ms/curie at n=200 vs 10-26ms at n=1).
+    # See roger.utils.batched_annotator. Off puts the serial path back.
+    batch_identifier_lookups: bool = True
     preprocessor: dict = field(default_factory=lambda:
         {
             "debreviator": {
@@ -190,6 +195,12 @@ class AnnotationConfig(DictLike):
             self.cache_post_requests = bool(self.cache_post_requests)
         self.http_cache_expire_seconds = int(self.http_cache_expire_seconds)
         self.annotate_workers = max(1, int(self.annotate_workers))
+        if isinstance(self.batch_identifier_lookups, str):
+            self.batch_identifier_lookups = (
+                self.batch_identifier_lookups.strip().lower() == "true")
+        else:
+            self.batch_identifier_lookups = bool(
+                self.batch_identifier_lookups)
 
 
 @dataclass
