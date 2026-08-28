@@ -372,7 +372,16 @@ class BulkLoad:
         args.extend(['--enforce-schema'])
         args.extend(['-e'])
         for lbl in collect_labels:
-            args.extend([f'-i `{lbl}`:id', f'-f {lbl}:name', f'-f {lbl}:synonyms'])
+            # Backtick every label. falkordb interpolates it straight into
+            # the pattern (`(e:{label})` in Graph._create_typed_index), and
+            # biolink labels contain a dot, so an unquoted one is a syntax
+            # error: "Invalid input '.': expected ')'". The loader catches
+            # that and only prints it, so every full text index silently
+            # failed to be created while the range indexes -- already
+            # quoted here -- succeeded.
+            args.extend([f'-i `{lbl}`:id',
+                         f'-f `{lbl}`:name',
+                         f'-f `{lbl}`:synonyms'])
         args.extend([f"{redisgraph['graph']}"])
         """ standalone_mode=False tells click not to sys.exit() """
         log.debug(f"Calling bulk_insert with extended args: {args}")
