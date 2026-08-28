@@ -43,3 +43,31 @@ def test_post_execute_accepts_the_result_arg(monkeypatch):
     monkeypatch.setattr(tasks, 'avalon_commit_callback', lambda ctx, **k: None)
     hook = _make_task()['post_execute']
     hook({'ti': 'x'}, "some result")   # must not raise TypeError
+
+
+class _LakefsError(Exception):
+    """Shaped like lakefs_sdk's BadRequestException."""
+    def __init__(self, status, body):
+        super().__init__(f"({status})\nHTTP response body: {body}")
+        self.status = status
+
+
+def test_empty_merge_is_not_a_failure():
+    """lakefs 400s a merge with nothing to apply.
+
+    That happens whenever a task's output already matches the branch, which
+    is normal for deterministic work over unchanged input. Failing the task
+    there stalls the dag for no reason.
+    """
+    from roger.tasks import _merge_had_no_changes
+    assert _merge_had_no_changes(
+        _LakefsError(400, '{"message":"update branch main: no changes"}'))
+
+
+def test_other_merge_failures_still_raise():
+    from roger.tasks import _merge_had_no_changes
+    assert not _merge_had_no_changes(
+        _LakefsError(400, '{"message":"branch not found"}'))
+    assert not _merge_had_no_changes(
+        _LakefsError(500, '{"message":"no changes"}'))   # wrong status
+    assert not _merge_had_no_changes(RuntimeError("no changes"))  # no status

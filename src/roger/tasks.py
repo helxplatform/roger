@@ -353,6 +353,18 @@ def _advance_state_variables(state: dict):
                     entry['commit_id'], key)
 
 
+def _merge_had_no_changes(exc):
+    """True when lakefs rejected a merge because there was nothing to apply.
+
+    lakefs answers an empty merge with 400 `update branch <b>: no changes`.
+    That is what a task produces when its output already matches the branch,
+    which is normal for deterministic work over unchanged input -- not a
+    failure, and it must not fail the task.
+    """
+    return (getattr(exc, "status", None) == 400
+            and "no changes" in str(exc))
+
+
 def avalon_commit_callback(context: Context, **kwargs):
     client: LakeFsWrapper = init_lakefs_client(config=config)
     state = read_state_file(context['ti'])
@@ -456,13 +468,24 @@ def avalon_commit_callback(context: Context, **kwargs):
         # re-processes the same commit window (idempotent)
         _advance_state_variables(state)
     except Exception as e:
-        # never swallow this: the clean_up below deletes the local output,
-        # so a logged-and-ignored merge failure destroyed the work and
-        # still reported success. Raising from post_execute fails the
-        # task, which keeps the output (on_failure_callback passes
-        # keep_output=True) so the retry resumes from it.
-        logger.error(e)
-        raise
+        if _merge_had_no_changes(e):
+            # lakefs 400s an empty merge. It means the output we just
+            # produced is byte-identical to what is already on the branch,
+            # which is a correct outcome, not a failure -- deterministic
+            # annotation over unchanged input lands here every time. State
+            # still advances: the input was consumed and the branch holds
+            # the right content.
+            logger.info("Nothing to merge from %s into %s; branch already "
+                        "matches this output", temp_branch_name, branch)
+            _advance_state_variables(state)
+        else:
+            # never swallow anything else: the clean_up below deletes the
+            # local output, so a logged-and-ignored merge failure destroyed
+            # the work and still reported success. Raising from post_execute
+            # fails the task, which keeps the output (on_failure_callback
+            # passes keep_output=True) so the retry resumes from it.
+            logger.error(e)
+            raise
     finally:
         client._client.branches_api.delete_branch(
             repository=repo,
