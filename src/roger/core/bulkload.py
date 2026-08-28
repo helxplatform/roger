@@ -10,6 +10,7 @@ import time
 
 import requests
 import redis
+from contextlib import contextmanager
 from falkordb_bulk_loader.bulk_insert import bulk_insert
 
 from roger.config import get_default_config as get_config
@@ -375,12 +376,56 @@ class BulkLoad:
         args.extend([f"{redisgraph['graph']}"])
         """ standalone_mode=False tells click not to sys.exit() """
         log.debug(f"Calling bulk_insert with extended args: {args}")
+        with self.snapshots_paused():
+            try:
+                bulk_insert(args, standalone_mode=False)
+                # self.add_indexes()
+            except Exception as e:
+                log.error(f"Unexpected {e.__class__.__name__}: {e}")
+                raise
+
+    @contextmanager
+    def snapshots_paused(self):
+        """Turn off RDB snapshots for the body, then put them back.
+
+        `save` triggers on write volume and a bulk load is nothing but
+        write volume, so bgsave forks over and over during the load.
+        Copy-on-write on a graph this size can add most of it again on top
+        of the resident set and OOMKill the pod -- the headroom between
+        redis maxmemory and the pod memory limit is not sized for it. A
+        snapshot taken partway through a load is worthless anyway: the
+        bulk csvs are the source of truth and the load starts by deleting
+        the graph.
+
+        Failing to set this is not fatal. The load still runs, it just
+        runs with snapshots on, which is where we were before.
+        """
+        client = self.get_redisgraph().r
+        prior = None
         try:
-            bulk_insert(args, standalone_mode=False)
-            # self.add_indexes()
+            # redis-py may hand back bytes depending on version/decoding
+            cfg = {(k.decode() if isinstance(k, bytes) else k):
+                   (v.decode() if isinstance(v, bytes) else v)
+                   for k, v in client.config_get("save").items()}
+            prior = cfg.get("save", "")
+            client.config_set("save", "")
+            log.info("Paused redis snapshots for bulk load (was save=%r)",
+                     prior)
         except Exception as e:
-            log.error(f"Unexpected {e.__class__.__name__}: {e}")
-            raise
+            log.warning("Could not pause redis snapshots, loading with "
+                        "them on: %s", e)
+        try:
+            yield
+        finally:
+            if prior is None:
+                return
+            try:
+                client.config_set("save", prior)
+                log.info("Restored redis save=%r", prior)
+            except Exception as e:
+                # loud: snapshots are now off until someone restores them
+                log.error("FAILED to restore redis save=%r, snapshots are "
+                          "still disabled: %s", prior, e)
 
     def add_indexes(self):
         redis_connection = self.get_redisgraph()
