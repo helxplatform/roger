@@ -35,6 +35,19 @@ log = get_logger()
 # this is about bounding request size, not about finding an optimum.
 BATCH_SIZE = 200
 
+# The node normalizer's GET query defaults. dug builds a GET url and only
+# sets some of these, so the rest are whatever GET defaults to -- and GET
+# and POST do not agree (drug_chemical_conflate is true on GET, false on
+# POST). Sending the full set keeps the batched POST answering exactly what
+# dug's GET answers.
+GET_DEFAULTS = {
+    "conflate": True,
+    "drug_chemical_conflate": True,
+    "description": False,
+    "individual_types": False,
+    "include_taxa": True,
+}
+
 
 def _chunks(items, size):
     for i in range(0, len(items), size):
@@ -126,17 +139,23 @@ class BatchedAnnotator:
         dug stores the normalizer as a GET url ending in `curie=`. The same
         service answers POST on the same path with {"curies": [...]}, and the
         query flags move into the body.
+
+        The flags have to be sent in full, because the service does not
+        default them the same way on both verbs -- notably
+        drug_chemical_conflate defaults to true on GET and false on POST.
+        Omitting it silently stopped conflating drug/chemical curies:
+        CHEBI:3759 came back as itself where dug's GET resolved it to
+        CHEBI:37941. So start from the GET defaults, which are what dug
+        gets today, and let the url override them.
         """
         split = urlsplit(self._inner.normalizer.url)
         query = parse_qs(split.query)
-
-        def flag(name):
-            value = query.get(name, [None])[0]
-            return str(value).strip().lower() == "true"
-
+        flags = dict(GET_DEFAULTS)
+        for name in flags:
+            if name in query:
+                flags[name] = str(query[name][0]).strip().lower() == "true"
         url = f"{split.scheme}://{split.netloc}{split.path}"
-        return url, {"conflate": flag("conflate"),
-                     "description": flag("description")}
+        return url, flags
 
     def _normalize_batch(self, identifiers, http_session):
         curies = list(dict.fromkeys(i.id for i in identifiers))

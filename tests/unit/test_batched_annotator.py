@@ -91,8 +91,15 @@ def test_one_request_per_service_not_per_identifier():
     assert len(syn_calls) == 1, "synonym lookup should be a single request"
     # 3 identifiers, one request each way
     assert sorted(norm_calls[0][1]["curies"]) == ["CHEBI:1", "MONDO:1", "MONDO:2"]
-    assert norm_calls[0][1]["conflate"] is False
-    assert norm_calls[0][1]["description"] is True
+    body = norm_calls[0][1]
+    assert body["conflate"] is False      # from the url
+    assert body["description"] is True    # from the url
+    # Not in the url, and GET/POST disagree on the default: GET conflates
+    # drug/chemical curies, POST does not. Sending it explicitly is what keeps
+    # CHEBI:3759 resolving to CHEBI:37941 the way dug's GET does.
+    assert body["drug_chemical_conflate"] is True
+    assert body["include_taxa"] is True
+    assert body["individual_types"] is False
 
     assert [i.id for i in out] == ["MONDO:1", "MONDO:2", "CHEBI:1"]
     assert [i.label for i in out] == ["Asthma", "Wheeze", "Aspirin"]
