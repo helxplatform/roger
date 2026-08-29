@@ -71,3 +71,20 @@ def test_other_merge_failures_still_raise():
     assert not _merge_had_no_changes(
         _LakefsError(500, '{"message":"no changes"}'))   # wrong status
     assert not _merge_had_no_changes(RuntimeError("no changes"))  # no status
+
+
+def test_output_is_kept_on_failure_only_when_resumable(monkeypatch):
+    """keep_output is the resume mechanism for annotate, and only annotate.
+
+    crawl and make_kgx redo everything on retry, so retaining their output
+    buys nothing and costs disk -- three failed crawls held 47GB and filled
+    the shared volume, which is what had made them fail.
+    """
+    from roger import tasks
+    monkeypatch.setattr(tasks.config, 'lakefs_config',
+                        mock.MagicMock(enabled=True))
+    for resumable, expected in ((True, True), (False, False)):
+        args = _make_task(resumable=resumable)
+        assert args['on_failure_callback'].keywords['keep_output'] is expected
+    # default must be the safe one
+    assert _make_task()['on_failure_callback'].keywords['keep_output'] is False

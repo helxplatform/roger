@@ -772,13 +772,19 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
                        external_repos=None, pass_conf=True,
                        no_output_files=False, no_input_files=False,
                        incremental_pull=True, clear_output_prefix=False,
-                       memory=None):
+                       memory=None, resumable=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
     :param name: The name of the task.
     :param a_callable: The code to run in this task.
     :param no_input_files: skip the lakefs input download entirely.
+    :param resumable: keep the output dir when the task fails, so a retry
+        can pick up where it left off. Only true for annotate, which is
+        the one task with a skip check (annotation_is_complete). For the
+        others the retained output is never reused and is pure disk cost:
+        three failed crawls held 47GB and filled the shared volume, which
+        is what made them fail in the first place.
     :param incremental_pull: when False the task always downloads its full
         inputs even if the dag runs with incremental=True (needed for tasks
         that rebuild state from scratch, e.g. ES indexing after a wipe).
@@ -832,7 +838,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
         # keep the output dir on failure: the next try hard-links it in and
         # skips the work already done (annotation is the expensive step)
         python_operator_args['on_failure_callback'] = partial(
-            clean_up, keep_output=True, **op_kwargs)
+            clean_up, keep_output=resumable, **op_kwargs)
         # pre_execute creates the input dir before it can raise
         # AirflowSkipException; clean it up on skip too
         python_operator_args['on_skipped_callback'] = partial(clean_up, **op_kwargs)
@@ -919,6 +925,9 @@ def create_pipeline_taskgroup(
             # annotate_workers threads each hold a whole parsed file; the
             # chart default was sized for the serial annotator
             memory=configparam.annotation.annotate_memory,
+            # the only task that can resume: annotation_is_complete skips
+            # input files whose output already exists
+            resumable=True,
             pass_conf=False)
 
         # --- 2. Make KGX Task ---
@@ -933,6 +942,9 @@ def create_pipeline_taskgroup(
             dag,
             f"make_kgx_{name}",
             make_kgx_callable,
+            # holds every element of the dataset in memory to build the kgx;
+            # OOMKilled at the 2Gi chart default on bdc-recover
+            memory=configparam.annotation.annotate_memory,
             pass_conf=False)
         make_kgx_task.set_upstream(annotate_task)
 
@@ -948,6 +960,8 @@ def create_pipeline_taskgroup(
             dag,
             f"crawl_{name}",
             crawl_callable,
+            # expands every concept through tranql, accumulating answers
+            memory=configparam.annotation.annotate_memory,
             pass_conf=False)
         crawl_task.set_upstream(annotate_task)
 
