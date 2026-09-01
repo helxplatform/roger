@@ -6,7 +6,7 @@ An Airflow workflow for the Roger Translator KGX data pipeline.
 """
 
 from airflow.models import DAG
-from airflow.operators.empty import EmptyOperator
+from airflow.providers.standard.operators.empty import EmptyOperator
 import roger
 from roger.tasks import default_args, create_python_task
 from roger.config import config
@@ -53,7 +53,12 @@ with DAG(
 
     merge_nodes = create_python_task (dag, name="MergeNodes",
                                       a_callable=roger.merge_nodes,
-                                      external_repos=input_repos
+                                      external_repos=input_repos,
+                                      # merges every KGX node across the
+                                      # baseline graph and all dataset
+                                      # outputs in one task; OOMed at the
+                                      # chart default
+                                      memory="15Gi",
                                       )
 
     # The rest of these  guys can just operate on the local lakefs repo/branch
@@ -69,14 +74,31 @@ with DAG(
 
     create_bulk_load_nodes = create_python_task(dag,
                                                 name="CreateBulkLoadNodes",
-                                                a_callable=roger.create_bulk_nodes)
+                                                a_callable=roger.create_bulk_nodes,
+                                                clear_output_prefix=True)
     create_bulk_load_edges = create_python_task(dag,
                                                 name="CreateBulkLoadEdges",
-                                                a_callable=roger.create_bulk_edges)
+                                                a_callable=roger.create_bulk_edges,
+                                                clear_output_prefix=True,
+                                                # edges dominate memory; the
+                                                # rest run at the chart default
+                                                memory="15Gi")
     bulk_load = create_python_task(dag,
                                    name="BulkLoad",
                                    a_callable=roger.bulk_load,
-                                   no_output_files=True)
+                                   no_output_files=True,
+                                   # deletes the graph and reloads it whole,
+                                   # so it always needs the complete node and
+                                   # edge csv set -- an incremental pull hands
+                                   # it only what changed and it would rebuild
+                                   # the graph from that fragment
+                                   incremental_pull=False,
+                                   # the loader holds a node-id -> internal
+                                   # id map for every node in the graph so it
+                                   # can resolve edge endpoints; at 3.9M nodes
+                                   # and 78M edges the chart default 2Gi is
+                                   # not enough
+                                   memory="15Gi")
     check_tranql = create_python_task(dag,
                                       name="CheckTranql",
                                       a_callable=roger.check_tranql,

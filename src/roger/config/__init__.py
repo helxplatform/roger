@@ -12,7 +12,10 @@ from flatten_dict import flatten, unflatten
 from ._base import DictLike
 from .s3_config import S3Config
 
-CONFIG_FILENAME = Path(__file__).parent.resolve() / "config.yaml"
+if os.environ.get('ROGER_CONFIG_FILE', None):
+    CONFIG_FILENAME = Path(os.environ.get('ROGER_CONFIG_FILE'))
+else:
+    CONFIG_FILENAME = Path(__file__).parent.resolve() / "config.yaml"
 
 @dataclass
 class RedisConfig(DictLike):
@@ -21,6 +24,7 @@ class RedisConfig(DictLike):
     host: str = "redis"
     graph: str = "test"
     port: int = 6379
+    use_redis_cache: bool = True
 
     def __post_init__(self):
         self.port = int(self.port)
@@ -121,6 +125,51 @@ class AnnotationConfig(DictLike):
     synonym_service: str = "https://onto.renci.org/synonyms/"
     ontology_metadata: str = "https://api.monarchinitiative.org/api/bioentity/"
     clear_http_cache: bool = False
+    # Bounds on the annotation service calls. Without a read timeout a broken
+    # connection stalls the pipeline indefinitely rather than failing.
+    http_connect_timeout: float = 10.0
+    http_read_timeout: float = 120.0
+    http_retries: int = 3
+    http_retry_backoff: float = 1.0
+    # dug hands the annotator a requests_cache CachedSession, but
+    # requests_cache only caches GET/HEAD by default. Of the four annotation
+    # calls only node normalization is a GET; nemo token classification,
+    # sapbert, and name-resolution synonyms are POSTs and so were never
+    # cached. That matters enormously for dbGaP-shaped data: each data-dict
+    # file re-annotates its parent study element, so bdc-parent annotated the
+    # same 24 study descriptions 61,597 times, at ~53s each against ~1.4s for
+    # the variable that file actually contributes. All these services are
+    # read-only lookups keyed entirely by the request body, so caching POSTs
+    # is safe.
+    cache_post_requests: bool = True
+    # Nonzero for two reasons. The normalizer and synonym services have
+    # stable urls but drifting content, so entries should not live forever.
+    # (dug set no expiry at all, so the normalizer GETs it did cache were
+    # permanent; setting this bounds those too.)
+    # More importantly, requests_cache's redis backend writes entries with
+    # SETEX when an expiry is set, which makes cache keys volatile while the
+    # graph keys sharing that redis stay permanent -- so redis can be given
+    # a maxmemory with volatile-lru and will evict annotation cache before it
+    # ever touches the loaded graph. With no expiry the cache is permanent,
+    # unbounded, and under noeviction grows until the pod is OOMKilled,
+    # taking the graph with it. 0 disables expiry.
+    http_cache_expire_seconds: int = 30 * 24 * 3600
+    # Files annotate independently, and the work is almost entirely waiting
+    # on http, so threads help even under the GIL. Each worker gets its own
+    # session and annotator.
+    annotate_workers: int = 4
+    # dug resolves identifiers one at a time; both the normalizer and the
+    # name resolution service take a list and answer it in about the time
+    # they take to answer one (0.13ms/curie at n=200 vs 10-26ms at n=1).
+    # See roger.utils.batched_annotator. Off puts the serial path back.
+    batch_identifier_lookups: bool = True
+    # Memory limit for the annotate task pods. The chart default (2Gi) was
+    # sized for the serial annotator; annotate_workers threads hold one
+    # parsed file each, and some files are large -- bdc-biolincc has files
+    # with 13,299 elements, and jsonpickle.encode builds the whole output
+    # string in memory before it is written. Four of those at once OOMKilled
+    # the task at 2Gi.
+    annotate_memory: str = "6Gi"
     preprocessor: dict = field(default_factory=lambda:
         {
             "debreviator": {
@@ -137,6 +186,28 @@ class AnnotationConfig(DictLike):
     def __post_init__(self):
         self.annotator_args["sapbert"]["bagel"]["enabled"] = str(self.annotator_args["sapbert"]["bagel"][
                                                                  "enabled"]).lower() == "true"
+        # These can arrive from environment variables, where every value is a
+        # string. urllib3 rejects a string timeout outright, and a string retry
+        # count fails on the first retry, so coerce them here.
+        self.http_connect_timeout = float(self.http_connect_timeout)
+        self.http_read_timeout = float(self.http_read_timeout)
+        self.http_retries = int(self.http_retries)
+        self.http_retry_backoff = float(self.http_retry_backoff)
+        # ROGER_ANNOTATION_CACHE__POST__REQUESTS=false would otherwise be a
+        # truthy string, silently leaving the cache on
+        if isinstance(self.cache_post_requests, str):
+            self.cache_post_requests = (
+                self.cache_post_requests.strip().lower() == "true")
+        else:
+            self.cache_post_requests = bool(self.cache_post_requests)
+        self.http_cache_expire_seconds = int(self.http_cache_expire_seconds)
+        self.annotate_workers = max(1, int(self.annotate_workers))
+        if isinstance(self.batch_identifier_lookups, str):
+            self.batch_identifier_lookups = (
+                self.batch_identifier_lookups.strip().lower() == "true")
+        else:
+            self.batch_identifier_lookups = bool(
+                self.batch_identifier_lookups)
 
 
 @dataclass
@@ -144,6 +215,8 @@ class IndexingConfig(DictLike):
     variables_index: str = "variables_index"
     concepts_index: str = "concepts_index"
     kg_index: str = "kg_index"
+    studies_index: str = "studies_index"
+    sections_index: str = "sections_index"
     tranql_min_score: float = 0.2
     excluded_identifiers: List[str] = field(default_factory=lambda: [
         "CHEBI:17336"
@@ -224,10 +297,16 @@ class RogerConfig(DictLike):
             redis_host=self.redisgraph.host,
             redis_password=self.redisgraph.password,
             redis_port=self.redisgraph.port,
+            use_redis_cache=self.redisgraph.use_redis_cache,
             nboost_host=self.elasticsearch.nboost_host,
             preprocessor=self.annotation.preprocessor,
             annotator_type=self.annotation.annotator_type,
             annotator_args=self.annotation.annotator_args,
+            concepts_index_name=self.indexing.get('concepts_index'),
+            variables_index_name=self.indexing.get('variables_index'),
+            studies_index_name=self.indexing.get('studies_index'),
+            sections_index_name=self.indexing.get('sections_index'),
+            kg_index_name=self.indexing.get('kg_index'),
             normalizer={
                 'url': self.annotation.normalizer,
             },

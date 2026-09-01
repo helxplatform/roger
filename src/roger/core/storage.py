@@ -226,6 +226,15 @@ def dug_expanded_concept_objects(data_path=None, format="pickle"):
             os.path.join('*',f'expanded_concepts.{format}'))
     return sorted(glob.glob(file_pattern, recursive=True))
 
+def dug_expanded_elements_objects(data_path=None, format="txt"):
+    "Return a list of element files from the expanded concepts directory"
+    if data_path:
+        file_pattern = os.path.join(data_path, '**', f'elements.{format}')
+    else:
+        file_pattern = dug_expanded_concepts_path(
+            os.path.join('*', f'elements.{format}'))
+    return sorted(glob.glob(file_pattern, recursive=True))
+
 def dug_extracted_elements_objects(data_path=None, format="txt"):
     if data_path:
         file_pattern = os.path.join(data_path, '**', f'extracted_graph_elements.{format}')
