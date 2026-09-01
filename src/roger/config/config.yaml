@@ -6,7 +6,9 @@ redisgraph:
   port: 6379
 
 logging:
-  level: DEBUG
+  # DEBUG here is roger's own logger; third-party HTTP chatter is capped
+  # separately in roger.logger.quiet_noisy_loggers.
+  level: INFO
   format: '[%(name)s][%(filename)s][%(lineno)d][%(funcName)20s] %(levelname)s: %(message)s'
 
 data_root: roger/data
@@ -48,6 +50,26 @@ annotation:
   http_read_timeout: 120.0
   http_retries: 3
   http_retry_backoff: 1.0
+  # requests_cache caches only GET/HEAD by default. Node normalization is
+  # the one annotation call that is a GET; classification, sapbert and
+  # synonym lookup are POSTs and were never cached. See AnnotationConfig for
+  # why this dominates dbGaP-shaped datasets.
+  cache_post_requests: true
+  # 30 days. Keep this nonzero: it makes requests_cache write redis entries
+  # with SETEX, so the annotation cache is evictable (set redis maxmemory +
+  # volatile-lru) while the graph keys in the same redis are not. dug set no
+  # expiry, so the normalizer GETs it cached were permanent. 0 disables.
+  http_cache_expire_seconds: 2592000
+  # threads over input files inside one annotate task
+  annotate_workers: 4
+  # Batch the normalize/synonym lookups dug makes per identifier into one
+  # request each per element. Both services are flat in batch size, so this
+  # turns ~2 requests per identifier into 2 per element.
+  batch_identifier_lookups: true
+  # annotate task pod memory. Threads hold a parsed file each, so this scales
+  # with annotate_workers; 2Gi (the chart default) OOMKilled bdc-biolincc,
+  # whose largest files carry 13,299 elements.
+  annotate_memory: 6Gi
   annotator_type: sapbert
   annotator_args:
     monarch:

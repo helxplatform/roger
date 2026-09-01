@@ -10,6 +10,7 @@ import time
 
 import requests
 import redis
+from contextlib import contextmanager
 from falkordb_bulk_loader.bulk_insert import bulk_insert
 
 from roger.config import get_default_config as get_config
@@ -319,6 +320,19 @@ class BulkLoad:
         graph = redisgraph['graph']
         log.info(f"bulk loading \n  nodes: {nodes} \n  edges: {edges}")
 
+        # An empty edge set is a valid loader invocation, so a build whose
+        # edge csvs never arrived loads nodes only and reports success. That
+        # is how the graph ended up with 3.9M nodes and no relationships:
+        # BulkLoad resolved the lakefs tip 100s before CreateBulkLoadEdges
+        # committed its 12GB of edges, so it read a commit where the prefix
+        # was still empty.
+        if nodes and not edges:
+            raise ValueError(
+                f"{len(nodes)} node csv(s) but no edge csv(s) under "
+                f"{storage.bulk_path('**/edges', input_data_path)}. "
+                "Refusing to bulk load an edgeless graph; check that "
+                "CreateBulkLoadEdges committed before this task ran.")
+
         try:
             log.info (f"deleting graph {graph} in preparation for bulk load.")
             db = self.get_redisgraph()
@@ -358,16 +372,69 @@ class BulkLoad:
         args.extend(['--enforce-schema'])
         args.extend(['-e'])
         for lbl in collect_labels:
-            args.extend([f'-i `{lbl}`:id', f'-f {lbl}:name', f'-f {lbl}:synonyms'])
+            # Backtick every label. falkordb interpolates it straight into
+            # the pattern (`(e:{label})` in Graph._create_typed_index), and
+            # biolink labels contain a dot, so an unquoted one is a syntax
+            # error: "Invalid input '.': expected ')'". The loader catches
+            # that and only prints it, so every full text index silently
+            # failed to be created while the range indexes -- already
+            # quoted here -- succeeded.
+            args.extend([f'-i `{lbl}`:id',
+                         f'-f `{lbl}`:name',
+                         f'-f `{lbl}`:synonyms'])
         args.extend([f"{redisgraph['graph']}"])
         """ standalone_mode=False tells click not to sys.exit() """
         log.debug(f"Calling bulk_insert with extended args: {args}")
+        with self.snapshots_paused():
+            try:
+                bulk_insert(args, standalone_mode=False)
+                # self.add_indexes()
+            except Exception as e:
+                log.error(f"Unexpected {e.__class__.__name__}: {e}")
+                raise
+
+    @contextmanager
+    def snapshots_paused(self):
+        """Turn off RDB snapshots for the body, then put them back.
+
+        `save` triggers on write volume and a bulk load is nothing but
+        write volume, so bgsave forks over and over during the load.
+        Copy-on-write on a graph this size can add most of it again on top
+        of the resident set and OOMKill the pod -- the headroom between
+        redis maxmemory and the pod memory limit is not sized for it. A
+        snapshot taken partway through a load is worthless anyway: the
+        bulk csvs are the source of truth and the load starts by deleting
+        the graph.
+
+        Failing to set this is not fatal. The load still runs, it just
+        runs with snapshots on, which is where we were before.
+        """
+        client = self.get_redisgraph().r
+        prior = None
         try:
-            bulk_insert(args, standalone_mode=False)
-            # self.add_indexes()
+            # redis-py may hand back bytes depending on version/decoding
+            cfg = {(k.decode() if isinstance(k, bytes) else k):
+                   (v.decode() if isinstance(v, bytes) else v)
+                   for k, v in client.config_get("save").items()}
+            prior = cfg.get("save", "")
+            client.config_set("save", "")
+            log.info("Paused redis snapshots for bulk load (was save=%r)",
+                     prior)
         except Exception as e:
-            log.error(f"Unexpected {e.__class__.__name__}: {e}")
-            raise
+            log.warning("Could not pause redis snapshots, loading with "
+                        "them on: %s", e)
+        try:
+            yield
+        finally:
+            if prior is None:
+                return
+            try:
+                client.config_set("save", prior)
+                log.info("Restored redis save=%r", prior)
+            except Exception as e:
+                # loud: snapshots are now off until someone restores them
+                log.error("FAILED to restore redis save=%r, snapshots are "
+                          "still disabled: %s", prior, e)
 
     def add_indexes(self):
         redis_connection = self.get_redisgraph()

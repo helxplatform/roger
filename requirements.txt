@@ -5,9 +5,14 @@ git+https://github.com/falkordb/falkordb-bulk-loader.git@v1.0.6
 setuptools>=66
 pytest
 PyYAML
-git+https://github.com/helxplatform/dug@DugModel2.0
+git+https://github.com/helxplatform/dug@develop
 orjson>=3.11
 git+https://github.com/helxplatform/kg_utils.git@v0.0.10.1
+# kg_utils/merging.py hashes an f-string; xxhash 4.0 dropped the
+# implicit str->bytes encoding, so every edge raises "Strings must
+# be encoded before hashing" and MergeNodes dies on the edge sort.
+# roger/models/kgx.py hashes a str the same way.
+xxhash<4
 git+https://github.com/helxplatform/python-stringcase@1.2.1
 bmt==1.4.4
 git+https://github.com/helxplatform/avalon.git@lakefs-1.71.0

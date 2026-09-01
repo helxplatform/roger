@@ -99,3 +99,43 @@ def harden_session(session, connect_timeout, read_timeout, retries,
         "retries=%s backoff_factor=%s",
         connect_timeout, read_timeout, retries, backoff_factor)
     return session
+
+
+# The annotation services are all read-only lookups whose answer depends only
+# on the request body, so a POST is cacheable in exactly the way a GET is.
+CACHEABLE_METHODS = ('GET', 'HEAD', 'POST')
+
+
+def enable_post_caching(session, expire_seconds=0):
+    """Let `session` cache POST responses, and report whether it can.
+
+    dug builds the annotation session with requests_cache, but requests_cache
+    caches only GET and HEAD unless told otherwise. Three of the four
+    annotation calls -- token classification, sapbert, synonym lookup -- are
+    POSTs and so never hit the cache. Only node normalization is a GET
+    (DefaultNormalizer.make_request) and was already being cached.
+
+    The cost of that is not marginal. dbGaP parsers emit the study element
+    into every one of a study's data-dict files, so annotating bdc-parent
+    re-ran the same 24 study descriptions 61,597 times. The study element
+    takes ~53s to annotate against ~1.4s for the variable the file actually
+    contributes, which is 96% of a 39-day run spent recomputing 24 answers.
+
+    Setting expire_seconds also bounds the normalizer GETs, which dug cached
+    with no expiry at all. See AnnotationConfig for why that matters to a
+    redis shared with the graph.
+
+    Returns True if caching was turned on. A plain requests.Session has no
+    `settings`, which is the no-lakefs/no-redis test path, and is left alone.
+    """
+    settings = getattr(session, 'settings', None)
+    if settings is None:
+        log.warning("HTTP session is not a CachedSession; annotation "
+                    "responses will not be cached")
+        return False
+    settings.allowable_methods = CACHEABLE_METHODS
+    if expire_seconds:
+        settings.expire_after = expire_seconds
+    log.info("HTTP response cache enabled for %s (expire_after=%s)",
+             ",".join(CACHEABLE_METHODS), settings.expire_after)
+    return True

@@ -1,7 +1,11 @@
 "Base class for implementing a dataset annotate, crawl, and index pipeline"
 
 import os
+import random
+import threading
+import time
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from io import StringIO
 import logging
 import re
@@ -13,6 +17,7 @@ from pathlib import Path
 import tarfile
 from typing import Union
 import jsonpickle
+from dug_data_model.v2 import dedupe_and_sort
 
 import requests
 
@@ -22,6 +27,7 @@ from dug.core.crawler import Crawler
 from dug.core.factory import DugFactory
 from dug.core.parsers import Parser, DugElement
 from dug.core.annotators import Annotator
+from dug.core.annotators.sapbert_annotator import AnnotateSapbert
 from dug.core.async_search import Search
 from dug.core.index import Index
 
@@ -30,7 +36,8 @@ from roger.core import storage
 from roger.models.biolink import BiolinkModel
 from roger.logger import get_logger
 
-from roger.utils.http_utils import harden_session
+from roger.utils.http_utils import enable_post_caching, harden_session
+from roger.utils.batched_annotator import BatchedAnnotator
 from roger.utils.s3_utils import S3Utils
 
 log = get_logger()
@@ -68,6 +75,31 @@ def make_edge(subj,
         "object": obj,
         "provided_by": "renci.bdc.semanticsearch.annotator"
     }
+
+# The six list fields dug's Index.index_element unions when a document id is
+# already present. It matters: the same CDE variable id appears in several
+# element files (e.g. BRTHDTC in both adult- and pediatric-demographic) with
+# different concepts and parents, and search must find it by any of them.
+MERGED_LIST_FIELDS = ('search_terms', 'optional_terms', 'parents',
+                      'programs', 'identifiers')
+
+
+def merge_searchable_docs(prior: dict, new: dict) -> dict:
+    """Union the list fields of two searchable dicts for the same id.
+
+    Scalars (name, description, data_type, ...) are taken from `new`; dug's
+    per-doc update path left them at whatever was written first, which let
+    edits upstream go stale.
+    """
+    merged = dict(new)
+    for field in MERGED_LIST_FIELDS:
+        merged[field] = dedupe_and_sort(
+            (prior.get(field) or []) + (new.get(field) or []))
+    tags = (prior.get('tags') or []) + (new.get('tags') or [])
+    merged['tags'] = [dict(t) for t in
+                      {tuple(sorted(d.items())) for d in tags}]
+    return merged
+
 
 class FileFetcher:
     """A basic remote file fetcher class
@@ -126,14 +158,12 @@ class DugPipeline():
         # dug builds this session with no timeout, so bound it here before
         # handing it to the Crawler. This is the session every annotation
         # call goes through.
-        annotation_conf = config.annotation
-        self.cached_session = harden_session(
-            self.factory.build_http_session(),
-            connect_timeout=annotation_conf.http_connect_timeout,
-            read_timeout=annotation_conf.http_read_timeout,
-            retries=annotation_conf.http_retries,
-            backoff_factor=annotation_conf.http_retry_backoff,
-        )
+        self.annotation_conf = config.annotation
+        self.cached_session = self.build_annotation_session()
+        # one session and annotator per worker thread; requests.Session is
+        # not documented as thread safe and a silently corrupted annotation
+        # run costs weeks
+        self._thread_local = threading.local()
         self.event_loop = asyncio.new_event_loop()
         self.log_stream = StringIO()
         if to_string:
@@ -160,21 +190,52 @@ class DugPipeline():
         self.index_obj = None 
 
 
+    def build_annotation_session(self):
+        """A hardened, POST-caching http session for annotation calls.
+
+        Built per call rather than shared so each annotate worker thread can
+        hold its own.
+        """
+        session = harden_session(
+            self.factory.build_http_session(),
+            connect_timeout=self.annotation_conf.http_connect_timeout,
+            read_timeout=self.annotation_conf.http_read_timeout,
+            retries=self.annotation_conf.http_retries,
+            backoff_factor=self.annotation_conf.http_retry_backoff,
+        )
+        if self.annotation_conf.cache_post_requests:
+            enable_post_caching(
+                session,
+                expire_seconds=self.annotation_conf.http_cache_expire_seconds)
+        return session
+
+    def thread_annotation_context(self):
+        """(session, annotator) owned by the calling thread.
+
+        The redis-backed response cache is shared, so worker threads still
+        see each other's annotations; only the client objects are private.
+        """
+        local = self._thread_local
+        if getattr(local, 'session', None) is None:
+            local.session = self.build_annotation_session()
+            local.annotator = self.init_annotator()
+        return local.session, local.annotator
+
     def __enter__(self):
         self.event_loop = asyncio.new_event_loop()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.search_obj:
         # close elastic search connection
-        if self.search_obj is not None:
             self.event_loop.run_until_complete(self.search_obj.es.close())
-        # close async loop
-        if self.event_loop.is_running() and not self.event_loop.is_closed():
-            self.event_loop.close()
-        if exc_type or exc_val or exc_tb:
-            traceback.print_exc()
-            log.error("%s %s %s", exc_val, exc_val, exc_tb)
-            log.exception("Got an exception")
+            # close async loop
+            if self.event_loop.is_running() and not self.event_loop.is_closed():
+                self.event_loop.close()
+            if exc_type or exc_val or exc_tb:
+                traceback.print_exc()
+                log.error("%s %s %s", exc_val, exc_val, exc_tb)
+                log.exception("Got an exception")
 
     def get_data_format(self):
         """Access method for data_format parameter
@@ -237,6 +298,13 @@ class DugPipeline():
             try:
                 log.info("Initializing annotator")
                 annotator = self.get_annotator()
+                # Only sapbert: the batching wrapper drives
+                # text_classification/annotate_classifiers, which the
+                # monarch annotator does not have.
+                if (self.annotation_conf.batch_identifier_lookups
+                        and isinstance(annotator, AnnotateSapbert)):
+                    annotator = BatchedAnnotator(annotator)
+                    log.info("Batching identifier lookups")
                 return annotator  # success
             except Exception as e:
                 attempt += 1
@@ -253,71 +321,120 @@ class DugPipeline():
     def annotate_files(self, parsable_files, output_data_path=None):
         """
         Annotates a Data element file using a Dug parser.
-        :param parser_name: Name of Dug parser to use.
         :param parsable_files: Files to parse.
+        :param output_data_path: Where to write elements.txt/concepts.txt.
         :return: None.
         """
         if not output_data_path:
             output_data_path = storage.dug_annotation_path('')
-        log.info("Parsing files")
         log.info("Intializing parser")
         parser = self.get_parser()
         log.info("Done intializing parser")
-        annotator = self.init_annotator()
-        log.info("Done intializing annotator")
-        for ct, parse_file in enumerate(parsable_files):
-            log.debug("Creating Dug Crawler object on parse_file %s "
-                      "at %d of %d", parse_file, ct , len(parsable_files))
-            crawler = Crawler(
-                crawl_file=parse_file,
-                parser=parser,
-                annotator=annotator,
-                tranqlizer='',
-                tranql_queries=[],
-                http_session=self.cached_session
-            )
 
-            # configure output space.
-            current_file_name = '.'.join(
-                os.path.basename(parse_file).split('.')[:-1])
-            elements_file_path = os.path.join(
-                output_data_path, current_file_name)
-            elements_file = os.path.join(elements_file_path, 'elements.txt')
-            concepts_file = os.path.join(elements_file_path, 'concepts.txt')
+        pending = [f for f in parsable_files
+                   if not self.annotation_is_complete(f, output_data_path)]
+        skipped = len(parsable_files) - len(pending)
+        if skipped:
+            log.info("Resuming: %d of %d files already annotated, %d to go",
+                     skipped, len(parsable_files), len(pending))
 
-            # Use the specified parser to parse the parse_file into elements.
-            log.debug("Parser is %s", str(parser))
-            elements = parser(parse_file)
-            log.debug("Parsed elements: %s", str(elements))
+        workers = max(1, int(self.annotation_conf.annotate_workers))
+        # A thread per file, not per element: files are wholly independent
+        # (own parse, own crawler, own output dir) and the work is nearly all
+        # http wait, so threads scale it despite the GIL. Element-level
+        # concurrency would have to live in dug's Crawler.
+        workers = min(workers, len(pending)) or 1
+        log.info("Annotating %d files with %d worker(s)", len(pending),
+                 workers)
 
-            # This inserts the list of elements into the crawler where
-            # annotate_elements expects to find it. Maybe in some future version
-            # of Dug this could be a parameter instead of an attribute?
-            crawler.elements = elements
+        if workers == 1:
+            for ct, parse_file in enumerate(pending):
+                self.annotate_one_file(parse_file, parser, output_data_path,
+                                       ct, len(pending))
+            return
 
-            # @TODO propose for Dug to make this a crawler class init param(??)
-            crawler.crawlspace = elements_file_path
-            log.debug("Crawler annotator: %s", str(crawler.annotator))
-            crawler.annotate_elements()
+        with ThreadPoolExecutor(max_workers=workers,
+                                thread_name_prefix='annotate') as pool:
+            futures = [
+                pool.submit(self.annotate_one_file, parse_file, parser,
+                            output_data_path, ct, len(pending))
+                for ct, parse_file in enumerate(pending)
+            ]
+            # surface the first failure rather than letting the pool swallow
+            # it; dug's annotate_elements has no per-element error handling,
+            # so a raised exception means that file produced nothing
+            for future in futures:
+                future.result()
 
-            # Extract out the concepts gotten out of annotation
-            # Extract out the elements
-            non_expanded_concepts = crawler.concepts
-            # The elements object will have been modified by annotate_elements,
-            # so we want to make sure to catch those modifications.
-            elements = crawler.elements
+    @staticmethod
+    def annotation_output_paths(parse_file, output_data_path):
+        "The (elements, concepts) files annotate_one_file writes for a source file"
+        stem = '.'.join(os.path.basename(parse_file).split('.')[:-1])
+        element_dir = os.path.join(output_data_path, stem)
+        return (os.path.join(element_dir, 'elements.txt'),
+                os.path.join(element_dir, 'concepts.txt'))
 
-            # Write pickles of objects to file
-            log.info("Parsed and annotated: %s", parse_file)
+    @classmethod
+    def annotation_is_complete(cls, parse_file, output_data_path):
+        """True if this file's annotation output is already fully written.
 
-            storage.write_object(jsonpickle.encode(elements, indent=2),
-                                 elements_file)
-            log.info("Serialized annotated elements to : %s", elements_file)
+        Both files are required: they are written in sequence, so a task
+        killed between the two leaves a half-annotated directory that must be
+        redone. Annotation is the most expensive step in the pipeline -- tens
+        of seconds per file, weeks for a large dbGaP study -- so a retry that
+        started from scratch threw away everything the previous try paid for.
+        """
+        return all(os.path.isfile(path) and os.path.getsize(path) > 0
+                   for path in cls.annotation_output_paths(parse_file,
+                                                           output_data_path))
 
-            storage.write_object(
-                jsonpickle.encode(non_expanded_concepts, indent=2),
-                concepts_file)
-            log.info("Serialized annotated concepts to : %s", concepts_file)
+    def annotate_one_file(self, parse_file, parser, output_data_path,
+                          index=0, total=0):
+        "Parse and annotate a single input file, writing pickles for it"
+        session, annotator = self.thread_annotation_context()
+        log.info("Annotating %s (%d of %d)", parse_file, index + 1, total)
+        elements_file, concepts_file = self.annotation_output_paths(
+            parse_file, output_data_path)
+        crawler = Crawler(
+            crawl_file=parse_file,
+            parser=parser,
+            annotator=annotator,
+            tranqlizer='',
+            tranql_queries=[],
+            http_session=session
+        )
+
+        # Use the specified parser to parse the parse_file into elements.
+        elements = parser(parse_file)
+        log.debug("Parsed elements: %s", str(elements))
+
+        # This inserts the list of elements into the crawler where
+        # annotate_elements expects to find it. Maybe in some future version
+        # of Dug this could be a parameter instead of an attribute?
+        crawler.elements = elements
+
+        # @TODO propose for Dug to make this a crawler class init param(??)
+        crawler.crawlspace = os.path.dirname(elements_file)
+        crawler.annotate_elements()
+
+        # Extract out the concepts gotten out of annotation
+        # Extract out the elements
+        non_expanded_concepts = crawler.concepts
+        # The elements object will have been modified by annotate_elements,
+        # so we want to make sure to catch those modifications.
+        elements = crawler.elements
+
+        # Write pickles of objects to file. elements first, then concepts;
+        # annotation_is_complete requires both, so a crash between them is
+        # correctly treated as unfinished on the next try.
+        log.info("Parsed and annotated: %s", parse_file)
+        storage.write_object(jsonpickle.encode(elements, indent=2),
+                             elements_file)
+        storage.write_object(
+            jsonpickle.encode(non_expanded_concepts, indent=2),
+            concepts_file)
+        log.info("Serialized annotated elements and concepts to %s",
+                 os.path.dirname(elements_file))
 
     def convert_to_kgx_json(self, elements, written_nodes=None):
         """
@@ -499,38 +616,78 @@ class DugPipeline():
             self.index_obj.set_ingest_date(index, timestamp)
 
     def index_elements(self, elements_file):
-        if self.index_obj == None:
+        """Submit one elements file to ElasticSearch, routed by element type.
+
+        Bulk, for the same reason as _index_concepts: dug's index_element
+        costs 2 requests for a new document and 3 for an existing one
+        (exists + get + update), which on a 127k-document index is hours of
+        sequential round trips.
+
+        Union semantics are preserved -- ids repeat across element files and
+        each occurrence can carry different concepts and parents -- but the
+        reads are batched: one mget per 1000 ids instead of two requests per
+        document.
+        """
+        from elasticsearch.helpers import bulk
+
+        if self.index_obj is None:
             self.index_obj: Index = self.factory.build_indexer_obj()
 
-        "Submit elements_file to ElasticSearch for indexing "
         log.info("Indexing %s...", str(elements_file))
-        elements =jsonpickle.decode(storage.read_object(elements_file))
-        count = 0
-        total = len(elements)
-        # Index Annotated Elements
+        elements = jsonpickle.decode(storage.read_object(elements_file))
         log.info("found %d from elements files.", len(elements))
+
+        # isinstance, not type(): pipelines may subclass these
+        index_for = ((DugVariable, self.variables_index),
+                     (DugStudy, self.studies_index),
+                     (DugSection, self.sections_index))
+
+        by_index = {}
         for element in elements:
-            count += 1
-            # Only index DugElements as concepts will be
-            # indexed differently in next step
-            if not isinstance(element, DugConcept):
-                # override data-type with mapping values
-                if element.type.lower() in self.element_mapping:
-                    element.type = self.element_mapping[element.type.lower()]
-                if not element.id:
-                    # no id no indexing
-                    continue
-                # Use the Dug Index object to submit the element to ES
-                if isinstance(element, DugVariable):
-                    self.index_obj.index_element(element, index=self.variables_index)
-                elif isinstance(element, DugStudy):
-                    self.index_obj.index_element(element, index=self.studies_index)
-                elif isinstance(element, DugSection):
-                    self.index_obj.index_element(element, index=self.sections_index)
-            percent_complete = (count / total) * 100
-            if percent_complete % 10 == 0:
-                log.info("%d %%", percent_complete)
-        log.info("Done indexing %s.", elements_file)
+            # concepts are indexed separately by _index_concepts
+            if isinstance(element, DugConcept) or not element.id:
+                continue
+            index = next((idx for cls, idx in index_for
+                          if isinstance(element, cls)), None)
+            if index is None:
+                continue
+            # override data-type with mapping values
+            if element.type.lower() in self.element_mapping:
+                element.type = self.element_mapping[element.type.lower()]
+            docs = by_index.setdefault(index, {})
+            doc_id = element.get_id()
+            doc = element.get_searchable_dict()
+            # same id twice inside one file
+            docs[doc_id] = (merge_searchable_docs(docs[doc_id], doc)
+                            if doc_id in docs else doc)
+
+        # fold in what earlier files (or datasets) already indexed
+        for index, docs in by_index.items():
+            ids = list(docs)
+            for i in range(0, len(ids), 1000):
+                chunk = ids[i:i + 1000]
+                found = self.index_obj.es.mget(
+                    index=index, body={'ids': chunk})
+                for entry in found.get('docs', []):
+                    if entry.get('found'):
+                        doc_id = entry['_id']
+                        docs[doc_id] = merge_searchable_docs(
+                            entry['_source'], docs[doc_id])
+
+        actions = [{'_op_type': 'index', '_index': index,
+                    '_id': doc_id, '_source': doc}
+                   for index, docs in by_index.items()
+                   for doc_id, doc in docs.items()]
+        indexed, errors = bulk(self.index_obj.es, actions,
+                               chunk_size=1000, raise_on_error=False,
+                               request_timeout=120)
+        if errors:
+            log.error("%d document(s) failed to index; first: %s",
+                      len(errors), errors[0])
+            raise PipelineException(
+                f"Bulk indexing failed for {len(errors)} document(s) "
+                f"from {elements_file}")
+        log.info("Done indexing %s: %d document(s).", elements_file, indexed)
 
     def validate_indexed_element_file(self, elements_file):        
         "After submitting elements for indexing, verify that they're available"
@@ -687,29 +844,52 @@ class DugPipeline():
         # log.info("Extracted elements serialized to %s", extracted_output_file)
 
     def _index_concepts(self, concepts):
-        "Submit concepts to ElasticSearch for indexing"
-        log.info("Indexing Concepts")
-        total = len(concepts)
-        count = 0
+        """Submit concepts and their KG answers to ElasticSearch.
 
-        if self.index_obj == None: 
+        Uses the bulk API rather than dug's per-doc index_concept /
+        index_kg_answer: those issue an exists check plus a write per
+        document, so a 60k-concept dataset became ~150k sequential round
+        trips and ran for an hour. Bulk sends 1000 docs per request.
+
+        Dropping the exists check is deliberate. index_concept skips
+        documents already present, which silently keeps stale copies; these
+        tasks always rebuild the indexes wholesale, so an id-keyed upsert is
+        both correct and what we want.
+        """
+        from elasticsearch.helpers import bulk
+
+        if self.index_obj is None:
             self.index_obj: Index = self.factory.build_indexer_obj()
 
-        for concept_id, concept in concepts.items():
-            count += 1
-            self.index_obj.index_concept(concept, index=self.concepts_index)
-            # Index knowledge graph answers for each concept
-            for kg_answer_id, kg_answer in concept.kg_answers.items():
-                self.index_obj.index_kg_answer(
-                    concept_id=concept_id,
-                    kg_answer=kg_answer,
-                    index=self.kg_index,
-                    id_suffix=kg_answer_id
-                )
-            percent_complete = int((count / total) * 100)
-            if percent_complete % 10 == 0:
-                log.info("%s %%", percent_complete)
-        log.info("Done Indexing concepts")
+        log.info("Indexing %d concepts", len(concepts))
+
+        def actions():
+            for concept_id, concept in concepts.items():
+                yield {'_op_type': 'index',
+                       '_index': self.concepts_index,
+                       '_id': concept_id,
+                       '_source': concept.get_searchable_dict()}
+                for kg_answer_id, kg_answer in concept.kg_answers.items():
+                    targets = (kg_answer.get_node_names(include_curie=False)
+                               + kg_answer.get_node_synonyms(
+                                   include_curie=False))
+                    yield {'_op_type': 'index',
+                           '_index': self.kg_index,
+                           '_id': f"{concept_id}_{kg_answer_id}",
+                           '_source': {
+                               'concept_id': concept_id,
+                               'search_targets': dedupe_and_sort(targets),
+                               'knowledge_graph': kg_answer.get_kg()}}
+
+        indexed, errors = bulk(self.index_obj.es, actions(),
+                               chunk_size=1000, raise_on_error=False,
+                               request_timeout=120)
+        if errors:
+            log.error("%d document(s) failed to index; first: %s",
+                      len(errors), errors[0])
+            raise PipelineException(
+                f"Bulk indexing failed for {len(errors)} document(s)")
+        log.info("Done Indexing concepts: %d document(s)", indexed)
 
     def _validate_indexed_concepts(self, elements, concepts):
         """
@@ -791,6 +971,11 @@ class DugPipeline():
 
     def clear_index(self, index_id):
         "Delete the index specified by index_id from ES"
+        # lazy init: clearing can run as the first ES touch of a task
+        if self.search_obj is None:
+            self.search_obj: Search = self.factory.build_search_obj()
+        if self.index_obj is None:
+            self.index_obj: Index = self.factory.build_indexer_obj()
         exists = self.event_loop.run_until_complete(
             self.search_obj.es.indices.exists(index=index_id))
         if exists:
@@ -812,6 +997,16 @@ class DugPipeline():
     def clear_concepts_index(self):
         "Delete the concepts index from ES"
         self.clear_index(self.concepts_index)
+
+    def clear_all_es_indexes(self, to_string=False, input_data_path=None,
+                             output_data_path=None):
+        """Wipe every ES index ahead of a full rebuild from the files
+        remaining in lakefs. Callable as an Airflow task method."""
+        for index_id in (self.variables_index, self.studies_index,
+                         self.sections_index, self.concepts_index,
+                         self.kg_index):
+            self.clear_index(index_id)
+        return self.log_stream.getvalue() if to_string else ''
 
     ####
     # Methods above this are directly from what used to be
