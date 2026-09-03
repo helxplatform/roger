@@ -232,6 +232,13 @@ class IndexingConfig(DictLike):
         "anat_to_pheno": ["anatomical_entity", "phenotypic_feature"],
     })
     tranql_endpoint: str = "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+    # Concurrency for the crawl. `crawl_workers` threads the TranQL fetches
+    # within one concept; `crawl_file_workers` threads whole input files.
+    # They multiply, and the product should not exceed what the TranQL
+    # service can serve at once (its gunicorn worker count) -- past that,
+    # requests only queue.
+    crawl_workers: int = 4
+    crawl_file_workers: int = 4
     # by default skips node to element queries
     node_to_element_queries: dict = field(default_factory=lambda: {})
     element_mapping: str = ""

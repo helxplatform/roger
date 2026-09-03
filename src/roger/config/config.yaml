@@ -120,6 +120,8 @@ indexing:
     "chemical_mixture_to_disease": ["chemical_mixture", "disease"]
     "phen_to_anat": ["phenotypic_feature", "anatomical_entity"]
   tranql_endpoint: "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+  crawl_workers: 4
+  crawl_file_workers: 4
   node_to_element_queries:
     enabled: false
     cde:

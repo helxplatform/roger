@@ -778,10 +778,6 @@ class DugPipeline():
         :param data_set_name:
         :return:
         """
-        # TODO crawl dir seems to be storaing crawling info to avoid
-        # re-crawling, but is that consting us much? , it was when tranql was
-        # slow, but might right to consider getting rid of it.
-        crawl_dir = storage.dug_crawl_path('crawl_output')
         output_file_name = os.path.join(data_set_name,
                                         'expanded_concepts.txt')
         extracted_dug_elements_file_name = os.path.join(
@@ -796,7 +792,6 @@ class DugPipeline():
             extracted_output_file = os.path.join(
                 output_path, extracted_dug_elements_file_name)
 
-        Path(crawl_dir).mkdir(parents=True, exist_ok=True)
         extracted_dug_elements = []
         log.debug("Creating Dug Crawler object")
         crawler = Crawler(
@@ -806,8 +801,8 @@ class DugPipeline():
             tranqlizer=self.tranqlizer,
             tranql_queries=self.tranql_queries,
             http_session=self.cached_session,
+            crawl_workers=self.config.indexing.crawl_workers,
         )
-        crawler.crawlspace = crawl_dir
         counter = 0
         total = len(concepts)
         for concept in concepts.values():
@@ -1220,77 +1215,94 @@ class DugPipeline():
                 input_data_path, format='txt')
 
         if output_data_path:
-            crawl_dir = os.path.join(output_data_path, 'crawl_output')
             expanded_concepts_dir = os.path.join(output_data_path,
                                                  'expanded_concepts')
         else:
-            crawl_dir = storage.dug_crawl_path('crawl_output')
             expanded_concepts_dir = storage.dug_expanded_concepts_path("")
-        log.info("Clearing crawl output dir %s", crawl_dir)
-        storage.clear_dir(crawl_dir)
 
         log.info("Clearing expanded concepts dir: %s", expanded_concepts_dir)
         storage.clear_dir(expanded_concepts_dir)
 
-        log.info("Crawling Dug Concepts, found %d file(s).",
-                 len(concept_files))
-        for file_ in concept_files:
-            objects = storage.read_object(file_)
-            objects = objects or {}
-            if not objects:
-                log.info(f'no concepts in {file_}')
-            data_set =  jsonpickle.decode(objects)
-            original_variables_dataset_name = os.path.split(
-                os.path.dirname(file_))[-1]
-            self.crawl_concepts(concepts=data_set,
-                                data_set_name=original_variables_dataset_name,
-                                output_path= output_data_path)
-
-            # After expanding concepts with KG answers, update the
-            # corresponding elements' optional_terms so that KG-derived
-            # search terms are present when elements are later indexed.
-            # This mirrors what Crawler.crawl() does after concept expansion.
-            # The updated elements are written to the expanded concepts
-            # directory (alongside expanded_concepts.txt) rather than
-            # mutating the annotate step's output.
-            annotation_elements_file = os.path.join(
-                os.path.dirname(file_), 'elements.txt')
-            expanded_elements_file_name = os.path.join(
-                original_variables_dataset_name, 'elements.txt')
-            if not output_data_path:
-                expanded_elements_file = (
-                    storage.dug_expanded_concepts_path(
-                        expanded_elements_file_name))
-            else:
-                expanded_elements_file = os.path.join(
-                    output_data_path, expanded_elements_file_name)
-            if os.path.exists(annotation_elements_file):
-                log.info("Updating element optional terms from expanded "
-                         "concepts for %s", original_variables_dataset_name)
-                elements = jsonpickle.decode(
-                    storage.read_object(annotation_elements_file))
-                for element in elements:
-                    if isinstance(element, DugConcept):
-                        continue
-                    # Replace each element's concept references with
-                    # the expanded versions that now carry kg_answers.
-                    for concept_id in list(element.concepts.keys()):
-                        if concept_id in data_set:
-                            element.concepts[concept_id] = data_set[
-                                concept_id]
-                    element.set_optional_terms()
-                storage.write_object(
-                    jsonpickle.encode(elements, indent=2),
-                    expanded_elements_file)
-                log.info("Updated elements serialized to %s",
-                         expanded_elements_file)
-            else:
-                log.warning("Elements file not found at %s, skipping "
-                            "optional terms update",
-                            annotation_elements_file)
+        workers = max(1, int(self.config.indexing.crawl_file_workers))
+        workers = min(workers, len(concept_files)) or 1
+        log.info("Crawling Dug Concepts, found %d file(s) with %d worker(s).",
+                 len(concept_files), workers)
+        if workers == 1:
+            for file_ in concept_files:
+                self.crawl_one_file(file_, output_data_path)
+        else:
+            # Files are independent: each decodes its own concepts, expands
+            # them and writes its own output dir. The work is nearly all
+            # http wait on TranQL, so threads scale it despite the GIL.
+            with ThreadPoolExecutor(max_workers=workers,
+                                    thread_name_prefix='crawl') as pool:
+                futures = [pool.submit(self.crawl_one_file, file_,
+                                       output_data_path)
+                           for file_ in concept_files]
+                # surface the first failure rather than letting the pool
+                # swallow it; a raised exception means that file produced
+                # nothing and the task must not report success
+                for future in futures:
+                    future.result()
 
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log
+
+    def crawl_one_file(self, file_, output_data_path=None):
+        "Expand one annotate output file's concepts and write its outputs"
+        objects = storage.read_object(file_)
+        objects = objects or {}
+        if not objects:
+            log.info(f'no concepts in {file_}')
+        data_set =  jsonpickle.decode(objects)
+        original_variables_dataset_name = os.path.split(
+            os.path.dirname(file_))[-1]
+        self.crawl_concepts(concepts=data_set,
+                            data_set_name=original_variables_dataset_name,
+                            output_path= output_data_path)
+
+        # After expanding concepts with KG answers, update the
+        # corresponding elements' optional_terms so that KG-derived
+        # search terms are present when elements are later indexed.
+        # This mirrors what Crawler.crawl() does after concept expansion.
+        # The updated elements are written to the expanded concepts
+        # directory (alongside expanded_concepts.txt) rather than
+        # mutating the annotate step's output.
+        annotation_elements_file = os.path.join(
+            os.path.dirname(file_), 'elements.txt')
+        expanded_elements_file_name = os.path.join(
+            original_variables_dataset_name, 'elements.txt')
+        if not output_data_path:
+            expanded_elements_file = (
+                storage.dug_expanded_concepts_path(
+                    expanded_elements_file_name))
+        else:
+            expanded_elements_file = os.path.join(
+                output_data_path, expanded_elements_file_name)
+        if os.path.exists(annotation_elements_file):
+            log.info("Updating element optional terms from expanded "
+                     "concepts for %s", original_variables_dataset_name)
+            elements = jsonpickle.decode(
+                storage.read_object(annotation_elements_file))
+            for element in elements:
+                if isinstance(element, DugConcept):
+                    continue
+                # Replace each element's concept references with
+                # the expanded versions that now carry kg_answers.
+                for concept_id in list(element.concepts.keys()):
+                    if concept_id in data_set:
+                        element.concepts[concept_id] = data_set[
+                            concept_id]
+                element.set_optional_terms()
+            storage.write_object(
+                jsonpickle.encode(elements, indent=2),
+                expanded_elements_file)
+            log.info("Updated elements serialized to %s",
+                     expanded_elements_file)
+        else:
+            log.warning("Elements file not found at %s, skipping "
+                        "optional terms update",
+                        annotation_elements_file)
 
     def index_concepts(self, to_string=False,
                        input_data_path=None, output_data_path=None):
