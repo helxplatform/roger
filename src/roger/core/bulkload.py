@@ -54,12 +54,19 @@ class BulkLoad:
         merged_nodes_file = storage.merged_objects('nodes', input_data_path)
         counter = 1
         for node in storage.json_line_iter(merged_nodes_file):
+            # \r alone (no paired \n) still reads as a line break under
+            # universal newlines -- both our own row count and the bulk
+            # loader's CSV parser split on it, turning one row into two
+            # and corrupting the column count. Seen in dbGaP codebook text
+            # pasted in with stray CRs (e.g. a Study "activitybk" field).
             if node.get('description'):
-                node['description'] = node['description'].replace('\n',
-                                                                  ' ')
+                node['description'] = (
+                    node['description'].replace('\r\n', ' ')
+                    .replace('\r', ' ').replace('\n', ' '))
             if node.get('name'):
-                node['name'] = node['name'].replace('\n',
-                                                    ' ')
+                node['name'] = (
+                    node['name'].replace('\r\n', ' ')
+                    .replace('\r', ' ').replace('\n', ' '))
             if not node.get('category'):
                 category_error_nodes.add(node['id'])
                 node['category'] = [BiolinkModel.root_type]
