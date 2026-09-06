@@ -5,6 +5,7 @@ This is home to the utilities that were formerly in dags/roger/core.py:Util
 
 import os
 import glob
+import gzip
 import time
 import pathlib
 import pickle
@@ -86,8 +87,24 @@ def read_object(path, key=None):
         with open(file=path, mode="rb") as stream:
             obj = pickle.load(stream)
     elif path.endswith(".jsonl") or path.endswith('.txt'):
-        obj = read_data(path)
+        obj = read_gzip_or_plain_text(path) if not is_web(path) \
+            else read_data(path)
     return obj
+
+# gzip magic number -- distinguishes a compressed artifact from the plain
+# text ones already committed to lakefs before this was added, so both
+# read transparently and nothing downstream needs to change.
+GZIP_MAGIC = b'\x1f\x8b'
+
+def read_gzip_or_plain_text(path):
+    """ Read a local .txt/.jsonl artifact, decompressing it if it was
+    gzip-written by write_object; falls back to plain text for artifacts
+    written before compression was added. """
+    with open(path, 'rb') as stream:
+        raw = stream.read()
+    if raw[:2] == GZIP_MAGIC:
+        return gzip.decompress(raw).decode('utf-8')
+    return raw.decode('utf-8')
 
 def is_web (uri):
     """ The URI is a web URI (starts with http or https).
@@ -122,8 +139,15 @@ def write_object (obj, path, key=None):
         with open (path, "wb") as stream:
             pickle.dump(obj, file=stream)
     elif path.endswith(".jsonl") or path.endswith('.txt'):
-        with open (path, "w", encoding="utf-8") as stream:
-            stream.write(obj)
+        # gzip -- these are the crawl-stage KG-answer artifacts, and the
+        # same repeated CURIEs/biolink categories/JSON keys compress
+        # 5-10x; that's the difference between fitting a large dataset's
+        # crawl output on the PVC and hitting ENOSPC mid-run. Same
+        # filename/extension as before so every glob pattern that finds
+        # these files by name still matches; read_object detects the
+        # gzip magic number so old uncompressed artifacts still read.
+        with open(path, "wb") as stream:
+            stream.write(gzip.compress(obj.encode('utf-8')))
     else:
         # Raise an exception if invalid.
         raise ValueError (f"Unrecognized extension: {path}")
