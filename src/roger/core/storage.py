@@ -147,7 +147,11 @@ def write_object (obj, path, key=None):
         # these files by name still matches; read_object detects the
         # gzip magic number so old uncompressed artifacts still read.
         with open(path, "wb") as stream:
-            stream.write(gzip.compress(obj.encode('utf-8')))
+            # level 9 (gzip.compress's default) burned 3-4x the CPU of
+            # level 6 for the same ratio on this repetitive JSON -- deadly
+            # under a crawl task's thin CPU limit (measured 70% of periods
+            # throttled on a 250m limit with 4 crawl workers).
+            stream.write(gzip.compress(obj.encode('utf-8'), compresslevel=6))
     else:
         # Raise an exception if invalid.
         raise ValueError (f"Unrecognized extension: {path}")
