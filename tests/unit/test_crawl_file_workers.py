@@ -6,6 +6,7 @@ things must hold: every file gets processed exactly once regardless of
 worker count, and a file that raises fails the task rather than quietly
 producing no output.
 """
+import os
 import threading
 import types
 
@@ -21,6 +22,9 @@ def make_pipeline(workers, crawl_one):
         indexing=types.SimpleNamespace(crawl_file_workers=workers))
     pipeline.log_stream = types.SimpleNamespace(getvalue=lambda: '')
     pipeline.crawl_one_file = crawl_one
+    # nothing exists yet in these tests -- every file is pending, same as
+    # the pre-skip-check behavior this test suite was written against
+    pipeline.crawl_is_complete = lambda f, output_data_path: False
     pipeline.crawl_tranql = types.MethodType(
         DugPipeline.crawl_tranql.__wrapped__
         if hasattr(DugPipeline.crawl_tranql, '__wrapped__')
@@ -81,3 +85,44 @@ def test_worker_count_is_capped_by_file_count(monkeypatch, tmp_path):
     pipeline.crawl_tranql(concept_files=FILES[:2],
                           output_data_path=str(tmp_path))
     assert len(threads) <= 2
+
+
+def test_already_crawled_files_are_skipped(monkeypatch, tmp_path):
+    """A resumed try must not redo files an earlier try already crawled --
+    TranQL's response cache makes that cheap, not free, and it stands
+    between a large dataset and any real new progress."""
+    import roger.pipelines.base as base
+
+    seen = []
+
+    def crawl_one(file_, output_data_path=None):
+        seen.append(file_)
+
+    monkeypatch.setattr(base.storage, 'clear_dir', lambda *a, **k: None)
+    pipeline = make_pipeline(4, crawl_one)
+    already_done = set(FILES[:5])
+    pipeline.crawl_is_complete = lambda f, output_data_path: f in already_done
+
+    pipeline.crawl_tranql(concept_files=list(FILES),
+                          output_data_path=str(tmp_path))
+
+    assert sorted(seen) == sorted(set(FILES) - already_done)
+
+
+def test_crawl_is_complete_checks_the_real_pipeline(tmp_path):
+    """Exercise the actual DugPipeline method, not just the stand-in used
+    above -- this is what would have caught crawl_output_path drifting
+    from where crawl_concepts actually writes."""
+    from roger.pipelines.base import DugPipeline
+
+    concept_file = "/in/phs000123.v1.data_dict/concepts.txt"
+    output_data_path = str(tmp_path)
+
+    assert DugPipeline.crawl_is_complete(concept_file, output_data_path) is False
+
+    path = DugPipeline.crawl_output_path(concept_file, output_data_path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w') as f:
+        f.write('{}')
+
+    assert DugPipeline.crawl_is_complete(concept_file, output_data_path) is True

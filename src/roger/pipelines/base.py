@@ -388,6 +388,30 @@ class DugPipeline():
                    for path in cls.annotation_output_paths(parse_file,
                                                            output_data_path))
 
+    @staticmethod
+    def crawl_output_path(concept_file, output_data_path=None):
+        "The expanded_concepts.txt file crawl_one_file writes for a concept_file"
+        data_set_name = os.path.split(os.path.dirname(concept_file))[-1]
+        output_file_name = os.path.join(data_set_name, 'expanded_concepts.txt')
+        if not output_data_path:
+            return storage.dug_expanded_concepts_path(output_file_name)
+        return os.path.join(output_data_path, output_file_name)
+
+    @classmethod
+    def crawl_is_complete(cls, concept_file, output_data_path):
+        """True if this file's crawl output is already fully written.
+
+        crawl_one_file has no partial-write hazard like annotation's two
+        files do -- expanded_concepts.txt is written in one call -- so
+        existence and non-empty is the whole check. Without this, a resumed
+        try re-crawls every file from scratch: TranQL's response cache makes
+        the already-done ones cheap, but not free, and a large dataset's
+        never-before-seen files still queue behind all the free-but-not-
+        instant redone work before any real progress resumes.
+        """
+        path = cls.crawl_output_path(concept_file, output_data_path)
+        return os.path.isfile(path) and os.path.getsize(path) > 0
+
     def annotate_one_file(self, parse_file, parser, output_data_path,
                           index=0, total=0):
         "Parse and annotate a single input file, writing pickles for it"
@@ -1223,12 +1247,23 @@ class DugPipeline():
         log.info("Clearing expanded concepts dir: %s", expanded_concepts_dir)
         storage.clear_dir(expanded_concepts_dir)
 
+        pending = [f for f in concept_files
+                  if not self.crawl_is_complete(f, output_data_path)]
+        skipped = len(concept_files) - len(pending)
+        if skipped:
+            log.info("Resuming: %d of %d files already crawled, %d to go",
+                     skipped, len(concept_files), len(pending))
+
+        if not pending:
+            output_log = self.log_stream.getvalue() if to_string else ''
+            return output_log
+
         workers = max(1, int(self.config.indexing.crawl_file_workers))
-        workers = min(workers, len(concept_files)) or 1
+        workers = min(workers, len(pending)) or 1
         log.info("Crawling Dug Concepts, found %d file(s) with %d worker(s).",
-                 len(concept_files), workers)
+                 len(pending), workers)
         if workers == 1:
-            for file_ in concept_files:
+            for file_ in pending:
                 self.crawl_one_file(file_, output_data_path)
         else:
             # Files are independent: each decodes its own concepts, expands
@@ -1238,7 +1273,7 @@ class DugPipeline():
                                     thread_name_prefix='crawl') as pool:
                 futures = [pool.submit(self.crawl_one_file, file_,
                                        output_data_path)
-                           for file_ in concept_files]
+                           for file_ in pending]
                 # surface the first failure rather than letting the pool
                 # swallow it; a raised exception means that file produced
                 # nothing and the task must not report success
