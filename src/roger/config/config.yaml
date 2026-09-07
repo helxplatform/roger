@@ -122,6 +122,7 @@ indexing:
   tranql_endpoint: "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
   crawl_workers: 4
   crawl_file_workers: 4
+  crawl_cpu: "1"
   node_to_element_queries:
     enabled: false
     cde:

@@ -127,21 +127,35 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
 
 
 def memory_override(limit: str, request: str = None) -> dict:
-    """executor_config bumping only this task's memory.
+    """executor_config bumping only this task's memory. See
+    resource_override -- this is kept as a thin wrapper since it is the
+    common case and already used at several call sites."""
+    return resource_override(memory_limit=limit, memory_request=request)
+
+
+def resource_override(memory_limit: str = None, memory_request: str = None,
+                      cpu_limit: str = None, cpu_request: str = None) -> dict:
+    """executor_config bumping only this task's cpu and/or memory.
 
     Everything else (image, volumes, env, service account) is inherited from
     the chart's worker pod template; this patches the 'base' container so one
     heavy task does not force the default up for every task. Keep request
-    well under limit: the namespace quota counts requests.memory and
-    limits.memory separately.
+    well under limit: the namespace quota counts requests.memory/cpu and
+    limits.memory/cpu separately.
     """
     from kubernetes.client import models as k8s
+    requests, limits = {}, {}
+    if memory_limit:
+        limits["memory"] = memory_limit
+        requests["memory"] = memory_request or "1Gi"
+    if cpu_limit:
+        limits["cpu"] = cpu_limit
+        requests["cpu"] = cpu_request or cpu_limit
     return {"pod_override": k8s.V1Pod(spec=k8s.V1PodSpec(containers=[
         k8s.V1Container(
             name="base",
             resources=k8s.V1ResourceRequirements(
-                requests={"memory": request or "1Gi"},
-                limits={"memory": limit}))]))}
+                requests=requests, limits=limits))]))}
 
 
 def init_lakefs_client(config: RogerConfig) -> LakeFsWrapper:
@@ -772,7 +786,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
                        external_repos=None, pass_conf=True,
                        no_output_files=False, no_input_files=False,
                        incremental_pull=True, clear_output_prefix=False,
-                       memory=None, resumable=False):
+                       memory=None, cpu=None, resumable=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -793,6 +807,8 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
         vary run to run (the bulk-load CSVs) and would otherwise accumulate.
     :param memory: memory limit for this task's pod, e.g. '15Gi'. Omit to
         take the chart's worker default.
+    :param cpu: cpu limit for this task's pod, e.g. '1'. Omit to take the
+        chart's worker default.
     """
 
     if external_repos is None:
@@ -814,8 +830,9 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
         # executor_config example left commented; fill if needed
         "dag": dag,
     }
-    if memory:
-        python_operator_args["executor_config"] = memory_override(memory)
+    if memory or cpu:
+        python_operator_args["executor_config"] = resource_override(
+            memory_limit=memory, cpu_limit=cpu)
 
     if config.lakefs_config.enabled:
         pre_exec_conf = {
@@ -962,6 +979,11 @@ def create_pipeline_taskgroup(
             crawl_callable,
             # expands every concept through tranql, accumulating answers
             memory=configparam.annotation.annotate_memory,
+            # crawl_file_workers threads doing real CPU work (TranQL
+            # fetches, jsonpickle encode, gzip) on the chart's thin default
+            # cpu limit throttled a crawl pod 70% of its scheduling
+            # periods, cutting throughput to a third.
+            cpu=configparam.indexing.crawl_cpu,
             pass_conf=False)
         crawl_task.set_upstream(annotate_task)
 

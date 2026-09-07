@@ -239,6 +239,12 @@ class IndexingConfig(DictLike):
     # requests only queue.
     crawl_workers: int = 4
     crawl_file_workers: int = 4
+    # crawl_file_workers threads doing real work (TranQL fetches, jsonpickle
+    # encode, gzip) on the chart's default cpu limit throttled a crawl pod
+    # 70% of its scheduling periods, cutting throughput to a third. One full
+    # core gives each worker thread real headroom instead of fighting over
+    # a quarter of one.
+    crawl_cpu: str = "1"
     # by default skips node to element queries
     node_to_element_queries: dict = field(default_factory=lambda: {})
     element_mapping: str = ""
