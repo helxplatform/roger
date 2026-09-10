@@ -794,11 +794,13 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
     :param a_callable: The code to run in this task.
     :param no_input_files: skip the lakefs input download entirely.
     :param resumable: keep the output dir when the task fails, so a retry
-        can pick up where it left off. Only true for annotate, which is
-        the one task with a skip check (annotation_is_complete). For the
-        others the retained output is never reused and is pure disk cost:
-        three failed crawls held 47GB and filled the shared volume, which
-        is what made them fail in the first place.
+        can pick up where it left off. True for annotate and crawl, which
+        have skip checks (annotation_is_complete, crawl_is_complete) that
+        make the retained output cheap to detect and reuse. make_kgx has no
+        such check, so for it the retained output would be pure disk cost:
+        three failed crawls once held 47GB and filled the shared volume,
+        back before crawl had a skip check of its own -- keeping its output
+        made that failure permanent instead of transient.
     :param incremental_pull: when False the task always downloads its full
         inputs even if the dag runs with incremental=True (needed for tasks
         that rebuild state from scratch, e.g. ES indexing after a wipe).
@@ -984,6 +986,10 @@ def create_pipeline_taskgroup(
             # cpu limit throttled a crawl pod 70% of its scheduling
             # periods, cutting throughput to a third.
             cpu=configparam.indexing.crawl_cpu,
+            # crawl_is_complete now gives crawl the same skip check that
+            # justified resumable for annotate; retained output is reused,
+            # not dead weight (see crawl_tranql's pending-files filter)
+            resumable=True,
             pass_conf=False)
         crawl_task.set_upstream(annotate_task)
 
