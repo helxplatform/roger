@@ -1,6 +1,7 @@
 "Base class for implementing a dataset annotate, crawl, and index pipeline"
 
 import os
+import json
 import random
 import threading
 import time
@@ -41,6 +42,10 @@ from roger.utils.batched_annotator import BatchedAnnotator
 from roger.utils.s3_utils import S3Utils
 
 log = get_logger()
+
+# Dotfile so storage.py's *.json / **/*.json globs over pulled task outputs
+# skip it, same convention as tasks.py's REMOVED_FILES_MANIFEST.
+CRAWL_FAILED_FILES_MANIFEST = ".crawl_failed_files.json"
 
 class PipelineException(Exception):
     "Exception raised from DugPipeline and related classes"
@@ -1262,23 +1267,41 @@ class DugPipeline():
         workers = min(workers, len(pending)) or 1
         log.info("Crawling Dug Concepts, found %d file(s) with %d worker(s).",
                  len(pending), workers)
+
+        # A single corrupt input file (e.g. a null byte from a torn write)
+        # must not sink the other tens of thousands. list.append is atomic
+        # under the GIL, so no lock is needed across worker threads.
+        failed = []
+
+        def crawl_one_file_safe(file_):
+            try:
+                self.crawl_one_file(file_, output_data_path)
+            except Exception as e:
+                log.error("Skipping %s, crawl failed: %s", file_, e)
+                failed.append({"file": file_, "error": str(e)})
+
         if workers == 1:
             for file_ in pending:
-                self.crawl_one_file(file_, output_data_path)
+                crawl_one_file_safe(file_)
         else:
             # Files are independent: each decodes its own concepts, expands
             # them and writes its own output dir. The work is nearly all
             # http wait on TranQL, so threads scale it despite the GIL.
             with ThreadPoolExecutor(max_workers=workers,
                                     thread_name_prefix='crawl') as pool:
-                futures = [pool.submit(self.crawl_one_file, file_,
-                                       output_data_path)
+                futures = [pool.submit(crawl_one_file_safe, file_)
                            for file_ in pending]
-                # surface the first failure rather than letting the pool
-                # swallow it; a raised exception means that file produced
-                # nothing and the task must not report success
                 for future in futures:
                     future.result()
+
+        if failed:
+            manifest_path = os.path.join(
+                output_data_path or storage.dug_expanded_concepts_path(""),
+                CRAWL_FAILED_FILES_MANIFEST)
+            with open(manifest_path, 'w') as f:
+                json.dump(failed, f, indent=2)
+            log.warning("%d of %d file(s) failed to crawl, see %s",
+                       len(failed), len(pending), manifest_path)
 
         output_log = self.log_stream.getvalue() if to_string else ''
         return output_log

@@ -1,11 +1,14 @@
-"""crawl_tranql threads whole input files; failures must not be swallowed.
+"""crawl_tranql threads whole input files; one bad file must not sink the rest.
 
 The dir loop is where the bulk of crawl concurrency comes from -- one file
-per annotated input, tens of thousands of them for a dbGaP dataset. Two
-things must hold: every file gets processed exactly once regardless of
-worker count, and a file that raises fails the task rather than quietly
-producing no output.
+per annotated input, tens of thousands of them for a dbGaP dataset. Every
+file gets processed exactly once regardless of worker count, and a file
+that raises (e.g. a corrupted input) is logged to a manifest and skipped
+rather than failing the whole task -- input is re-pulled fresh from lakefs
+on every retry, so a task-ending exception here means the same file kills
+every future retry too.
 """
+import json
 import os
 import threading
 import types
@@ -55,18 +58,33 @@ def test_every_file_processed_once(workers, monkeypatch, tmp_path):
     assert len(seen) == len(FILES)
 
 
-def test_one_bad_file_fails_the_task(monkeypatch, tmp_path):
+def test_one_bad_file_is_skipped_not_fatal(monkeypatch, tmp_path):
+    """A corrupted input file must not sink the other pending files, and
+    must not fail the task -- input is re-pulled fresh from lakefs on every
+    retry, so a fatal exception here would fail identically forever."""
     import roger.pipelines.base as base
+
+    seen = []
+    lock = threading.Lock()
 
     def crawl_one(file_, output_data_path=None):
         if file_.endswith("file7/concepts.txt"):
             raise ValueError("bad pickle")
+        with lock:
+            seen.append(file_)
 
     monkeypatch.setattr(base.storage, 'clear_dir', lambda *a, **k: None)
     pipeline = make_pipeline(4, crawl_one)
-    with pytest.raises(ValueError, match="bad pickle"):
-        pipeline.crawl_tranql(concept_files=list(FILES),
-                              output_data_path=str(tmp_path))
+    pipeline.crawl_tranql(concept_files=list(FILES),
+                          output_data_path=str(tmp_path))
+
+    bad_file = "/in/file7/concepts.txt"
+    assert sorted(seen) == sorted(set(FILES) - {bad_file})
+
+    manifest_path = os.path.join(str(tmp_path), base.CRAWL_FAILED_FILES_MANIFEST)
+    with open(manifest_path) as f:
+        failed = json.load(f)
+    assert failed == [{"file": bad_file, "error": "bad pickle"}]
 
 
 def test_worker_count_is_capped_by_file_count(monkeypatch, tmp_path):
