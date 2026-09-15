@@ -1064,6 +1064,10 @@ def create_es_taskgroup(
                     configparam=configparam,
                     method_name='index_variables',
                     **kwargs),
+            # decodes one elements.txt at a time, but a single file can be
+            # large for a big dataset; index_bdc-recover_variables OOMKilled
+            # at the chart's 2Gi default while its concepts sibling did not
+            memory=configparam.annotation.annotate_memory,
             **full_pull(crawl_path))
 
         validate_index_variables_task = create_python_task(
