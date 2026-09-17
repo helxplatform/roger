@@ -127,21 +127,35 @@ def get_executor_config(data_path='/opt/airflow/share/data'):
 
 
 def memory_override(limit: str, request: str = None) -> dict:
-    """executor_config bumping only this task's memory.
+    """executor_config bumping only this task's memory. See
+    resource_override -- this is kept as a thin wrapper since it is the
+    common case and already used at several call sites."""
+    return resource_override(memory_limit=limit, memory_request=request)
+
+
+def resource_override(memory_limit: str = None, memory_request: str = None,
+                      cpu_limit: str = None, cpu_request: str = None) -> dict:
+    """executor_config bumping only this task's cpu and/or memory.
 
     Everything else (image, volumes, env, service account) is inherited from
     the chart's worker pod template; this patches the 'base' container so one
     heavy task does not force the default up for every task. Keep request
-    well under limit: the namespace quota counts requests.memory and
-    limits.memory separately.
+    well under limit: the namespace quota counts requests.memory/cpu and
+    limits.memory/cpu separately.
     """
     from kubernetes.client import models as k8s
+    requests, limits = {}, {}
+    if memory_limit:
+        limits["memory"] = memory_limit
+        requests["memory"] = memory_request or "1Gi"
+    if cpu_limit:
+        limits["cpu"] = cpu_limit
+        requests["cpu"] = cpu_request or cpu_limit
     return {"pod_override": k8s.V1Pod(spec=k8s.V1PodSpec(containers=[
         k8s.V1Container(
             name="base",
             resources=k8s.V1ResourceRequirements(
-                requests={"memory": request or "1Gi"},
-                limits={"memory": limit}))]))}
+                requests=requests, limits=limits))]))}
 
 
 def init_lakefs_client(config: RogerConfig) -> LakeFsWrapper:
@@ -772,7 +786,7 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
                        external_repos=None, pass_conf=True,
                        no_output_files=False, no_input_files=False,
                        incremental_pull=True, clear_output_prefix=False,
-                       memory=None, resumable=False):
+                       memory=None, cpu=None, resumable=False):
     """ Create a python task.
     :param func_kwargs: additional arguments for callable.
     :param dag: dag to add task to.
@@ -780,11 +794,13 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
     :param a_callable: The code to run in this task.
     :param no_input_files: skip the lakefs input download entirely.
     :param resumable: keep the output dir when the task fails, so a retry
-        can pick up where it left off. Only true for annotate, which is
-        the one task with a skip check (annotation_is_complete). For the
-        others the retained output is never reused and is pure disk cost:
-        three failed crawls held 47GB and filled the shared volume, which
-        is what made them fail in the first place.
+        can pick up where it left off. True for annotate and crawl, which
+        have skip checks (annotation_is_complete, crawl_is_complete) that
+        make the retained output cheap to detect and reuse. make_kgx has no
+        such check, so for it the retained output would be pure disk cost:
+        three failed crawls once held 47GB and filled the shared volume,
+        back before crawl had a skip check of its own -- keeping its output
+        made that failure permanent instead of transient.
     :param incremental_pull: when False the task always downloads its full
         inputs even if the dag runs with incremental=True (needed for tasks
         that rebuild state from scratch, e.g. ES indexing after a wipe).
@@ -793,6 +809,8 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
         vary run to run (the bulk-load CSVs) and would otherwise accumulate.
     :param memory: memory limit for this task's pod, e.g. '15Gi'. Omit to
         take the chart's worker default.
+    :param cpu: cpu limit for this task's pod, e.g. '1'. Omit to take the
+        chart's worker default.
     """
 
     if external_repos is None:
@@ -814,8 +832,9 @@ def create_python_task(dag, name, a_callable, func_kwargs=None,
         # executor_config example left commented; fill if needed
         "dag": dag,
     }
-    if memory:
-        python_operator_args["executor_config"] = memory_override(memory)
+    if memory or cpu:
+        python_operator_args["executor_config"] = resource_override(
+            memory_limit=memory, cpu_limit=cpu)
 
     if config.lakefs_config.enabled:
         pre_exec_conf = {
@@ -962,6 +981,15 @@ def create_pipeline_taskgroup(
             crawl_callable,
             # expands every concept through tranql, accumulating answers
             memory=configparam.annotation.annotate_memory,
+            # crawl_file_workers threads doing real CPU work (TranQL
+            # fetches, jsonpickle encode, gzip) on the chart's thin default
+            # cpu limit throttled a crawl pod 70% of its scheduling
+            # periods, cutting throughput to a third.
+            cpu=configparam.indexing.crawl_cpu,
+            # crawl_is_complete now gives crawl the same skip check that
+            # justified resumable for annotate; retained output is reused,
+            # not dead weight (see crawl_tranql's pending-files filter)
+            resumable=True,
             pass_conf=False)
         crawl_task.set_upstream(annotate_task)
 
@@ -1036,6 +1064,10 @@ def create_es_taskgroup(
                     configparam=configparam,
                     method_name='index_variables',
                     **kwargs),
+            # decodes one elements.txt at a time, but a single file can be
+            # large for a big dataset; index_bdc-recover_variables OOMKilled
+            # at the chart's 2Gi default while its concepts sibling did not
+            memory=configparam.annotation.annotate_memory,
             **full_pull(crawl_path))
 
         validate_index_variables_task = create_python_task(

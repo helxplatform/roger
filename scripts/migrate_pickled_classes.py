@@ -16,6 +16,7 @@ Run inside the roger image so the current dug/dug_data_model are importable.
 """
 
 import argparse
+import gzip
 import importlib
 import os
 import json
@@ -38,6 +39,23 @@ CURRENT = {c.__name__: c for c in (
 
 PY_OBJECT = re.compile(r'"py/object":\s*"([^"]+)"')
 ARTIFACTS = ('elements.txt', 'concepts.txt', 'expanded_concepts.txt')
+
+GZIP_MAGIC = b'\x1f\x8b'
+
+
+def read_artifact_text(path):
+    """roger's storage.write_object gzips these now; older artifacts
+    committed before that are still plain text, so detect and handle both."""
+    raw = path.read_bytes()
+    if raw[:2] == GZIP_MAGIC:
+        return gzip.decompress(raw).decode('utf-8')
+    return raw.decode('utf-8')
+
+
+def write_artifact_text(path, text):
+    """Always write gzip -- migration is also the chance to bring an old
+    plain-text artifact up to the current on-disk format."""
+    path.write_bytes(gzip.compress(text.encode('utf-8')))
 
 
 def install_alias(module_path):
@@ -110,7 +128,7 @@ def field_drift_paths(paths):
     """
     drift = {}
     for path in paths:
-        obj = jsonpickle.decode(path.read_text())
+        obj = jsonpickle.decode(read_artifact_text(path))
         stack, seen = [obj], set()
         while stack:
             item = stack.pop()
@@ -137,7 +155,7 @@ def scan(root):
     print(f"{len(files)} artifact file(s) under {root}")
     found = set()
     for path in files:
-        found |= classes_in(path.read_text())
+        found |= classes_in(read_artifact_text(path))
     broken = broken_modules(found)
     for cls in sorted(found):
         module_path = cls.rpartition('.')[0]
@@ -180,7 +198,7 @@ def dead_modules(sample_paths):
     """
     dead, found = set(), set()
     for path in sample_paths:
-        found |= classes_in(path.read_text())
+        found |= classes_in(read_artifact_text(path))
     for cls in found:
         module_path = cls.rpartition('.')[0]
         if module_path in dead or module_path in sys.modules:
@@ -271,7 +289,7 @@ def restamp(root, sample=20, dry_run=False):
 
     changed = 0
     for i, path in enumerate(files, 1):
-        text = path.read_text()
+        text = read_artifact_text(path)
         new_text, unmapped = restamp_text(text, dead)
         if unmapped:
             raise SystemExit(
@@ -284,7 +302,7 @@ def restamp(root, sample=20, dry_run=False):
             # write-then-rename: a pod killed mid-write must not leave a
             # truncated artifact behind, and there are 150k of them
             tmp = path.with_name(path.name + '.restamp-tmp')
-            tmp.write_text(new_text)
+            write_artifact_text(tmp, new_text)
             os.replace(tmp, path)
         if changed % 5000 == 0:
             print(f"  {changed} rewritten ({i}/{len(files)} scanned)")
@@ -296,13 +314,13 @@ def restamp(root, sample=20, dry_run=False):
 def fix(root, dry_run=False):
     files = artifact_files(root)
     for module_path in broken_modules(
-            {c for p in files for c in classes_in(p.read_text())}):
+            {c for p in files for c in classes_in(read_artifact_text(p))}):
         print(f"aliasing legacy module {module_path}")
         install_alias(module_path)
 
     changed = 0
     for path in files:
-        text = path.read_text()
+        text = read_artifact_text(path)
         obj = jsonpickle.decode(text)
         fill_defaults(obj)
         rewritten = jsonpickle.encode(obj, indent=2)
@@ -311,7 +329,7 @@ def fix(root, dry_run=False):
         changed += 1
         print(f"{'would rewrite' if dry_run else 'rewrote'} {path}")
         if not dry_run:
-            path.write_text(rewritten)
+            write_artifact_text(path, rewritten)
     print(f"{changed} of {len(files)} file(s) needed migration")
     return changed
 
