@@ -427,6 +427,16 @@ def test_memory_override_patches_base_container():
     assert container.resources.requests == {"memory": "1Gi"}
 
 
+def test_resource_override_patches_cpu_and_memory_together():
+    pytest.importorskip("kubernetes")
+    cfg = tasks.resource_override(memory_limit="15Gi", cpu_limit="1")
+    container = cfg["pod_override"].spec.containers[0]
+    assert container.resources.limits == {"memory": "15Gi", "cpu": "1"}
+    # cpu request defaults to the limit (no separate cheap-request case,
+    # unlike memory) since cpu limits are compressible, not a quota risk
+    assert container.resources.requests == {"memory": "1Gi", "cpu": "1"}
+
+
 def test_es_taskgroup_pulls_crawl_outputs_only(monkeypatch, lakefs_env):
     """index_variables must read crawl's expanded elements.txt, not
     annotate's: only the crawl copy carries KG-derived optional_terms, and

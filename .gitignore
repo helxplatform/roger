@@ -152,3 +152,7 @@ dags/roger/data
 local_storage
 logs
 tests/integration/data/bulk/
+
+# Claude Code personal project settings (not shared)
+.claude/settings.local.json
+.claude/scheduled_tasks.lock

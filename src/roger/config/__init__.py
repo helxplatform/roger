@@ -232,6 +232,19 @@ class IndexingConfig(DictLike):
         "anat_to_pheno": ["anatomical_entity", "phenotypic_feature"],
     })
     tranql_endpoint: str = "http://tranql-service/tranql/query?dynamic_id_resolution=true&asynchronous=false"
+    # Concurrency for the crawl. `crawl_workers` threads the TranQL fetches
+    # within one concept; `crawl_file_workers` threads whole input files.
+    # They multiply, and the product should not exceed what the TranQL
+    # service can serve at once (its gunicorn worker count) -- past that,
+    # requests only queue.
+    crawl_workers: int = 4
+    crawl_file_workers: int = 4
+    # crawl_file_workers threads doing real work (TranQL fetches, jsonpickle
+    # encode, gzip) on the chart's default cpu limit throttled a crawl pod
+    # 70% of its scheduling periods, cutting throughput to a third. Match
+    # crawl_file_workers 1:1 with cores so each worker thread gets its own,
+    # instead of 4 threads fighting over a fraction of one.
+    crawl_cpu: str = "4"
     # by default skips node to element queries
     node_to_element_queries: dict = field(default_factory=lambda: {})
     element_mapping: str = ""
