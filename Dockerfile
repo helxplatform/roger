@@ -75,6 +75,9 @@ RUN apt-get purge -y --auto-remove \
 
 RUN if [ -n "$ROGER_SOURCE" ]; then pip install -e $ROGER_SOURCE; fi
 
+# pip bundles vendored msgpack/setuptools/urllib3 with CVEs; nothing needs pip at runtime
+RUN pip uninstall -y pip
+
 # Set ownership
 RUN chown -R airflow:airflow ${AIRFLOW_HOME}
 
