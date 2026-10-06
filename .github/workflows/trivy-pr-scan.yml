@@ -63,6 +63,7 @@ jobs:
       with:
         image-ref: '${{ github.repository }}:vuln-test'
         format: 'sarif'
+        limit-severities-for-sarif: true
         severity: 'CRITICAL,HIGH'
         ignore-unfixed: true
         output: 'trivy-results.sarif'
