@@ -47,6 +47,16 @@ jobs:
         cache-from: type=registry,ref=${{ github.repository }}:buildcache
         cache-to: type=registry,ref=${{ github.repository }}:buildcache,mode=max
 
+    # Human-readable findings in the job log (the sarif step below is what fails the job)
+    - name: Print Trivy findings
+      uses: aquasecurity/trivy-action@v0.36.0
+      with:
+        image-ref: '${{ github.repository }}:vuln-test'
+        format: 'table'
+        severity: 'CRITICAL,HIGH'
+        ignore-unfixed: true
+        exit-code: '0'
+
     # We will not be concerned with Medium and Low vulnerabilities
     - name: Run Trivy vulnerability scanner
       uses: aquasecurity/trivy-action@v0.36.0
