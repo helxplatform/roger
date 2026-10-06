@@ -3,7 +3,7 @@ FROM python:3.12.13-slim-trixie
 # FROM dhi.io/python:3.12-debian13-dev
 # Set Airflow version and home directory
 
-ARG AIRFLOW_VERSION=3.2.2
+ARG AIRFLOW_VERSION=3.3.1
 
 ARG AIRFLOW_HOME=/opt/airflow
 
@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tini \
     tzdata \
     git \
+    && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip tools
@@ -53,6 +54,13 @@ RUN pip install -r /tmp/requirements.txt
 
 RUN rm /tmp/requirements.txt
 
+# Security patches for transitive deps pinned lower by the airflow constraints file.
+# starlette pin dropped (airflow-core 3.x needs >=1.0.1).
+RUN pip install --no-cache-dir \
+    "PyJWT>=2.14.0" "aiohttp>=3.14.3" "anyio>=4.14.2" "cryptography>=50.0.0" \
+    "msgpack>=1.2.1" "python-multipart>=0.0.30" "setuptools>=78.1.1" \
+    "sqlparse>=0.6.0" "tornado>=6.5.9" "urllib3>=2.8.0"
+
 # COPY . /opt/roger
 # RUN pip install /opt/roger
 
@@ -66,6 +74,9 @@ RUN apt-get purge -y --auto-remove \
     apt-get clean
 
 RUN if [ -n "$ROGER_SOURCE" ]; then pip install -e $ROGER_SOURCE; fi
+
+# pip bundles vendored msgpack/setuptools/urllib3 with CVEs; nothing needs pip at runtime
+RUN pip uninstall -y pip
 
 # Set ownership
 RUN chown -R airflow:airflow ${AIRFLOW_HOME}
