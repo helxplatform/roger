@@ -1,9 +1,8 @@
 # Use a Debian-based image for better compatibility
-FROM python:3.12.13-slim-trixie
-# FROM dhi.io/python:3.12-debian13-dev
+FROM python:3.14-slim-trixie
 # Set Airflow version and home directory
 
-ARG AIRFLOW_VERSION=3.2.2
+ARG AIRFLOW_VERSION=3.3.2
 
 ARG AIRFLOW_HOME=/opt/airflow
 
