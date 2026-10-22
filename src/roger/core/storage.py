@@ -5,6 +5,7 @@ This is home to the utilities that were formerly in dags/roger/core.py:Util
 
 import os
 import glob
+import gzip
 import time
 import pathlib
 import pickle
@@ -44,13 +45,14 @@ def current_time_in_millis():
 
 # A just do it approach to getting data.
 def read_file(path):
-    """ Read a file.
+    """ Read a file, transparently decompressing gzip if present.
     :param path: Path to a file.
     """
-    text = None
-    with open(path, "r", encoding='utf-8') as stream:
-        text = stream.read()
-    return text
+    with open(path, "rb") as stream:
+        raw = stream.read()
+    if raw[:2] == b'\x1f\x8b':
+        raw = gzip.decompress(raw)
+    return raw.decode('utf-8')
 
 def read_url(url):
     """ Read data from a URL.
